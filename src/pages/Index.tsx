@@ -121,28 +121,28 @@ const Index = () => {
                 selectedWeek === 'all' ? 'Totaal 2025' : `Sales in Week ${selectedWeek}`
               }
               icon={CheckCircle}
-              variant="success"
+              variant="green"
             />
             <KPICard
               title="Jaarwaarde"
               value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`}
               subtext="Totale opbrengst"
               icon={DollarSign}
-              variant="primary"
+              variant="blue"
             />
             <KPICard
               title="Kosten per Donateur"
               value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`}
               subtext={`O.b.v. €${hourlyRate}/u`}
               icon={TrendingUp}
-              variant={costPerDonor > 50 ? 'destructive' : 'warning'}
+              variant={costPerDonor > 50 ? 'pink' : 'orange'}
             />
             <KPICard
               title="Inzet Uren"
               value={`${totalHours.toFixed(1)} u`}
               subtext="Totale beltijd"
               icon={Users}
-              variant="primary"
+              variant="cyan"
             />
           </div>
 

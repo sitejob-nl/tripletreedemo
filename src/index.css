@@ -59,6 +59,19 @@ All colors MUST be HSL.
     --chart-4: 38 92% 50%;
     --chart-5: 0 84% 60%;
 
+    --kpi-green: 142 76% 94%;
+    --kpi-green-text: 142 76% 36%;
+    --kpi-pink: 330 82% 95%;
+    --kpi-pink-text: 330 81% 60%;
+    --kpi-purple: 263 70% 95%;
+    --kpi-purple-text: 263 70% 50%;
+    --kpi-blue: 217 91% 95%;
+    --kpi-blue-text: 217 91% 60%;
+    --kpi-cyan: 191 85% 94%;
+    --kpi-cyan-text: 191 85% 42%;
+    --kpi-orange: 38 92% 94%;
+    --kpi-orange-text: 38 92% 50%;
+
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
@@ -113,6 +126,19 @@ All colors MUST be HSL.
     --chart-3: 271 81% 56%;
     --chart-4: 38 92% 50%;
     --chart-5: 0 84% 60%;
+
+    --kpi-green: 142 76% 20%;
+    --kpi-green-text: 142 76% 50%;
+    --kpi-pink: 330 82% 20%;
+    --kpi-pink-text: 330 81% 70%;
+    --kpi-purple: 263 70% 20%;
+    --kpi-purple-text: 263 70% 60%;
+    --kpi-blue: 217 91% 20%;
+    --kpi-blue-text: 217 91% 70%;
+    --kpi-cyan: 191 85% 20%;
+    --kpi-cyan-text: 191 85% 55%;
+    --kpi-orange: 38 92% 20%;
+    --kpi-orange-text: 38 92% 60%;
   }
 }
 
