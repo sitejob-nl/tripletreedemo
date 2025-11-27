@@ -18,7 +18,7 @@ export const Sidebar = ({
   const projectColors = ['bg-kpi-orange-text', 'bg-kpi-blue-text', 'bg-kpi-green-text', 'bg-kpi-purple-text', 'bg-kpi-cyan-text'];
   return <aside className="w-full md:w-64 bg-black border-r border-border flex-shrink-0 flex flex-col">
       <div className="p-6 border-b border-border flex items-center justify-center py-[25px] px-0">
-        <img src={logo} alt="Triple Tree Logo" className="h-12 w-12" />
+        <img src={logo} alt="Triple Tree Logo" className="h-20 w-20" />
       </div>
 
       <nav className="p-4 space-y-1 flex-1">
