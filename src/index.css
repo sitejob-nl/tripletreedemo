@@ -17,7 +17,7 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 217 91% 60%;
+    --primary: 105 55% 38%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 210 40% 96%;
@@ -26,13 +26,13 @@ All colors MUST be HSL.
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 217 91% 60%;
+    --accent: 105 55% 38%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 142 71% 45%;
+    --success: 105 55% 38%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
@@ -40,21 +40,21 @@ All colors MUST be HSL.
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 217 91% 60%;
+    --ring: 105 55% 38%;
 
     --radius: 0.75rem;
 
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 105 55% 38%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 215 28% 17%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 215 28% 17%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-ring: 105 55% 38%;
 
-    --chart-1: 217 91% 60%;
-    --chart-2: 142 71% 45%;
+    --chart-1: 105 55% 38%;
+    --chart-2: 105 65% 50%;
     --chart-3: 271 81% 56%;
     --chart-4: 38 92% 50%;
     --chart-5: 0 84% 60%;
@@ -74,7 +74,7 @@ All colors MUST be HSL.
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 217 91% 60%;
+    --primary: 105 65% 50%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 217 33% 18%;
@@ -89,7 +89,7 @@ All colors MUST be HSL.
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
 
-    --success: 142 71% 45%;
+    --success: 105 65% 50%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
@@ -97,19 +97,19 @@ All colors MUST be HSL.
 
     --border: 217 33% 18%;
     --input: 217 33% 18%;
-    --ring: 217 91% 60%;
+    --ring: 105 65% 50%;
 
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary: 105 65% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 217 33% 18%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217 33% 18%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-ring: 105 65% 50%;
 
-    --chart-1: 217 91% 60%;
-    --chart-2: 142 71% 45%;
+    --chart-1: 105 65% 50%;
+    --chart-2: 105 75% 60%;
     --chart-3: 271 81% 56%;
     --chart-4: 38 92% 50%;
     --chart-5: 0 84% 60%;
