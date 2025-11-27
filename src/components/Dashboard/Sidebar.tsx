@@ -1,5 +1,6 @@
 import { LogOut, ChevronRight } from 'lucide-react';
 import { Project, Role } from '@/types/dashboard';
+import logo from '@/assets/triple-tree-logo.png';
 
 interface SidebarProps {
   selectedProject: Project;
@@ -13,9 +14,12 @@ export const Sidebar = ({ selectedProject, onProjectChange, projects, role, onLo
   return (
     <aside className="w-full md:w-64 bg-sidebar text-sidebar-foreground flex-shrink-0 flex flex-col">
       <div className="p-6 border-b border-sidebar-border">
-        <h1 className="text-xl font-bold tracking-tight">
-          Rapportage<span className="text-sidebar-primary">2025</span>
-        </h1>
+        <div className="flex items-center gap-3 mb-2">
+          <img src={logo} alt="Triple Tree Logo" className="h-8 w-8" />
+          <h1 className="text-xl font-bold tracking-tight">
+            Rapportage<span className="text-sidebar-primary">2025</span>
+          </h1>
+        </div>
         <p className="text-xs text-muted-foreground mt-1">Triple Tree Portal</p>
       </div>
 
