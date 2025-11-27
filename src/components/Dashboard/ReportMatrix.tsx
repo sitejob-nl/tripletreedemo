@@ -84,8 +84,8 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
     isPercent = false,
     isCalculation: ((stats: DayStats) => number | string) | null = null
   ) => (
-    <tr className="hover:bg-muted/50 transition-colors border-b border-border">
-      <td className="px-4 py-3 font-medium text-foreground bg-muted/50 sticky left-0">{label}</td>
+    <tr className="hover:bg-muted/30 transition-colors border-b border-border/50">
+      <td className="px-6 py-4 font-medium text-foreground bg-muted/30 sticky left-0">{label}</td>
       {days.map((day) => {
         let val: number | string = 0;
         if (isCalculation) {
@@ -95,7 +95,7 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
         }
 
         return (
-          <td key={day} className="px-4 py-3 text-right text-foreground">
+          <td key={day} className="px-6 py-4 text-right text-foreground">
             {isCurrency
               ? `€ ${(typeof val === 'number' ? val : parseFloat(val as string)).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`
               : isPercent
@@ -104,7 +104,7 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
           </td>
         );
       })}
-      <td className="px-4 py-3 text-right font-bold text-foreground bg-muted/50">
+      <td className="px-6 py-4 text-right font-bold text-foreground bg-muted/30">
         {isCalculation
           ? isCurrency
             ? `€ ${(typeof isCalculation(aggregated.total) === 'number' ? isCalculation(aggregated.total) : parseFloat(isCalculation(aggregated.total) as string)).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`
@@ -119,24 +119,24 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
   );
 
   return (
-    <div className="overflow-x-auto bg-card rounded-xl border border-border shadow-sm">
+    <div className="overflow-x-auto bg-card rounded-2xl border border-border shadow-sm">
       <table className="w-full text-sm">
-        <thead className="bg-muted text-foreground font-semibold">
+        <thead className="bg-muted/50 text-foreground font-semibold">
           <tr>
-            <th className="px-4 py-3 text-left sticky left-0 bg-muted z-10">
+            <th className="px-6 py-4 text-left sticky left-0 bg-muted/50 z-10 rounded-tl-2xl">
               Week {selectedWeek === 'all' ? 'Totaal' : selectedWeek}
             </th>
             {days.map((d) => (
-              <th key={d} className="px-4 py-3 text-right capitalize">
+              <th key={d} className="px-6 py-4 text-right capitalize">
                 {d}
               </th>
             ))}
-            <th className="px-4 py-3 text-right font-bold">Totaal</th>
+            <th className="px-6 py-4 text-right font-bold rounded-tr-2xl">Totaal</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td colSpan={9} className="px-4 py-2 bg-primary/10 text-primary font-bold text-xs uppercase tracking-wider">
+            <td colSpan={9} className="px-6 py-3 bg-kpi-green text-kpi-green-text font-bold text-xs uppercase tracking-wider">
               Resultaten
             </td>
           </tr>
@@ -145,7 +145,7 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
           {renderRow('Aantal eenmalige machtigingen', 'oneoff')}
 
           <tr>
-            <td colSpan={9} className="px-4 py-2 bg-primary/10 text-primary font-bold text-xs uppercase tracking-wider">
+            <td colSpan={9} className="px-6 py-3 bg-kpi-blue text-kpi-blue-text font-bold text-xs uppercase tracking-wider">
               Financieel
             </td>
           </tr>
@@ -153,7 +153,7 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
           {renderRow('Jaarwaarde Doorlopend', 'annualValueRecurring', true)}
 
           <tr>
-            <td colSpan={9} className="px-4 py-2 bg-primary/10 text-primary font-bold text-xs uppercase tracking-wider">
+            <td colSpan={9} className="px-6 py-3 bg-kpi-purple text-kpi-purple-text font-bold text-xs uppercase tracking-wider">
               Productiviteit & Conversie
             </td>
           </tr>
@@ -162,7 +162,7 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
           {renderRow('Bruto Conversie', null, false, true, calcConversion)}
 
           <tr>
-            <td colSpan={9} className="px-4 py-2 bg-primary/10 text-primary font-bold text-xs uppercase tracking-wider">
+            <td colSpan={9} className="px-6 py-3 bg-kpi-cyan text-kpi-cyan-text font-bold text-xs uppercase tracking-wider">
               Investering (o.b.v. €{hourlyRate}/u)
             </td>
           </tr>

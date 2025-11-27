@@ -11,42 +11,47 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ selectedProject, onProjectChange, projects, role, onLogout }: SidebarProps) => {
+  const projectColors = ['bg-kpi-orange-text', 'bg-kpi-blue-text', 'bg-kpi-green-text', 'bg-kpi-purple-text', 'bg-kpi-cyan-text'];
+
   return (
-    <aside className="w-full md:w-64 bg-sidebar text-sidebar-foreground flex-shrink-0 flex flex-col">
-      <div className="p-6 border-b border-sidebar-border">
+    <aside className="w-full md:w-64 bg-card border-r border-border flex-shrink-0 flex flex-col">
+      <div className="p-6 border-b border-border">
         <div className="flex items-center gap-3 mb-2">
-          <img src={logo} alt="Triple Tree Logo" className="h-8 w-8" />
-          <h1 className="text-xl font-bold tracking-tight">
-            Rapportage<span className="text-sidebar-primary">2025</span>
-          </h1>
+          <img src={logo} alt="Triple Tree Logo" className="h-10 w-10" />
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">
+              Triple Tree
+            </h1>
+            <p className="text-xs text-muted-foreground">Rapportage Portal</p>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">Triple Tree Portal</p>
       </div>
 
-      <nav className="p-4 space-y-2 flex-1">
-        <div className="text-xs uppercase text-muted-foreground font-bold px-3 mb-2 mt-4">
+      <nav className="p-4 space-y-1 flex-1">
+        <div className="text-xs uppercase text-muted-foreground font-bold px-3 mb-3 mt-2">
           Campagnes
         </div>
-        {projects.map((proj) => (
+        {projects.map((proj, idx) => (
           <button
             key={proj}
             onClick={() => onProjectChange(proj)}
-            className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between transition-colors ${
+            className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all ${
               selectedProject === proj
-                ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-foreground hover:bg-muted'
             }`}
           >
-            <span className="capitalize">{proj}</span>
-            {selectedProject === proj && <ChevronRight size={14} />}
+            <div className={`w-2 h-2 rounded-full ${projectColors[idx % projectColors.length]}`}></div>
+            <span className="capitalize font-medium">{proj}</span>
+            {selectedProject === proj && <ChevronRight size={16} className="ml-auto" />}
           </button>
         ))}
       </nav>
 
-      <div className="mt-auto p-4 border-t border-sidebar-border">
+      <div className="mt-auto p-4 border-t border-border">
         <button
           onClick={onLogout}
-          className="flex items-center gap-2 text-muted-foreground hover:text-sidebar-foreground text-sm w-full"
+          className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm w-full px-3 py-2 rounded-lg hover:bg-muted transition-colors"
         >
           <LogOut size={16} /> Uitloggen ({role})
         </button>

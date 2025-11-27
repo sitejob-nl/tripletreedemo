@@ -5,28 +5,41 @@ interface KPICardProps {
   value: string | number;
   subtext?: string;
   icon: LucideIcon;
-  variant?: 'primary' | 'success' | 'warning' | 'destructive';
+  variant?: 'green' | 'pink' | 'purple' | 'blue' | 'cyan' | 'orange';
+  trend?: {
+    value: number;
+    isPositive: boolean;
+  };
 }
 
-export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'primary' }: KPICardProps) => {
+export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', trend }: KPICardProps) => {
   const variantStyles = {
-    primary: 'bg-primary/10 text-primary',
-    success: 'bg-success/10 text-success',
-    warning: 'bg-warning/10 text-warning',
-    destructive: 'bg-destructive/10 text-destructive',
+    green: { bg: 'bg-kpi-green', text: 'text-kpi-green-text', iconBg: 'bg-kpi-green', iconText: 'text-kpi-green-text' },
+    pink: { bg: 'bg-kpi-pink', text: 'text-kpi-pink-text', iconBg: 'bg-kpi-pink', iconText: 'text-kpi-pink-text' },
+    purple: { bg: 'bg-kpi-purple', text: 'text-kpi-purple-text', iconBg: 'bg-kpi-purple', iconText: 'text-kpi-purple-text' },
+    blue: { bg: 'bg-kpi-blue', text: 'text-kpi-blue-text', iconBg: 'bg-kpi-blue', iconText: 'text-kpi-blue-text' },
+    cyan: { bg: 'bg-kpi-cyan', text: 'text-kpi-cyan-text', iconBg: 'bg-kpi-cyan', iconText: 'text-kpi-cyan-text' },
+    orange: { bg: 'bg-kpi-orange', text: 'text-kpi-orange-text', iconBg: 'bg-kpi-orange', iconText: 'text-kpi-orange-text' },
   };
 
-  const subtextColor = variant === 'destructive' ? 'text-destructive' : 'text-success';
+  const styles = variantStyles[variant];
 
   return (
-    <div className="bg-card p-6 rounded-xl shadow-sm border border-border flex items-start justify-between">
-      <div>
-        <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
-        <h3 className="text-2xl font-bold text-card-foreground">{value}</h3>
-        {subtext && <p className={`text-xs mt-2 ${subtextColor}`}>{subtext}</p>}
+    <div className={`${styles.bg} p-6 rounded-2xl shadow-sm border border-border/50 flex items-start justify-between hover:shadow-md transition-shadow`}>
+      <div className="flex-1">
+        <p className="text-sm font-medium text-muted-foreground mb-2">{title}</p>
+        <h3 className={`text-3xl font-bold ${styles.text} mb-2`}>{value}</h3>
+        <div className="flex items-center gap-2">
+          {trend && (
+            <span className={`text-xs font-semibold ${trend.isPositive ? 'text-success' : 'text-destructive'}`}>
+              {trend.isPositive ? '▲' : '▼'} {Math.abs(trend.value)}%
+            </span>
+          )}
+          {subtext && <p className="text-xs text-muted-foreground">{subtext}</p>}
+        </div>
       </div>
-      <div className={`p-3 rounded-lg ${variantStyles[variant]}`}>
-        <Icon size={24} />
+      <div className={`p-4 rounded-xl ${styles.iconBg} ${styles.iconText}`}>
+        <Icon size={28} strokeWidth={2} />
       </div>
     </div>
   );
