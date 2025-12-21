@@ -73,14 +73,19 @@ const endpoints = [
   {
     method: 'POST',
     path: '/functions/v1/sync-project',
-    description: 'Trigger handmatige sync voor een project (toekomstig)',
+    description: 'Trigger handmatige sync voor een project',
     params: [
-      { name: 'project_id', type: 'uuid', description: 'Project ID om te synchroniseren', required: true }
+      { name: 'project_id', type: 'uuid', description: 'Project ID om te synchroniseren (of project_key)' },
+      { name: 'project_key', type: 'string', description: 'Project key als alternatief voor project_id' },
+      { name: 'from_date', type: 'string', description: 'Start datum (optioneel, format: YYYY-MM-DD)' },
+      { name: 'to_date', type: 'string', description: 'Eind datum (optioneel, format: YYYY-MM-DD)' }
     ],
     response: `{
   "success": true,
-  "message": "Sync gestart",
-  "sync_id": "uuid"
+  "project_id": "uuid",
+  "project_name": "Project Naam",
+  "records_synced": 150,
+  "sync_log_id": "uuid"
 }`
   }
 ];
@@ -121,7 +126,13 @@ curl -X GET \\
 curl -X GET \\
   'https://tvsdbztjqksxybxjwtrf.supabase.co/rest/v1/call_records?project_id=eq.UUID&beldatum=gte.2024-01-01' \\
   -H "apikey: YOUR_ANON_KEY" \\
-  -H "Authorization: Bearer YOUR_ANON_KEY"`,
+  -H "Authorization: Bearer YOUR_ANON_KEY"
+
+# Project sync triggeren
+curl -X POST \\
+  'https://tvsdbztjqksxybxjwtrf.supabase.co/functions/v1/sync-project' \\
+  -H "Content-Type: application/json" \\
+  -d '{"project_id": "YOUR_PROJECT_UUID"}'`,
 
   python: `# Python met supabase-py
 from supabase import create_client
