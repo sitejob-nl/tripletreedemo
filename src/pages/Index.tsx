@@ -11,6 +11,7 @@ import { SyncStatus } from '@/components/Dashboard/SyncStatus';
 import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
 import { useProjects } from '@/hooks/useProjects';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
@@ -18,6 +19,7 @@ const Index = () => {
   const [selectedProjectKey, setSelectedProjectKey] = useState<string>('hersenstichting');
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   const [selectedWeek, setSelectedWeek] = useState<string | number>('all');
+  const { signOut } = useAuth();
   const { toast } = useToast();
 
   // Fetch projects from Supabase
@@ -105,6 +107,11 @@ const Index = () => {
   const isLoading = projectsLoading || recordsLoading;
   const error = projectsError || recordsError;
 
+  const handleLogout = async () => {
+    await signOut();
+    setRole(null);
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans">
       <Sidebar
@@ -112,7 +119,7 @@ const Index = () => {
         onProjectChange={(key) => setSelectedProjectKey(key)}
         projects={projectKeys as any}
         role={role}
-        onLogout={() => setRole(null)}
+        onLogout={handleLogout}
       />
 
       <main className="flex-1 overflow-y-auto">

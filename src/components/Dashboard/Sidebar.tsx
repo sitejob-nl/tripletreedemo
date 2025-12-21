@@ -1,6 +1,8 @@
-import { LogOut, ChevronRight } from 'lucide-react';
+import { LogOut, ChevronRight, Settings } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Project, Role } from '@/types/dashboard';
 import logo from '@/assets/triple-tree-logo.png';
+
 interface SidebarProps {
   selectedProject: Project;
   onProjectChange: (project: Project) => void;
@@ -32,9 +34,17 @@ export const Sidebar = ({
           </button>)}
       </nav>
 
-      <div className="mt-auto p-4 border-t border-gray-800">
+      <div className="mt-auto p-4 border-t border-gray-800 space-y-1">
+        {role === 'admin' && (
+          <Link 
+            to="/admin" 
+            className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            <Settings size={16} /> Admin
+          </Link>
+        )}
         <button onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">
-          <LogOut size={16} /> Uitloggen ({role})
+          <LogOut size={16} /> Uitloggen
         </button>
       </div>
     </aside>;
