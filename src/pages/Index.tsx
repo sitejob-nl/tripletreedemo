@@ -178,50 +178,66 @@ const Index = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `Week ${selectedWeek === 'all' ? 'Totaal' : selectedWeek}`);
 
+    // Border style definition
+    const thinBorder = {
+      top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      right: { style: 'thin', color: { rgb: 'CCCCCC' } },
+    };
+
     // Style definitions
     const headerStyle = {
       font: { bold: true, color: { rgb: 'FFFFFF' } },
       fill: { fgColor: { rgb: '4A7C4E' } },
-      alignment: { horizontal: 'center' as const }
+      alignment: { horizontal: 'center' as const },
+      border: thinBorder
     };
     
-    const categoryStyles: Record<string, { font: { bold: boolean; color: { rgb: string } }; fill: { fgColor: { rgb: string } } }> = {
-      'RESULTATEN': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '22C55E' } } },
-      'FINANCIEEL': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '3B82F6' } } },
-      'PRODUCTIVITEIT': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '8B5CF6' } } },
-      'INVESTERING': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '06B6D4' } } },
+    const categoryStyles: Record<string, object> = {
+      'RESULTATEN': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '22C55E' } }, border: thinBorder },
+      'FINANCIEEL': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '3B82F6' } }, border: thinBorder },
+      'PRODUCTIVITEIT': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '8B5CF6' } }, border: thinBorder },
+      'INVESTERING': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '06B6D4' } }, border: thinBorder },
     };
 
-    // Apply header row styling (row 0)
+    const dataStyle = { border: thinBorder };
+    const totalColStyle = { font: { bold: true }, border: thinBorder };
+
+    // Apply styles to all cells
     const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-    cols.forEach((col) => {
-      const cell = ws[`${col}1`];
-      if (cell) {
-        cell.s = headerStyle;
-      }
-    });
-
-    // Apply category header styling
-    const categoryRows = [2, 7, 11, 15]; // Row numbers for RESULTATEN, FINANCIEEL, PRODUCTIVITEIT, INVESTERING
+    const categoryRows = [2, 7, 11, 15]; // Row numbers for category headers
     const categoryNames = ['RESULTATEN', 'FINANCIEEL', 'PRODUCTIVITEIT', 'INVESTERING'];
-    
-    categoryRows.forEach((rowNum, idx) => {
-      cols.forEach((col) => {
-        const cellRef = `${col}${rowNum}`;
+    const emptyRows = [6, 10, 14]; // Empty separator rows
+
+    for (let row = 1; row <= 17; row++) {
+      cols.forEach((col, colIdx) => {
+        const cellRef = `${col}${row}`;
+        
+        // Initialize cell if it doesn't exist
         if (!ws[cellRef]) {
           ws[cellRef] = { v: '', t: 's' };
         }
-        ws[cellRef].s = categoryStyles[categoryNames[idx]];
-      });
-    });
 
-    // Style the totaal column (last column) with bold
-    const totalColStyle = { font: { bold: true } };
-    for (let row = 1; row <= 17; row++) {
-      const cell = ws[`I${row}`];
-      if (cell && !categoryRows.includes(row) && row !== 1) {
-        cell.s = { ...cell.s, ...totalColStyle };
-      }
+        // Apply appropriate style based on row type
+        if (row === 1) {
+          // Header row
+          ws[cellRef].s = headerStyle;
+        } else if (categoryRows.includes(row)) {
+          // Category header rows
+          const categoryIdx = categoryRows.indexOf(row);
+          ws[cellRef].s = categoryStyles[categoryNames[categoryIdx]];
+        } else if (emptyRows.includes(row)) {
+          // Empty separator rows - just borders
+          ws[cellRef].s = dataStyle;
+        } else if (colIdx === 8) {
+          // Totaal column (last column) - bold with border
+          ws[cellRef].s = totalColStyle;
+        } else {
+          // Regular data cells
+          ws[cellRef].s = dataStyle;
+        }
+      });
     }
 
     // Set column widths
