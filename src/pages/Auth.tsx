@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Mail, Lock } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
 const emailSchema = z.string().email('Ongeldig email adres');
 const passwordSchema = z.string().min(6, 'Wachtwoord moet minimaal 6 tekens zijn');
@@ -138,16 +138,16 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="register-email">Email</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input id="register-email" type="email" placeholder="naam@voorbeeld.nl" value={email} onChange={e => setEmail(e.target.value)} className="pl-10" />
+                    
+                    <Input id="register-email" type="email" placeholder="naam@voorbeeld.nl" value={email} onChange={e => setEmail(e.target.value)} className="pl-[10px]" />
                   </div>
                   {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="register-password">Wachtwoord</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input id="register-password" type="password" placeholder="Minimaal 6 tekens" value={password} onChange={e => setPassword(e.target.value)} className="pl-10" />
+                    
+                    <Input id="register-password" type="password" placeholder="Minimaal 6 tekens" value={password} onChange={e => setPassword(e.target.value)} className="pl-[10px]" />
                   </div>
                   {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
                 </div>
