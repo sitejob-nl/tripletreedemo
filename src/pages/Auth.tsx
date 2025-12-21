@@ -96,7 +96,7 @@ export default function Auth() {
   };
   return <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
+        <CardHeader className="text-center text-primary-foreground bg-popover-foreground">
           <img alt="Triple Tree Logo" className="h-16 mx-auto mb-4" src="/lovable-uploads/88aa155b-88a2-45d0-a554-eaafefd22704.png" />
           <CardTitle className="text-2xl">Triple Tree Dashboard</CardTitle>
           <CardDescription>Log in of maak een account aan</CardDescription>
@@ -113,7 +113,7 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="login-email">Email</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    
                     <Input id="login-email" type="email" placeholder="naam@voorbeeld.nl" value={email} onChange={e => setEmail(e.target.value)} className="pl-10" />
                   </div>
                   {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
@@ -121,7 +121,7 @@ export default function Auth() {
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Wachtwoord</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    
                     <Input id="login-password" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="pl-10" />
                   </div>
                   {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
