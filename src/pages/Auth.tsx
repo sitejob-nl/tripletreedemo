@@ -98,7 +98,7 @@ export default function Auth() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center text-primary-foreground bg-popover-foreground">
           <img alt="Triple Tree Logo" className="h-16 mx-auto mb-4" src="/lovable-uploads/88aa155b-88a2-45d0-a554-eaafefd22704.png" />
-          <CardTitle className="text-2xl">Triple Tree Dashboard</CardTitle>
+          
           <CardDescription>Log in of maak een account aan</CardDescription>
         </CardHeader>
         <CardContent className="pt-[20px]">
