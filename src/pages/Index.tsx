@@ -1,6 +1,5 @@
-import { useState, useMemo } from 'react';
-import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2 } from 'lucide-react';
-import { RoleSelection } from '@/components/Dashboard/RoleSelection';
+import { useState, useMemo, useEffect } from 'react';
+import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye } from 'lucide-react';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
 import { KPICard } from '@/components/Dashboard/KPICard';
@@ -12,17 +11,26 @@ import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/das
 import { useProjects } from '@/hooks/useProjects';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
 import { useAuth } from '@/hooks/useAuth';
-import { useIsSuperAdmin } from '@/hooks/useUserRole';
+import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Navigate } from 'react-router-dom';
 
 const Index = () => {
-  const [role, setRole] = useState<Role | null>(null);
   const [selectedProjectKey, setSelectedProjectKey] = useState<string>('hersenstichting');
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   const [selectedWeek, setSelectedWeek] = useState<string | number>('all');
-  const { user, signOut } = useAuth();
+  const [viewAsClient, setViewAsClient] = useState(false);
+  
+  const { user, signOut, loading: authLoading } = useAuth();
+  const { data: userRole, isLoading: roleLoading } = useUserRole(user?.id);
   const { isSuperAdmin } = useIsSuperAdmin(user?.id);
   const { toast } = useToast();
+
+  // Determine effective role based on database role and viewAsClient toggle
+  const isDbAdmin = userRole?.role === 'admin' || userRole?.role === 'superadmin';
+  const effectiveRole: Role = viewAsClient ? 'client' : (isDbAdmin ? 'admin' : 'client');
 
   // Fetch projects from Supabase
   const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
@@ -102,8 +110,21 @@ const Index = () => {
   // Project keys for sidebar (from database)
   const projectKeys = projects.map((p) => p.project_key);
 
-  if (!role) {
-    return <RoleSelection onSelectRole={setRole} />;
+  // Redirect to auth if not logged in
+  if (!authLoading && !user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // Show loading while checking auth and role
+  if (authLoading || roleLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="text-muted-foreground">Laden...</span>
+        </div>
+      </div>
+    );
   }
 
   const isLoading = projectsLoading || recordsLoading;
@@ -111,7 +132,6 @@ const Index = () => {
 
   const handleLogout = async () => {
     await signOut();
-    setRole(null);
   };
 
   return (
@@ -120,7 +140,7 @@ const Index = () => {
         selectedProject={selectedProjectKey as any}
         onProjectChange={(key) => setSelectedProjectKey(key)}
         projects={projectKeys as any}
-        role={role}
+        role={effectiveRole}
         onLogout={handleLogout}
         isSuperAdmin={isSuperAdmin}
       />
@@ -128,13 +148,30 @@ const Index = () => {
       <main className="flex-1 overflow-y-auto">
         <Header
           project={selectedProjectKey as any}
-          role={role}
+          role={effectiveRole}
           selectedWeek={selectedWeek}
           availableWeeks={availableWeeks}
           viewMode={viewMode}
           onWeekChange={(week) => setSelectedWeek(week)}
           onViewModeChange={setViewMode}
         />
+        
+        {/* Admin toggle to view as client */}
+        {isDbAdmin && (
+          <div className="px-8 pt-4">
+            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border border-border w-fit">
+              <Eye size={16} className="text-muted-foreground" />
+              <Label htmlFor="view-as-client" className="text-sm font-medium cursor-pointer">
+                Bekijk als klant
+              </Label>
+              <Switch
+                id="view-as-client"
+                checked={viewAsClient}
+                onCheckedChange={setViewAsClient}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="p-8 max-w-7xl mx-auto">
           {/* Sync Status */}
@@ -164,7 +201,7 @@ const Index = () => {
           {/* Main Content */}
           {!isLoading && !error && (
             <>
-              {role === 'admin' && (
+              {effectiveRole === 'admin' && (
                 <div className="mb-8">
                   {!currentMapping.amount_col && (
                     <div className="bg-warning/10 border border-warning/20 rounded-lg p-4 mb-4 flex items-start gap-3">
