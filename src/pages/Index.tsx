@@ -12,6 +12,7 @@ import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/das
 import { useProjects } from '@/hooks/useProjects';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 
 const Index = () => {
@@ -19,7 +20,8 @@ const Index = () => {
   const [selectedProjectKey, setSelectedProjectKey] = useState<string>('hersenstichting');
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   const [selectedWeek, setSelectedWeek] = useState<string | number>('all');
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const { isSuperAdmin } = useIsSuperAdmin(user?.id);
   const { toast } = useToast();
 
   // Fetch projects from Supabase
@@ -120,6 +122,7 @@ const Index = () => {
         projects={projectKeys as any}
         role={role}
         onLogout={handleLogout}
+        isSuperAdmin={isSuperAdmin}
       />
 
       <main className="flex-1 overflow-y-auto">
