@@ -1,4 +1,4 @@
-import { LogOut, ChevronRight, Settings } from 'lucide-react';
+import { LogOut, ChevronRight, Settings, Users, Code } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Project, Role } from '@/types/dashboard';
 import logo from '@/assets/triple-tree-logo.png';
@@ -9,13 +9,15 @@ interface SidebarProps {
   projects: Project[];
   role: Role;
   onLogout: () => void;
+  isSuperAdmin?: boolean;
 }
 export const Sidebar = ({
   selectedProject,
   onProjectChange,
   projects,
   role,
-  onLogout
+  onLogout,
+  isSuperAdmin = false
 }: SidebarProps) => {
   const projectColors = ['bg-kpi-orange-text', 'bg-kpi-blue-text', 'bg-kpi-green-text', 'bg-kpi-purple-text', 'bg-kpi-cyan-text'];
   return <aside className="w-full md:w-64 bg-black border-r border-border flex-shrink-0 flex flex-col">
@@ -36,11 +38,27 @@ export const Sidebar = ({
 
       <div className="mt-auto p-4 border-t border-gray-800 space-y-1">
         {role === 'admin' && (
+          <>
+            <Link 
+              to="/admin" 
+              className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <Settings size={16} /> Projectbeheer
+            </Link>
+            <Link 
+              to="/admin/users" 
+              className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <Users size={16} /> Gebruikers
+            </Link>
+          </>
+        )}
+        {isSuperAdmin && (
           <Link 
-            to="/admin" 
-            className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+            to="/developer" 
+            className="flex items-center gap-2 text-kpi-purple-text hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
           >
-            <Settings size={16} /> Admin
+            <Code size={16} /> Developer
           </Link>
         )}
         <button onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">

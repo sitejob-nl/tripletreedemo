@@ -6,6 +6,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Admin from "./pages/Admin";
+import AdminUsers from "./pages/AdminUsers";
+import Developer from "./pages/Developer";
+import ApiDocs from "./pages/ApiDocs";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -19,23 +22,11 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Index />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute requireAdmin>
-                <Admin />
-              </ProtectedRoute>
-            }
-          />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+          <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
+          <Route path="/developer" element={<ProtectedRoute requireSuperAdmin><Developer /></ProtectedRoute>} />
+          <Route path="/developer/api-docs" element={<ProtectedRoute requireSuperAdmin><ApiDocs /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

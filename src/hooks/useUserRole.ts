@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-type AppRole = 'admin' | 'user';
+type AppRole = 'admin' | 'user' | 'superadmin';
 
 interface UserRole {
   id: string;
@@ -37,7 +37,16 @@ export function useIsAdmin(userId: string | undefined) {
   const { data: userRole, isLoading } = useUserRole(userId);
   
   return {
-    isAdmin: userRole?.role === 'admin',
+    isAdmin: userRole?.role === 'admin' || userRole?.role === 'superadmin',
+    isLoading,
+  };
+}
+
+export function useIsSuperAdmin(userId: string | undefined) {
+  const { data: userRole, isLoading } = useUserRole(userId);
+  
+  return {
+    isSuperAdmin: userRole?.role === 'superadmin',
     isLoading,
   };
 }
