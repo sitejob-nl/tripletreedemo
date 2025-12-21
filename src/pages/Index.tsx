@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
 import { KPICard } from '@/components/Dashboard/KPICard';
@@ -177,6 +177,52 @@ const Index = () => {
     const ws = XLSX.utils.aoa_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `Week ${selectedWeek === 'all' ? 'Totaal' : selectedWeek}`);
+
+    // Style definitions
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '4A7C4E' } },
+      alignment: { horizontal: 'center' as const }
+    };
+    
+    const categoryStyles: Record<string, { font: { bold: boolean; color: { rgb: string } }; fill: { fgColor: { rgb: string } } }> = {
+      'RESULTATEN': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '22C55E' } } },
+      'FINANCIEEL': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '3B82F6' } } },
+      'PRODUCTIVITEIT': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '8B5CF6' } } },
+      'INVESTERING': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '06B6D4' } } },
+    };
+
+    // Apply header row styling (row 0)
+    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+    cols.forEach((col) => {
+      const cell = ws[`${col}1`];
+      if (cell) {
+        cell.s = headerStyle;
+      }
+    });
+
+    // Apply category header styling
+    const categoryRows = [2, 7, 11, 15]; // Row numbers for RESULTATEN, FINANCIEEL, PRODUCTIVITEIT, INVESTERING
+    const categoryNames = ['RESULTATEN', 'FINANCIEEL', 'PRODUCTIVITEIT', 'INVESTERING'];
+    
+    categoryRows.forEach((rowNum, idx) => {
+      cols.forEach((col) => {
+        const cellRef = `${col}${rowNum}`;
+        if (!ws[cellRef]) {
+          ws[cellRef] = { v: '', t: 's' };
+        }
+        ws[cellRef].s = categoryStyles[categoryNames[idx]];
+      });
+    });
+
+    // Style the totaal column (last column) with bold
+    const totalColStyle = { font: { bold: true } };
+    for (let row = 1; row <= 17; row++) {
+      const cell = ws[`I${row}`];
+      if (cell && !categoryRows.includes(row) && row !== 1) {
+        cell.s = { ...cell.s, ...totalColStyle };
+      }
+    }
 
     // Set column widths
     ws['!cols'] = [
