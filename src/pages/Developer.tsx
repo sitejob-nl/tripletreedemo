@@ -1,24 +1,46 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Database, Activity, RefreshCw, AlertCircle, CheckCircle, Clock, FileText, Code } from "lucide-react";
+import { ArrowLeft, Database, Activity, RefreshCw, AlertCircle, CheckCircle, Clock, FileText, Code, ChevronDown, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSyncLogs, useDbStats } from "@/hooks/useSyncLogs";
 import { useProjects } from "@/hooks/useProjects";
+import { toast } from "sonner";
 
 const statusStyles: Record<string, { icon: React.ReactNode; color: string }> = {
   completed: { icon: <CheckCircle className="h-4 w-4" />, color: 'text-primary bg-primary/10' },
+  success: { icon: <CheckCircle className="h-4 w-4" />, color: 'text-primary bg-primary/10' },
   running: { icon: <RefreshCw className="h-4 w-4 animate-spin" />, color: 'text-kpi-blue-text bg-kpi-blue' },
   failed: { icon: <AlertCircle className="h-4 w-4" />, color: 'text-destructive bg-destructive/10' },
   pending: { icon: <Clock className="h-4 w-4" />, color: 'text-warning bg-warning/10' },
+};
+
+const copyToClipboard = (text: string, label: string) => {
+  navigator.clipboard.writeText(text);
+  toast.success(`${label} gekopieerd`);
 };
 
 export default function Developer() {
   const { data: syncLogs, isLoading: logsLoading } = useSyncLogs();
   const { data: stats, isLoading: statsLoading } = useDbStats();
   const { projects } = useProjects(false);
+  const [openLogs, setOpenLogs] = useState<Set<string>>(new Set());
+
+  const toggleLog = (logId: string) => {
+    setOpenLogs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(logId)) {
+        newSet.delete(logId);
+      } else {
+        newSet.add(logId);
+      }
+      return newSet;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -84,55 +106,172 @@ export default function Developer() {
                       {syncLogs.map((log) => {
                         const status = log.status || 'pending';
                         const style = statusStyles[status] || statusStyles.pending;
+                        const isOpen = openLogs.has(log.id);
                         
                         return (
-                          <div 
-                            key={log.id} 
-                            className="p-4 rounded-lg border bg-card"
+                          <Collapsible
+                            key={log.id}
+                            open={isOpen}
+                            onOpenChange={() => toggleLog(log.id)}
                           >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className={style.color}>
-                                  {style.icon}
-                                  <span className="ml-1 capitalize">{status}</span>
-                                </Badge>
-                                <span className="font-medium">{log.project_name || 'Onbekend project'}</span>
-                              </div>
-                              <span className="text-sm text-muted-foreground">
-                                {log.started_at ? new Date(log.started_at).toLocaleString('nl-NL') : '-'}
-                              </span>
+                            <div className="rounded-lg border bg-card overflow-hidden">
+                              <CollapsibleTrigger className="w-full p-4 text-left hover:bg-muted/50 transition-colors">
+                                <div className="flex items-start justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className={style.color}>
+                                      {style.icon}
+                                      <span className="ml-1 capitalize">{status}</span>
+                                    </Badge>
+                                    <span className="font-medium">{log.project_name || 'Onbekend project'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">
+                                      {log.started_at ? new Date(log.started_at).toLocaleString('nl-NL') : '-'}
+                                    </span>
+                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-muted-foreground">Records:</span>
+                                    <p className="font-medium">{log.records_synced || 0}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Periode:</span>
+                                    <p className="font-medium text-xs">
+                                      {log.sync_from ? new Date(log.sync_from).toLocaleDateString('nl-NL') : '-'} → {' '}
+                                      {log.sync_to ? new Date(log.sync_to).toLocaleDateString('nl-NL') : '-'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Duur:</span>
+                                    <p className="font-medium">
+                                      {log.started_at && log.completed_at 
+                                        ? `${Math.round((new Date(log.completed_at).getTime() - new Date(log.started_at).getTime()) / 1000)}s`
+                                        : '-'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">ID:</span>
+                                    <p className="font-mono text-xs truncate">{log.id.slice(0, 8)}...</p>
+                                  </div>
+                                </div>
+                                {log.error_message && (
+                                  <div className="mt-3 p-2 rounded bg-destructive/10 text-destructive text-sm text-left">
+                                    <strong>Error:</strong> {log.error_message.length > 100 ? log.error_message.slice(0, 100) + '...' : log.error_message}
+                                  </div>
+                                )}
+                              </CollapsibleTrigger>
+                              
+                              <CollapsibleContent>
+                                <div className="px-4 pb-4 pt-2 border-t bg-muted/30 space-y-4">
+                                  {/* Full Log ID */}
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <span className="text-sm text-muted-foreground">Log ID:</span>
+                                      <p className="font-mono text-sm">{log.id}</p>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        copyToClipboard(log.id, 'Log ID');
+                                      }}
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  {/* Project ID */}
+                                  {log.project_id && (
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <span className="text-sm text-muted-foreground">Project ID:</span>
+                                        <p className="font-mono text-sm">{log.project_id}</p>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          copyToClipboard(log.project_id!, 'Project ID');
+                                        }}
+                                      >
+                                        <Copy className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  {/* Timestamps */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <span className="text-sm text-muted-foreground">Gestart op:</span>
+                                      <p className="text-sm font-medium">
+                                        {log.started_at ? new Date(log.started_at).toLocaleString('nl-NL', { 
+                                          dateStyle: 'full', 
+                                          timeStyle: 'medium' 
+                                        }) : '-'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <span className="text-sm text-muted-foreground">Voltooid op:</span>
+                                      <p className="text-sm font-medium">
+                                        {log.completed_at ? new Date(log.completed_at).toLocaleString('nl-NL', { 
+                                          dateStyle: 'full', 
+                                          timeStyle: 'medium' 
+                                        }) : '-'}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Sync Period Details */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <span className="text-sm text-muted-foreground">Sync periode van:</span>
+                                      <p className="text-sm font-medium">
+                                        {log.sync_from ? new Date(log.sync_from).toLocaleString('nl-NL', { 
+                                          dateStyle: 'full', 
+                                          timeStyle: 'medium' 
+                                        }) : '-'}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <span className="text-sm text-muted-foreground">Sync periode tot:</span>
+                                      <p className="text-sm font-medium">
+                                        {log.sync_to ? new Date(log.sync_to).toLocaleString('nl-NL', { 
+                                          dateStyle: 'full', 
+                                          timeStyle: 'medium' 
+                                        }) : '-'}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Full Error Message */}
+                                  {log.error_message && (
+                                    <div>
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm text-muted-foreground">Volledige foutmelding:</span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            copyToClipboard(log.error_message!, 'Foutmelding');
+                                          }}
+                                        >
+                                          <Copy className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      <div className="p-3 rounded bg-destructive/10 text-destructive text-sm font-mono whitespace-pre-wrap break-all">
+                                        {log.error_message}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </CollapsibleContent>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">Records:</span>
-                                <p className="font-medium">{log.records_synced || 0}</p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Periode:</span>
-                                <p className="font-medium text-xs">
-                                  {log.sync_from ? new Date(log.sync_from).toLocaleDateString('nl-NL') : '-'} → {' '}
-                                  {log.sync_to ? new Date(log.sync_to).toLocaleDateString('nl-NL') : '-'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Duur:</span>
-                                <p className="font-medium">
-                                  {log.started_at && log.completed_at 
-                                    ? `${Math.round((new Date(log.completed_at).getTime() - new Date(log.started_at).getTime()) / 1000)}s`
-                                    : '-'}
-                                </p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">ID:</span>
-                                <p className="font-mono text-xs truncate">{log.id.slice(0, 8)}...</p>
-                              </div>
-                            </div>
-                            {log.error_message && (
-                              <div className="mt-3 p-2 rounded bg-destructive/10 text-destructive text-sm">
-                                <strong>Error:</strong> {log.error_message}
-                              </div>
-                            )}
-                          </div>
+                          </Collapsible>
                         );
                       })}
                     </div>
