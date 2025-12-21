@@ -21,7 +21,7 @@ const Index = () => {
   const { toast } = useToast();
 
   // Fetch projects from Supabase
-  const { data: projects = [], isLoading: projectsLoading, error: projectsError } = useProjects();
+  const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
 
   // Find current project
   const currentProject = useMemo(
