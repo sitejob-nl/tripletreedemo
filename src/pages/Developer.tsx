@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Database, Activity, RefreshCw, AlertCircle, CheckCircle, Clock, FileText, Code, ChevronDown, Copy, Check } from "lucide-react";
+import { ArrowLeft, Database, Activity, RefreshCw, AlertCircle, CheckCircle, Clock, FileText, Code, ChevronDown, Copy, AlertTriangle, Bug, Trash2, CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSyncLogs, useDbStats } from "@/hooks/useSyncLogs";
 import { useProjects } from "@/hooks/useProjects";
+import { useErrorLogs, useUnresolvedErrorCount, useResolveError, useDeleteError } from "@/hooks/useErrorLogs";
 import { toast } from "sonner";
 
 const statusStyles: Record<string, { icon: React.ReactNode; color: string }> = {
@@ -17,6 +18,14 @@ const statusStyles: Record<string, { icon: React.ReactNode; color: string }> = {
   running: { icon: <RefreshCw className="h-4 w-4 animate-spin" />, color: 'text-kpi-blue-text bg-kpi-blue' },
   failed: { icon: <AlertCircle className="h-4 w-4" />, color: 'text-destructive bg-destructive/10' },
   pending: { icon: <Clock className="h-4 w-4" />, color: 'text-warning bg-warning/10' },
+};
+
+const errorTypeStyles: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+  javascript_error: { icon: <Bug className="h-4 w-4" />, color: 'text-destructive bg-destructive/10', label: 'JavaScript' },
+  react_error: { icon: <AlertTriangle className="h-4 w-4" />, color: 'text-kpi-orange-text bg-kpi-orange', label: 'React' },
+  api_error: { icon: <AlertCircle className="h-4 w-4" />, color: 'text-kpi-purple-text bg-kpi-purple', label: 'API' },
+  network_error: { icon: <RefreshCw className="h-4 w-4" />, color: 'text-kpi-blue-text bg-kpi-blue', label: 'Network' },
+  unhandled_rejection: { icon: <AlertTriangle className="h-4 w-4" />, color: 'text-warning bg-warning/10', label: 'Promise' },
 };
 
 const copyToClipboard = (text: string, label: string) => {
@@ -28,7 +37,13 @@ export default function Developer() {
   const { data: syncLogs, isLoading: logsLoading } = useSyncLogs();
   const { data: stats, isLoading: statsLoading } = useDbStats();
   const { projects } = useProjects(false);
+  const { data: errorLogs, isLoading: errorLogsLoading } = useErrorLogs();
+  const { data: unresolvedCount } = useUnresolvedErrorCount();
+  const resolveError = useResolveError();
+  const deleteError = useDeleteError();
+  
   const [openLogs, setOpenLogs] = useState<Set<string>>(new Set());
+  const [openErrors, setOpenErrors] = useState<Set<string>>(new Set());
 
   const toggleLog = (logId: string) => {
     setOpenLogs(prev => {
@@ -39,6 +54,32 @@ export default function Developer() {
         newSet.add(logId);
       }
       return newSet;
+    });
+  };
+
+  const toggleError = (errorId: string) => {
+    setOpenErrors(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(errorId)) {
+        newSet.delete(errorId);
+      } else {
+        newSet.add(errorId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleResolveError = (errorId: string) => {
+    resolveError.mutate(errorId, {
+      onSuccess: () => toast.success('Error gemarkeerd als opgelost'),
+      onError: () => toast.error('Kon error niet bijwerken'),
+    });
+  };
+
+  const handleDeleteError = (errorId: string) => {
+    deleteError.mutate(errorId, {
+      onSuccess: () => toast.success('Error verwijderd'),
+      onError: () => toast.error('Kon error niet verwijderen'),
     });
   };
 
@@ -73,6 +114,15 @@ export default function Developer() {
             <TabsTrigger value="logs" className="gap-2">
               <Activity className="h-4 w-4" />
               Sync Logs
+            </TabsTrigger>
+            <TabsTrigger value="errors" className="gap-2 relative">
+              <Bug className="h-4 w-4" />
+              Error Logs
+              {unresolvedCount && unresolvedCount > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs font-medium rounded-full bg-destructive text-destructive-foreground">
+                  {unresolvedCount}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger value="stats" className="gap-2">
               <Database className="h-4 w-4" />
@@ -266,6 +316,216 @@ export default function Developer() {
                                       <div className="p-3 rounded bg-destructive/10 text-destructive text-sm font-mono whitespace-pre-wrap break-all">
                                         {log.error_message}
                                       </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </CollapsibleContent>
+                            </div>
+                          </Collapsible>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Error Logs Tab */}
+          <TabsContent value="errors" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bug className="h-5 w-5" />
+                  Error Logs
+                  {unresolvedCount && unresolvedCount > 0 && (
+                    <Badge variant="destructive">{unresolvedCount} open</Badge>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  Alle systeem errors worden hier automatisch gelogd
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {errorLogsLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Laden...</div>
+                ) : !errorLogs || errorLogs.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CheckCircle className="h-12 w-12 mx-auto mb-3 text-primary" />
+                    <p className="font-medium">Geen errors!</p>
+                    <p className="text-sm">Het systeem draait zonder problemen.</p>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[500px]">
+                    <div className="space-y-3">
+                      {errorLogs.map((error) => {
+                        const style = errorTypeStyles[error.error_type] || errorTypeStyles.javascript_error;
+                        const isOpen = openErrors.has(error.id);
+                        
+                        return (
+                          <Collapsible
+                            key={error.id}
+                            open={isOpen}
+                            onOpenChange={() => toggleError(error.id)}
+                          >
+                            <div className={`rounded-lg border overflow-hidden ${error.is_resolved ? 'opacity-60' : ''}`}>
+                              <CollapsibleTrigger className="w-full p-4 text-left hover:bg-muted/50 transition-colors">
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className={style.color}>
+                                      {style.icon}
+                                      <span className="ml-1">{style.label}</span>
+                                    </Badge>
+                                    {error.is_resolved && (
+                                      <Badge variant="outline" className="text-primary bg-primary/10">
+                                        <CheckCheck className="h-3 w-3 mr-1" />
+                                        Opgelost
+                                      </Badge>
+                                    )}
+                                    {error.component_name && (
+                                      <span className="text-sm text-muted-foreground font-mono">
+                                        {error.component_name}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm text-muted-foreground">
+                                      {new Date(error.created_at).toLocaleString('nl-NL')}
+                                    </span>
+                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                                  </div>
+                                </div>
+                                <p className="text-sm font-medium line-clamp-2">
+                                  {error.error_message}
+                                </p>
+                                {error.url && (
+                                  <p className="text-xs text-muted-foreground mt-1 truncate">
+                                    {error.url}
+                                  </p>
+                                )}
+                              </CollapsibleTrigger>
+                              
+                              <CollapsibleContent>
+                                <div className="px-4 pb-4 pt-2 border-t bg-muted/30 space-y-4">
+                                  {/* Actions */}
+                                  <div className="flex gap-2">
+                                    {!error.is_resolved && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleResolveError(error.id);
+                                        }}
+                                        className="gap-2"
+                                      >
+                                        <CheckCheck className="h-4 w-4" />
+                                        Markeer als opgelost
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteError(error.id);
+                                      }}
+                                      className="gap-2 text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Verwijderen
+                                    </Button>
+                                  </div>
+
+                                  {/* Error ID */}
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <span className="text-sm text-muted-foreground">Error ID:</span>
+                                      <p className="font-mono text-sm">{error.id}</p>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        copyToClipboard(error.id, 'Error ID');
+                                      }}
+                                    >
+                                      <Copy className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+
+                                  {/* Full Error Message */}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-sm text-muted-foreground">Error message:</span>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          copyToClipboard(error.error_message, 'Error message');
+                                        }}
+                                      >
+                                        <Copy className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                    <div className="p-3 rounded bg-destructive/10 text-destructive text-sm font-mono whitespace-pre-wrap break-all">
+                                      {error.error_message}
+                                    </div>
+                                  </div>
+
+                                  {/* Stack Trace */}
+                                  {error.stack_trace && (
+                                    <div>
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm text-muted-foreground">Stack trace:</span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            copyToClipboard(error.stack_trace!, 'Stack trace');
+                                          }}
+                                        >
+                                          <Copy className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                      <div className="p-3 rounded bg-muted text-sm font-mono whitespace-pre-wrap break-all max-h-48 overflow-auto">
+                                        {error.stack_trace}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Metadata */}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    {error.url && (
+                                      <div>
+                                        <span className="text-sm text-muted-foreground">URL:</span>
+                                        <p className="text-sm font-medium break-all">{error.url}</p>
+                                      </div>
+                                    )}
+                                    {error.user_id && (
+                                      <div>
+                                        <span className="text-sm text-muted-foreground">User ID:</span>
+                                        <p className="text-sm font-mono">{error.user_id}</p>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {error.user_agent && (
+                                    <div>
+                                      <span className="text-sm text-muted-foreground">User Agent:</span>
+                                      <p className="text-xs font-mono text-muted-foreground break-all">{error.user_agent}</p>
+                                    </div>
+                                  )}
+
+                                  {error.metadata && Object.keys(error.metadata).length > 0 && (
+                                    <div>
+                                      <span className="text-sm text-muted-foreground">Extra metadata:</span>
+                                      <pre className="mt-1 p-3 rounded bg-muted text-xs font-mono overflow-auto">
+                                        {JSON.stringify(error.metadata, null, 2)}
+                                      </pre>
                                     </div>
                                   )}
                                 </div>
