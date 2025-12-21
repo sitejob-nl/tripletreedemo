@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
 import { KPICard } from '@/components/Dashboard/KPICard';
@@ -88,14 +89,6 @@ const Index = () => {
     };
   }, [currentProject]);
 
-  const handleSaveMapping = () => {
-    // TODO: Implement save to Supabase
-    toast({
-      title: 'Mapping opgeslagen',
-      description: 'De configuratie is succesvol bijgewerkt.',
-    });
-  };
-
   // Calculate totals for KPI cards
   const totalSales = processedData.filter((d) => d.is_sale).length;
   const totalAnnualValue = processedData.reduce(
@@ -106,6 +99,105 @@ const Index = () => {
   const hourlyRate = currentMapping.hourly_rate;
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
+
+  const handleSaveMapping = () => {
+    // TODO: Implement save to Supabase
+    toast({
+      title: 'Mapping opgeslagen',
+      description: 'De configuratie is succesvol bijgewerkt.',
+    });
+  };
+
+  // Export to Excel function
+  const handleExportToExcel = useCallback(() => {
+    const days = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
+    
+    // Aggregate data by day
+    const aggregated: Record<string, { calls: number; sales: number; recurring: number; oneoff: number; annualValue: number; annualValueRecurring: number; durationSec: number }> = {};
+    days.forEach((d) => (aggregated[d] = { calls: 0, sales: 0, recurring: 0, oneoff: 0, annualValue: 0, annualValueRecurring: 0, durationSec: 0 }));
+    aggregated.total = { calls: 0, sales: 0, recurring: 0, oneoff: 0, annualValue: 0, annualValueRecurring: 0, durationSec: 0 };
+
+    processedData.forEach((record) => {
+      const day = record.day_name.toLowerCase();
+      if (!aggregated[day]) return;
+
+      aggregated[day].calls++;
+      aggregated[day].durationSec += record.bc_gesprekstijd;
+
+      if (record.is_sale) {
+        aggregated[day].sales++;
+        aggregated[day].annualValue += record.annual_value;
+        if (record.is_recurring) {
+          aggregated[day].recurring++;
+          aggregated[day].annualValueRecurring += record.annual_value;
+        } else {
+          aggregated[day].oneoff++;
+        }
+      }
+
+      aggregated.total.calls++;
+      aggregated.total.durationSec += record.bc_gesprekstijd;
+      if (record.is_sale) {
+        aggregated.total.sales++;
+        aggregated.total.annualValue += record.annual_value;
+        if (record.is_recurring) {
+          aggregated.total.recurring++;
+          aggregated.total.annualValueRecurring += record.annual_value;
+        } else {
+          aggregated.total.oneoff++;
+        }
+      }
+    });
+
+    // Build rows for Excel
+    const calcHours = (durationSec: number) => durationSec / 3600;
+    const calcInvestment = (durationSec: number) => calcHours(durationSec) * hourlyRate;
+    
+    const excelData = [
+      ['', ...days.map(d => d.charAt(0).toUpperCase() + d.slice(1)), 'Totaal'],
+      ['RESULTATEN', '', '', '', '', '', '', '', ''],
+      ['Aantal positief', ...days.map(d => aggregated[d].sales), aggregated.total.sales],
+      ['Doorlopende machtigingen', ...days.map(d => aggregated[d].recurring), aggregated.total.recurring],
+      ['Eenmalige machtigingen', ...days.map(d => aggregated[d].oneoff), aggregated.total.oneoff],
+      ['', '', '', '', '', '', '', '', ''],
+      ['FINANCIEEL', '', '', '', '', '', '', '', ''],
+      ['Jaarwaarde Totaal', ...days.map(d => `€ ${aggregated[d].annualValue.toFixed(2)}`), `€ ${aggregated.total.annualValue.toFixed(2)}`],
+      ['Jaarwaarde Doorlopend', ...days.map(d => `€ ${aggregated[d].annualValueRecurring.toFixed(2)}`), `€ ${aggregated.total.annualValueRecurring.toFixed(2)}`],
+      ['', '', '', '', '', '', '', '', ''],
+      ['PRODUCTIVITEIT', '', '', '', '', '', '', '', ''],
+      ['Aantal beluren', ...days.map(d => calcHours(aggregated[d].durationSec).toFixed(1)), calcHours(aggregated.total.durationSec).toFixed(1)],
+      ['Bruto Conversie', ...days.map(d => aggregated[d].calls > 0 ? `${((aggregated[d].sales / aggregated[d].calls) * 100).toFixed(1)}%` : '0%'), aggregated.total.calls > 0 ? `${((aggregated.total.sales / aggregated.total.calls) * 100).toFixed(1)}%` : '0%'],
+      ['', '', '', '', '', '', '', '', ''],
+      ['INVESTERING', '', '', '', '', '', '', '', ''],
+      ['Investering (Excl BTW)', ...days.map(d => `€ ${calcInvestment(aggregated[d].durationSec).toFixed(2)}`), `€ ${calcInvestment(aggregated.total.durationSec).toFixed(2)}`],
+      ['Investering per donateur', ...days.map(d => aggregated[d].sales > 0 ? `€ ${(calcInvestment(aggregated[d].durationSec) / aggregated[d].sales).toFixed(2)}` : '€ 0.00'), aggregated.total.sales > 0 ? `€ ${(calcInvestment(aggregated.total.durationSec) / aggregated.total.sales).toFixed(2)}` : '€ 0.00'],
+    ];
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `Week ${selectedWeek === 'all' ? 'Totaal' : selectedWeek}`);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 28 },
+      ...days.map(() => ({ wch: 14 })),
+      { wch: 14 }
+    ];
+
+    // Generate filename
+    const projectName = currentProject?.name || selectedProjectKey;
+    const weekLabel = selectedWeek === 'all' ? 'Totaal' : `Week${selectedWeek}`;
+    const filename = `${projectName}_${weekLabel}_Rapport.xlsx`;
+
+    // Download file
+    XLSX.writeFile(wb, filename);
+
+    toast({
+      title: 'Export succesvol',
+      description: `Rapport geëxporteerd als ${filename}`,
+    });
+  }, [processedData, hourlyRate, selectedWeek, currentProject, selectedProjectKey, toast]);
 
   // Project keys for sidebar (from database)
   const projectKeys = projects.map((p) => p.project_key);
@@ -278,7 +370,10 @@ const Index = () => {
                             ? 'Totaaloverzicht 2025'
                             : `Weekoverzicht - Week ${selectedWeek}`}
                         </h3>
-                        <button className="text-primary text-sm font-medium hover:underline flex items-center gap-1">
+                        <button 
+                          onClick={handleExportToExcel}
+                          className="text-primary text-sm font-medium hover:underline flex items-center gap-1"
+                        >
                           <FileSpreadsheet size={16} /> Exporteer naar Excel
                         </button>
                       </div>
