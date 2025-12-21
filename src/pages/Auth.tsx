@@ -101,7 +101,7 @@ export default function Auth() {
           <CardTitle className="text-2xl">Triple Tree Dashboard</CardTitle>
           <CardDescription>Log in of maak een account aan</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-[20px]">
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Inloggen</TabsTrigger>
