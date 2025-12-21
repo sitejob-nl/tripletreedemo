@@ -114,7 +114,7 @@ export default function Auth() {
                   <Label htmlFor="login-email">Email</Label>
                   <div className="relative">
                     
-                    <Input id="login-email" type="email" placeholder="naam@voorbeeld.nl" value={email} onChange={e => setEmail(e.target.value)} className="pl-10" />
+                    <Input id="login-email" type="email" placeholder="naam@voorbeeld.nl" value={email} onChange={e => setEmail(e.target.value)} className="pl-[10px]" />
                   </div>
                   {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
                 </div>
@@ -122,7 +122,7 @@ export default function Auth() {
                   <Label htmlFor="login-password">Wachtwoord</Label>
                   <div className="relative">
                     
-                    <Input id="login-password" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="pl-10" />
+                    <Input id="login-password" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="pl-[10px]" />
                   </div>
                   {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
                 </div>
