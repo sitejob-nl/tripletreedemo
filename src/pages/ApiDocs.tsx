@@ -1,16 +1,35 @@
 import { Link } from "react-router-dom";
-import { ArrowLeft, Copy, CheckCircle } from "lucide-react";
+import { ArrowLeft, Copy, CheckCircle, Play, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { supabase } from "@/integrations/supabase/client";
 
-const endpoints = [
+interface EndpointParam {
+  name: string;
+  type: string;
+  description: string;
+}
+
+interface Endpoint {
+  method: 'GET' | 'POST';
+  path: string;
+  table?: string;
+  description: string;
+  params: EndpointParam[];
+  response: string;
+}
+
+const endpoints: Endpoint[] = [
   {
     method: 'GET',
     path: '/rest/v1/projects',
+    table: 'projects',
     description: 'Haal alle projecten op',
     params: [
       { name: 'select', type: 'string', description: 'Kolommen om te selecteren (default: *)' },
@@ -31,11 +50,13 @@ const endpoints = [
   {
     method: 'GET',
     path: '/rest/v1/call_records',
+    table: 'call_records',
     description: 'Haal call records op met filters',
     params: [
       { name: 'project_id', type: 'uuid', description: 'Filter op project' },
       { name: 'beldatum', type: 'date', description: 'Filter op beldatum (gte/lte)' },
-      { name: 'resultaat', type: 'string', description: 'Filter op resultaat' }
+      { name: 'resultaat', type: 'string', description: 'Filter op resultaat' },
+      { name: 'limit', type: 'number', description: 'Max aantal records (default: 10)' }
     ],
     response: `[
   {
@@ -53,10 +74,12 @@ const endpoints = [
   {
     method: 'GET',
     path: '/rest/v1/sync_logs',
+    table: 'sync_logs',
     description: 'Haal synchronisatie logs op',
     params: [
       { name: 'project_id', type: 'uuid', description: 'Filter op project' },
-      { name: 'status', type: 'string', description: 'Filter op status (completed/failed/running)' }
+      { name: 'status', type: 'string', description: 'Filter op status (success/failed/running)' },
+      { name: 'limit', type: 'number', description: 'Max aantal logs (default: 10)' }
     ],
     response: `[
   {
@@ -64,7 +87,7 @@ const endpoints = [
     "project_id": "uuid",
     "started_at": "2024-01-15T10:00:00Z",
     "completed_at": "2024-01-15T10:05:00Z",
-    "status": "completed",
+    "status": "success",
     "records_synced": 150,
     "error_message": null
   }
@@ -158,6 +181,232 @@ records = supabase.table("call_records") \\
     .execute()`
 };
 
+interface TestResult {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  data?: any;
+  error?: string;
+  duration?: number;
+}
+
+interface EndpointTesterProps {
+  endpoint: Endpoint;
+  index: number;
+}
+
+function EndpointTester({ endpoint, index }: EndpointTesterProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [params, setParams] = useState<Record<string, string>>({});
+  const [result, setResult] = useState<TestResult>({ status: 'idle' });
+
+  const updateParam = (name: string, value: string) => {
+    setParams(prev => ({ ...prev, [name]: value }));
+  };
+
+  const executeTest = async () => {
+    setResult({ status: 'loading' });
+    const startTime = performance.now();
+
+    try {
+      if (endpoint.method === 'GET' && endpoint.table) {
+        const tableName = endpoint.table as 'projects' | 'call_records' | 'sync_logs';
+        const limit = params.limit ? parseInt(params.limit) : 10;
+        
+        let data: any[] | null = null;
+        let error: any = null;
+
+        if (tableName === 'projects') {
+          let query = supabase.from('projects').select('*');
+          if (params.is_active === 'true') {
+            query = query.eq('is_active', true);
+          } else if (params.is_active === 'false') {
+            query = query.eq('is_active', false);
+          }
+          const result = await query.limit(limit);
+          data = result.data;
+          error = result.error;
+        } else if (tableName === 'call_records') {
+          let query = supabase.from('call_records').select('*');
+          if (params.project_id) {
+            query = query.eq('project_id', params.project_id);
+          }
+          if (params.beldatum) {
+            query = query.gte('beldatum', params.beldatum);
+          }
+          if (params.resultaat) {
+            query = query.eq('resultaat', params.resultaat);
+          }
+          const result = await query.limit(limit);
+          data = result.data;
+          error = result.error;
+        } else if (tableName === 'sync_logs') {
+          let query = supabase.from('sync_logs').select('*');
+          if (params.project_id) {
+            query = query.eq('project_id', params.project_id);
+          }
+          if (params.status) {
+            query = query.eq('status', params.status);
+          }
+          const result = await query.limit(limit);
+          data = result.data;
+          error = result.error;
+        }
+
+        const duration = Math.round(performance.now() - startTime);
+
+        if (error) {
+          setResult({ status: 'error', error: error.message, duration });
+        } else {
+          setResult({ status: 'success', data, duration });
+        }
+      } else if (endpoint.method === 'POST' && endpoint.path.includes('sync-project')) {
+        // Use edge function for POST
+        const body: Record<string, string> = {};
+        if (params.project_id) body.project_id = params.project_id;
+        if (params.project_key) body.project_key = params.project_key;
+        if (params.from_date) body.from_date = params.from_date;
+        if (params.to_date) body.to_date = params.to_date;
+
+        const { data, error } = await supabase.functions.invoke('sync-project', {
+          body,
+        });
+
+        const duration = Math.round(performance.now() - startTime);
+
+        if (error) {
+          setResult({ status: 'error', error: error.message, duration });
+        } else {
+          setResult({ status: 'success', data, duration });
+        }
+      }
+    } catch (err) {
+      const duration = Math.round(performance.now() - startTime);
+      setResult({ 
+        status: 'error', 
+        error: err instanceof Error ? err.message : 'Onbekende fout',
+        duration 
+      });
+    }
+  };
+
+  return (
+    <div className="p-4 rounded-lg border bg-card">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <Badge 
+            variant="outline" 
+            className={
+              endpoint.method === 'GET' 
+                ? 'bg-primary/10 text-primary' 
+                : 'bg-kpi-orange text-kpi-orange-text'
+            }
+          >
+            {endpoint.method}
+          </Badge>
+          <code className="font-mono text-sm">{endpoint.path}</code>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsOpen(!isOpen)}
+          className="gap-2"
+        >
+          <Play className="h-4 w-4" />
+          Test
+          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
+      </div>
+      
+      <p className="text-muted-foreground mb-4">{endpoint.description}</p>
+
+      {/* Test Panel */}
+      {isOpen && (
+        <div className="mt-4 p-4 rounded-lg border bg-muted/30 space-y-4">
+          <h5 className="text-sm font-medium">Test Parameters</h5>
+          
+          <div className="grid gap-3 md:grid-cols-2">
+            {endpoint.params.map((param) => (
+              <div key={param.name} className="space-y-1">
+                <Label htmlFor={`${index}-${param.name}`} className="text-xs">
+                  {param.name} <span className="text-muted-foreground">({param.type})</span>
+                </Label>
+                <Input
+                  id={`${index}-${param.name}`}
+                  placeholder={param.description}
+                  value={params[param.name] || ''}
+                  onChange={(e) => updateParam(param.name, e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
+            ))}
+          </div>
+
+          <Button 
+            onClick={executeTest} 
+            disabled={result.status === 'loading'}
+            className="gap-2"
+          >
+            {result.status === 'loading' ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            Uitvoeren
+          </Button>
+
+          {/* Result */}
+          {result.status !== 'idle' && result.status !== 'loading' && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge variant={result.status === 'success' ? 'default' : 'destructive'}>
+                  {result.status === 'success' ? '200 OK' : 'Error'}
+                </Badge>
+                {result.duration && (
+                  <span className="text-xs text-muted-foreground">
+                    {result.duration}ms
+                  </span>
+                )}
+              </div>
+              <ScrollArea className="h-[200px]">
+                <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto">
+                  {result.status === 'success' 
+                    ? JSON.stringify(result.data, null, 2)
+                    : result.error
+                  }
+                </pre>
+              </ScrollArea>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Parameters Info (collapsed state) */}
+      {!isOpen && endpoint.params.length > 0 && (
+        <div className="mb-4">
+          <h5 className="text-sm font-medium mb-2">Parameters</h5>
+          <div className="space-y-2">
+            {endpoint.params.map((param, pIdx) => (
+              <div key={pIdx} className="flex items-start gap-2 text-sm">
+                <code className="bg-muted px-1 rounded">{param.name}</code>
+                <span className="text-muted-foreground">({param.type})</span>
+                <span>- {param.description}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isOpen && (
+        <div>
+          <h5 className="text-sm font-medium mb-2">Response</h5>
+          <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto">
+            {endpoint.response}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ApiDocs() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -208,6 +457,13 @@ export default function ApiDocs() {
                 </p>
               </div>
             </div>
+            <div className="p-4 rounded-lg border bg-primary/10">
+              <h4 className="font-medium mb-2 text-primary">🧪 Live Testing</h4>
+              <p className="text-sm">
+                Klik op <strong>Test</strong> bij elk endpoint om live API calls te maken 
+                met de huidige authenticatie sessie.
+              </p>
+            </div>
             <div className="p-4 rounded-lg border bg-kpi-orange/50">
               <h4 className="font-medium mb-2 text-kpi-orange-text">⚠️ Belangrijk</h4>
               <p className="text-sm">
@@ -218,53 +474,16 @@ export default function ApiDocs() {
           </CardContent>
         </Card>
 
-        {/* Endpoints */}
+        {/* Endpoints with Live Testing */}
         <Card className="mb-8">
           <CardHeader>
             <CardTitle>Endpoints</CardTitle>
-            <CardDescription>Beschikbare API endpoints</CardDescription>
+            <CardDescription>Beschikbare API endpoints met live testing</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
               {endpoints.map((endpoint, idx) => (
-                <div key={idx} className="p-4 rounded-lg border bg-card">
-                  <div className="flex items-center gap-3 mb-3">
-                    <Badge 
-                      variant="outline" 
-                      className={
-                        endpoint.method === 'GET' 
-                          ? 'bg-primary/10 text-primary' 
-                          : 'bg-kpi-orange text-kpi-orange-text'
-                      }
-                    >
-                      {endpoint.method}
-                    </Badge>
-                    <code className="font-mono text-sm">{endpoint.path}</code>
-                  </div>
-                  <p className="text-muted-foreground mb-4">{endpoint.description}</p>
-                  
-                  {endpoint.params.length > 0 && (
-                    <div className="mb-4">
-                      <h5 className="text-sm font-medium mb-2">Parameters</h5>
-                      <div className="space-y-2">
-                        {endpoint.params.map((param, pIdx) => (
-                          <div key={pIdx} className="flex items-start gap-2 text-sm">
-                            <code className="bg-muted px-1 rounded">{param.name}</code>
-                            <span className="text-muted-foreground">({param.type})</span>
-                            <span>- {param.description}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <h5 className="text-sm font-medium mb-2">Response</h5>
-                    <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto">
-                      {endpoint.response}
-                    </pre>
-                  </div>
-                </div>
+                <EndpointTester key={idx} endpoint={endpoint} index={idx} />
               ))}
             </div>
           </CardContent>
