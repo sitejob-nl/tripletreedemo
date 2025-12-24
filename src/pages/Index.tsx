@@ -1,11 +1,12 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
-import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye, MapPin, Phone, PieChart, Clock, GitCompare } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye, MapPin, Phone, PieChart, Clock, GitCompare, Shield } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
 import { KPICard } from '@/components/Dashboard/KPICard';
 import { MappingTool } from '@/components/Dashboard/MappingTool';
 import { ReportMatrix } from '@/components/Dashboard/ReportMatrix';
+import { InboundReportMatrix } from '@/components/Dashboard/InboundReportMatrix';
 import { WeekComparison } from '@/components/Dashboard/WeekComparison';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
@@ -13,9 +14,9 @@ import { GeographicAnalysis } from '@/components/Dashboard/GeographicAnalysis';
 import { CallAttemptsAnalysis } from '@/components/Dashboard/CallAttemptsAnalysis';
 import { ResultsBreakdown } from '@/components/Dashboard/ResultsBreakdown';
 import { TimeAnalysis } from '@/components/Dashboard/TimeAnalysis';
-import { Role, ViewMode, ProjectMapping, ProcessedCallRecord, AnalyticsTab } from '@/types/dashboard';
+import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
@@ -108,12 +109,13 @@ const Index = () => {
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
 
-  const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig) => {
+  const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType) => {
     try {
       await updateProject.mutateAsync({
         projectId,
         hourlyRate,
         mappingConfig,
+        projectType,
       });
       toast({
         title: 'Configuratie opgeslagen',
@@ -127,6 +129,9 @@ const Index = () => {
       });
     }
   };
+
+  // Check if current project is inbound type
+  const isInboundProject = currentProject?.project_type === 'inbound';
 
   // Export to Excel function
   const handleExportToExcel = useCallback(() => {
@@ -412,36 +417,69 @@ const Index = () => {
               {processedData.length > 0 && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <KPICard
-                      title="Aantal Positief"
-                      value={totalSales}
-                      subtext={
-                        selectedWeek === 'all' ? 'Totaal 2025' : `Sales in Week ${selectedWeek}`
-                      }
-                      icon={CheckCircle}
-                      variant="green"
-                    />
-                    <KPICard
-                      title="Jaarwaarde"
-                      value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      subtext="Totale opbrengst"
-                      icon={DollarSign}
-                      variant="blue"
-                    />
-                    <KPICard
-                      title="Kosten per Donateur"
-                      value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      subtext={`O.b.v. €${hourlyRate}/u`}
-                      icon={TrendingUp}
-                      variant={costPerDonor > 50 ? 'pink' : 'orange'}
-                    />
-                    <KPICard
-                      title="Inzet Uren"
-                      value={`${totalHours.toFixed(1)} u`}
-                      subtext="Totale beltijd"
-                      icon={Users}
-                      variant="cyan"
-                    />
+                    {isInboundProject ? (
+                      <>
+                        <KPICard
+                          title="Behouden"
+                          value={processedData.filter((d) => d.is_sale).length}
+                          subtext={selectedWeek === 'all' ? 'Totaal 2025' : `Week ${selectedWeek}`}
+                          icon={Shield}
+                          variant="green"
+                        />
+                        <KPICard
+                          title="Behouden Waarde"
+                          value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                          subtext="Jaarwaarde behouden"
+                          icon={DollarSign}
+                          variant="blue"
+                        />
+                        <KPICard
+                          title="Retentie Ratio"
+                          value={processedData.length > 0 ? `${((totalSales / processedData.length) * 100).toFixed(1)}%` : '0%'}
+                          subtext="Behouden / Totaal"
+                          icon={TrendingUp}
+                          variant="purple"
+                        />
+                        <KPICard
+                          title="Inzet Uren"
+                          value={`${totalHours.toFixed(1)} u`}
+                          subtext="Totale beltijd"
+                          icon={Users}
+                          variant="cyan"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <KPICard
+                          title="Aantal Positief"
+                          value={totalSales}
+                          subtext={selectedWeek === 'all' ? 'Totaal 2025' : `Sales in Week ${selectedWeek}`}
+                          icon={CheckCircle}
+                          variant="green"
+                        />
+                        <KPICard
+                          title="Jaarwaarde"
+                          value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                          subtext="Totale opbrengst"
+                          icon={DollarSign}
+                          variant="blue"
+                        />
+                        <KPICard
+                          title="Kosten per Donateur"
+                          value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                          subtext={`O.b.v. €${hourlyRate}/u`}
+                          icon={TrendingUp}
+                          variant={costPerDonor > 50 ? 'pink' : 'orange'}
+                        />
+                        <KPICard
+                          title="Inzet Uren"
+                          value={`${totalHours.toFixed(1)} u`}
+                          subtext="Totale beltijd"
+                          icon={Users}
+                          variant="cyan"
+                        />
+                      </>
+                    )}
                   </div>
 
                   {/* MAIN VIEW SWITCHER */}
@@ -449,9 +487,9 @@ const Index = () => {
                     <div>
                       <div className="flex justify-between items-end mb-4">
                         <h3 className="font-bold text-foreground text-lg">
-                          {selectedWeek === 'all'
-                            ? 'Totaaloverzicht 2025'
-                            : `Weekoverzicht - Week ${selectedWeek}`}
+                          {isInboundProject 
+                            ? (selectedWeek === 'all' ? 'Retentie Overzicht 2025' : `Retentie Week ${selectedWeek}`)
+                            : (selectedWeek === 'all' ? 'Totaaloverzicht 2025' : `Weekoverzicht - Week ${selectedWeek}`)}
                         </h3>
                         <button 
                           onClick={handleExportToExcel}
@@ -460,14 +498,25 @@ const Index = () => {
                           <FileSpreadsheet size={16} /> Exporteer naar Excel
                         </button>
                       </div>
-                      <ReportMatrix
-                        data={processedData}
-                        hourlyRate={hourlyRate}
-                        vatRate={currentProject?.vat_rate || 21}
-                        selectedWeek={selectedWeek}
-                        amountCol={currentProject?.mapping_config?.amount_col}
-                        freqCol={currentProject?.mapping_config?.freq_col}
-                      />
+                      {isInboundProject && currentProject ? (
+                        <InboundReportMatrix
+                          data={processedData}
+                          hourlyRate={hourlyRate}
+                          vatRate={currentProject.vat_rate}
+                          selectedWeek={selectedWeek}
+                          mappingConfig={currentProject.mapping_config}
+                          amountCol={currentProject.mapping_config.amount_col}
+                        />
+                      ) : (
+                        <ReportMatrix
+                          data={processedData}
+                          hourlyRate={hourlyRate}
+                          vatRate={currentProject?.vat_rate || 21}
+                          selectedWeek={selectedWeek}
+                          amountCol={currentProject?.mapping_config?.amount_col}
+                          freqCol={currentProject?.mapping_config?.freq_col}
+                        />
+                      )}
                     </div>
                   ) : viewMode === 'dashboard' ? (
                     <DashboardView data={processedData} />
