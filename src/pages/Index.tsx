@@ -463,7 +463,10 @@ const Index = () => {
                       <ReportMatrix
                         data={processedData}
                         hourlyRate={hourlyRate}
+                        vatRate={currentProject?.vat_rate || 21}
                         selectedWeek={selectedWeek}
+                        amountCol={currentProject?.mapping_config?.amount_col}
+                        freqCol={currentProject?.mapping_config?.freq_col}
                       />
                     </div>
                   ) : viewMode === 'dashboard' ? (

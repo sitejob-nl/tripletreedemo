@@ -32,6 +32,11 @@ export interface ProjectMapping {
   freq_map: Record<string, number>;
 }
 
+export interface FreqBreakdown {
+  count: number;
+  annualValue: number;
+}
+
 export interface DayStats {
   calls: number;
   sales: number;
@@ -45,4 +50,19 @@ export interface DayStats {
   totalAmount: number;
   negativeResults: Record<string, number>;
   negativeCount: number;
+  // Frequency breakdown
+  freqBreakdown: {
+    monthly: FreqBreakdown;
+    quarterly: FreqBreakdown;
+    halfYearly: FreqBreakdown;
+    yearly: FreqBreakdown;
+    oneoff: FreqBreakdown;
+  };
+  // Negative categorization
+  negativeArgumented: Record<string, number>;
+  negativeNotArgumented: Record<string, number>;
+  negativeArgumentedCount: number;
+  negativeNotArgumentedCount: number;
+  // Unreachable for netto conversion
+  unreachableCount: number;
 }
