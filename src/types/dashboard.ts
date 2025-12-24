@@ -66,3 +66,27 @@ export interface DayStats {
   // Unreachable for netto conversion
   unreachableCount: number;
 }
+
+// ============= INBOUND (RETENTION) STATS =============
+
+export interface InboundStats {
+  calls: number;
+  durationSec: number;
+  totalAttempts: number;
+  
+  // Retention outcomes
+  retained: number;           // Donateurs behouden
+  retainedValue: number;      // Jaarwaarde behouden
+  lost: number;               // Donateurs verloren
+  lostValue: number;          // Jaarwaarde verloren
+  partialSuccess: number;     // Gedeeltelijk succes (bijv. eenmalig)
+  partialSuccessValue: number;
+  pending: number;            // Nog niet afgehandeld
+  
+  // Reason breakdown
+  lostReasons: Record<string, number>;
+  retainedReasons: Record<string, number>;
+  
+  // Unreachable
+  unreachableCount: number;
+}

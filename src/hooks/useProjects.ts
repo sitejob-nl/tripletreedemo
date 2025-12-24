@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DBProject, MappingConfig } from '@/types/database';
+import { DBProject, MappingConfig, ProjectType } from '@/types/database';
 
 export const useProjects = (onlyActive = true) => {
   const query = useQuery({
@@ -21,9 +21,10 @@ export const useProjects = (onlyActive = true) => {
         throw new Error(`Fout bij ophalen projecten: ${error.message}`);
       }
 
-      // Parse mapping_config from JSONB
+      // Parse mapping_config from JSONB and cast project_type
       return (data || []).map((project) => ({
         ...project,
+        project_type: (project.project_type || 'outbound') as ProjectType,
         mapping_config: project.mapping_config as unknown as MappingConfig,
       }));
     },
