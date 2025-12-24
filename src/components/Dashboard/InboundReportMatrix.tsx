@@ -57,12 +57,13 @@ export const InboundReportMatrix = ({
       // Calculate annual value based on frequency
       const annualValue = record.annual_value || amount * 12;
 
-      // Basic counts
+      // Basic counts - ensure numeric conversion for safety
+      const durationSec = Number(record.bc_gesprekstijd) || 0;
       result[day].calls++;
-      result[day].durationSec += record.bc_gesprekstijd;
+      result[day].durationSec += durationSec;
       result[day].totalAttempts += attempts;
       result.total.calls++;
-      result.total.durationSec += record.bc_gesprekstijd;
+      result.total.durationSec += durationSec;
       result.total.totalAttempts += attempts;
 
       // Categorize based on inbound config
