@@ -114,6 +114,7 @@ export type Database = {
           mapping_config: Json | null
           name: string
           project_key: string
+          project_type: string | null
           updated_at: string | null
           vat_rate: number | null
         }
@@ -127,6 +128,7 @@ export type Database = {
           mapping_config?: Json | null
           name: string
           project_key: string
+          project_type?: string | null
           updated_at?: string | null
           vat_rate?: number | null
         }
@@ -140,6 +142,7 @@ export type Database = {
           mapping_config?: Json | null
           name?: string
           project_key?: string
+          project_type?: string | null
           updated_at?: string | null
           vat_rate?: number | null
         }

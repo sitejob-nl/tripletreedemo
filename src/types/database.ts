@@ -1,5 +1,7 @@
 // Database types for Supabase tables
 
+export type ProjectType = 'outbound' | 'inbound';
+
 export interface MappingConfig {
   amount_col: string;
   freq_col: string;
@@ -7,6 +9,11 @@ export interface MappingConfig {
   location_col?: string; // Veld voor locatie/stad data
   freq_map: Record<string, number>;
   sale_results: string[];
+  
+  // Inbound-specifieke configuratie
+  retention_results?: string[];      // Resultaten waarbij donateur behouden blijft
+  lost_results?: string[];           // Resultaten waarbij donateur verloren is
+  partial_success_results?: string[]; // Gedeeltelijk succes (bijv. eenmalig i.p.v. doorlopend)
 }
 
 export interface DBProject {
@@ -18,6 +25,7 @@ export interface DBProject {
   is_active: boolean;
   hourly_rate: number;
   vat_rate: number;
+  project_type: ProjectType;
   mapping_config: MappingConfig;
   created_at: string;
   updated_at: string;
