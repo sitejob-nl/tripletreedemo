@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye } from 'lucide-react';
+import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye, MapPin, Phone, PieChart, Clock } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
@@ -8,7 +8,11 @@ import { MappingTool } from '@/components/Dashboard/MappingTool';
 import { ReportMatrix } from '@/components/Dashboard/ReportMatrix';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
-import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
+import { GeographicAnalysis } from '@/components/Dashboard/GeographicAnalysis';
+import { CallAttemptsAnalysis } from '@/components/Dashboard/CallAttemptsAnalysis';
+import { ResultsBreakdown } from '@/components/Dashboard/ResultsBreakdown';
+import { TimeAnalysis } from '@/components/Dashboard/TimeAnalysis';
+import { Role, ViewMode, ProjectMapping, ProcessedCallRecord, AnalyticsTab } from '@/types/dashboard';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
@@ -18,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Navigate } from 'react-router-dom';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const Index = () => {
   const [selectedProjectKey, setSelectedProjectKey] = useState<string>('hersenstichting');
@@ -460,8 +465,40 @@ const Index = () => {
                         selectedWeek={selectedWeek}
                       />
                     </div>
-                  ) : (
+                  ) : viewMode === 'dashboard' ? (
                     <DashboardView data={processedData} />
+                  ) : (
+                    <div className="space-y-6">
+                      <h3 className="font-bold text-foreground text-lg">Geavanceerde Analyse</h3>
+                      <Tabs defaultValue="geographic" className="w-full">
+                        <TabsList className="grid w-full grid-cols-4 mb-6">
+                          <TabsTrigger value="geographic" className="flex items-center gap-2">
+                            <MapPin size={16} /> Geografisch
+                          </TabsTrigger>
+                          <TabsTrigger value="attempts" className="flex items-center gap-2">
+                            <Phone size={16} /> Belpogingen
+                          </TabsTrigger>
+                          <TabsTrigger value="results" className="flex items-center gap-2">
+                            <PieChart size={16} /> Resultaten
+                          </TabsTrigger>
+                          <TabsTrigger value="time" className="flex items-center gap-2">
+                            <Clock size={16} /> Tijdsanalyse
+                          </TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="geographic">
+                          <GeographicAnalysis data={processedData} />
+                        </TabsContent>
+                        <TabsContent value="attempts">
+                          <CallAttemptsAnalysis data={processedData} />
+                        </TabsContent>
+                        <TabsContent value="results">
+                          <ResultsBreakdown data={processedData} />
+                        </TabsContent>
+                        <TabsContent value="time">
+                          <TimeAnalysis data={processedData} />
+                        </TabsContent>
+                      </Tabs>
+                    </div>
                   )}
                 </>
               )}
