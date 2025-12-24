@@ -165,7 +165,7 @@ export const DashboardView = ({ data }: DashboardViewProps) => {
               {data.slice(0, 10).map((row, idx) => (
                 <tr key={row.id} className={`hover:bg-muted/30 transition-colors ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
                   <td className="px-6 py-4 text-foreground font-medium">
-                    {row.bc_beldatum}{' '}
+                    {row.normalized_date || row.bc_beldatum}{' '}
                     <span className="text-xs text-muted-foreground ml-2 font-normal">(W{row.week_number})</span>
                   </td>
                   <td className="px-6 py-4">
