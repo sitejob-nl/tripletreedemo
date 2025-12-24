@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye, MapPin, Phone, PieChart, Clock } from 'lucide-react';
+import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye, MapPin, Phone, PieChart, Clock, GitCompare } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
 import { KPICard } from '@/components/Dashboard/KPICard';
 import { MappingTool } from '@/components/Dashboard/MappingTool';
 import { ReportMatrix } from '@/components/Dashboard/ReportMatrix';
+import { WeekComparison } from '@/components/Dashboard/WeekComparison';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
 import { GeographicAnalysis } from '@/components/Dashboard/GeographicAnalysis';
@@ -470,8 +471,11 @@ const Index = () => {
                   ) : (
                     <div className="space-y-6">
                       <h3 className="font-bold text-foreground text-lg">Geavanceerde Analyse</h3>
-                      <Tabs defaultValue="geographic" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4 mb-6">
+                      <Tabs defaultValue="comparison" className="w-full">
+                        <TabsList className="grid w-full grid-cols-5 mb-6">
+                          <TabsTrigger value="comparison" className="flex items-center gap-2">
+                            <GitCompare size={16} /> Weekvergelijking
+                          </TabsTrigger>
                           <TabsTrigger value="geographic" className="flex items-center gap-2">
                             <MapPin size={16} /> Geografisch
                           </TabsTrigger>
@@ -485,6 +489,14 @@ const Index = () => {
                             <Clock size={16} /> Tijdsanalyse
                           </TabsTrigger>
                         </TabsList>
+                        <TabsContent value="comparison">
+                          <WeekComparison 
+                            data={processedData} 
+                            hourlyRate={hourlyRate}
+                            availableWeeks={availableWeeks}
+                            amountCol={currentProject?.mapping_config?.amount_col}
+                          />
+                        </TabsContent>
                         <TabsContent value="geographic">
                           <GeographicAnalysis 
                             data={processedData} 
