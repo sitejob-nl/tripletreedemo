@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
         const { error: upsertError } = await supabase
           .from('call_records')
           .upsert(recordsToUpsert, {
-            onConflict: 'basicall_record_id',
+            onConflict: 'project_id,basicall_record_id',
             ignoreDuplicates: false,
           });
 
