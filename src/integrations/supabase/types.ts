@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           basicall_record_id: number
           beldatum: string | null
+          beldatum_date: string | null
           beltijd: string | null
           gesprekstijd_sec: number | null
           id: string
@@ -30,6 +31,7 @@ export type Database = {
         Insert: {
           basicall_record_id: number
           beldatum?: string | null
+          beldatum_date?: string | null
           beltijd?: string | null
           gesprekstijd_sec?: number | null
           id?: string
@@ -42,6 +44,7 @@ export type Database = {
         Update: {
           basicall_record_id?: number
           beldatum?: string | null
+          beldatum_date?: string | null
           beltijd?: string | null
           gesprekstijd_sec?: number | null
           id?: string
