@@ -9,7 +9,8 @@ import { ReportMatrix } from '@/components/Dashboard/ReportMatrix';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
 import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
-import { useProjects } from '@/hooks/useProjects';
+import { useProjects, useUpdateProject } from '@/hooks/useProjects';
+import { MappingConfig } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
@@ -35,6 +36,7 @@ const Index = () => {
 
   // Fetch projects from Supabase
   const { projects, isLoading: projectsLoading, error: projectsError } = useProjects();
+  const updateProject = useUpdateProject();
 
   // Find current project
   const currentProject = useMemo(
@@ -100,12 +102,24 @@ const Index = () => {
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
 
-  const handleSaveMapping = () => {
-    // TODO: Implement save to Supabase
-    toast({
-      title: 'Mapping opgeslagen',
-      description: 'De configuratie is succesvol bijgewerkt.',
-    });
+  const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig) => {
+    try {
+      await updateProject.mutateAsync({
+        projectId,
+        hourlyRate,
+        mappingConfig,
+      });
+      toast({
+        title: 'Configuratie opgeslagen',
+        description: 'De project configuratie is succesvol bijgewerkt.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Fout bij opslaan',
+        description: error instanceof Error ? error.message : 'Onbekende fout',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Export to Excel function
@@ -368,12 +382,13 @@ const Index = () => {
                       </div>
                     </div>
                   )}
-                  <MappingTool
-                    project={selectedProjectKey as any}
-                    data={[]}
-                    mapping={currentMapping}
-                    onSave={handleSaveMapping}
-                  />
+                  {currentProject && (
+                    <MappingTool
+                      project={currentProject}
+                      onSave={handleSaveMapping}
+                      isSaving={updateProject.isPending}
+                    />
+                  )}
                 </div>
               )}
 
