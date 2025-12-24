@@ -26,12 +26,15 @@ interface MappingToolProps {
   isSaving?: boolean;
 }
 
+const EMPTY_VALUE = "__none__";
+const AUTO_VALUE = "__auto__";
+
 export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolProps) => {
   const [hourlyRate, setHourlyRate] = useState(project.hourly_rate);
   const [amountCol, setAmountCol] = useState(project.mapping_config.amount_col);
   const [freqCol, setFreqCol] = useState(project.mapping_config.freq_col);
-  const [reasonCol, setReasonCol] = useState(project.mapping_config.reason_col || '');
-  const [locationCol, setLocationCol] = useState(project.mapping_config.location_col || '');
+  const [reasonCol, setReasonCol] = useState(project.mapping_config.reason_col || EMPTY_VALUE);
+  const [locationCol, setLocationCol] = useState(project.mapping_config.location_col || AUTO_VALUE);
   const [saleResults, setSaleResults] = useState<string[]>(project.mapping_config.sale_results || []);
   const [freqMap, setFreqMap] = useState<Record<string, number>>(project.mapping_config.freq_map || {});
   const [newFreqKey, setNewFreqKey] = useState('');
@@ -44,8 +47,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setHourlyRate(project.hourly_rate);
     setAmountCol(project.mapping_config.amount_col);
     setFreqCol(project.mapping_config.freq_col);
-    setReasonCol(project.mapping_config.reason_col || '');
-    setLocationCol(project.mapping_config.location_col || '');
+    setReasonCol(project.mapping_config.reason_col || EMPTY_VALUE);
+    setLocationCol(project.mapping_config.location_col || AUTO_VALUE);
     setSaleResults(project.mapping_config.sale_results || []);
     setFreqMap(project.mapping_config.freq_map || {});
   }, [project.id]);
@@ -54,8 +57,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     const mappingConfig: MappingConfig = {
       amount_col: amountCol,
       freq_col: freqCol,
-      reason_col: reasonCol,
-      location_col: locationCol,
+      reason_col: reasonCol === EMPTY_VALUE ? '' : reasonCol,
+      location_col: locationCol === AUTO_VALUE ? '' : locationCol,
       freq_map: freqMap,
       sale_results: saleResults,
     };
@@ -191,7 +194,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                     <SelectValue placeholder="Selecteer veld..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">-- Geen --</SelectItem>
+                    <SelectItem value={EMPTY_VALUE}>-- Geen --</SelectItem>
                     {availableFields.map((field) => (
                       <SelectItem key={field} value={field}>
                         {field}
@@ -207,7 +210,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                     <SelectValue placeholder="Selecteer veld..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">-- Automatisch detecteren --</SelectItem>
+                    <SelectItem value={AUTO_VALUE}>-- Automatisch detecteren --</SelectItem>
                     {availableFields.map((field) => (
                       <SelectItem key={field} value={field}>
                         {field}
