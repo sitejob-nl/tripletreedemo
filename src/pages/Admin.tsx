@@ -5,15 +5,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Settings, ArrowLeft, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { DBProject, MappingConfig } from "@/types/database";
-
+import { SyncJobManager } from "@/components/Dashboard/SyncJobManager";
 const defaultMappingConfig: MappingConfig = {
   amount_col: "termijnbedrag",
   freq_col: "frequentie",
@@ -304,6 +303,11 @@ export default function Admin() {
             ))}
           </div>
         )}
+
+        {/* Sync Job Manager */}
+        <div className="mt-8">
+          <SyncJobManager />
+        </div>
 
         {/* Add/Edit Dialog */}
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

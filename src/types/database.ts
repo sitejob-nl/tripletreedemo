@@ -48,6 +48,22 @@ export interface DBSyncLog {
   sync_to: string | null;
 }
 
+// Sync job for the "remote control" sync system
+export interface DBSyncJob {
+  id: string;
+  project_id: string;
+  start_date: string;
+  end_date: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  records_synced: number;
+  log_message: string | null;
+  created_by: string | null;
+}
+
 // Processed call record from database with calculated values
 export interface ProcessedDBCallRecord extends DBCallRecord {
   annual_value: number;
