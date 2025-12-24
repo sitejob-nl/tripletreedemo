@@ -56,12 +56,13 @@ export const ReportMatrix = ({
       const resultName = rawData.raw_data?.bc_result_naam as string || record.bc_result_naam || 'Onbekend';
       const frequency = rawData.raw_data?.[freqCol];
 
-      // Basic counts
+      // Basic counts - ensure numeric conversion for safety
+      const durationSec = Number(record.bc_gesprekstijd) || 0;
       result[day].calls++;
-      result[day].durationSec += record.bc_gesprekstijd;
+      result[day].durationSec += durationSec;
       result[day].totalAttempts += attempts;
       result.total.calls++;
-      result.total.durationSec += record.bc_gesprekstijd;
+      result.total.durationSec += durationSec;
       result.total.totalAttempts += attempts;
 
       if (record.is_sale) {

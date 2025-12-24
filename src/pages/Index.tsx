@@ -64,9 +64,12 @@ const Index = () => {
   // Convert DB records to ProcessedCallRecord format for existing components
   const processedData: ProcessedCallRecord[] = useMemo(() => {
     return callRecords.map((record) => ({
+      // Spread raw_data FIRST so explicit fields override string values
+      ...(record.raw_data || {}),
+      // Explicit fields with correct types
       id: parseInt(record.basicall_record_id.toString()),
       bc_result_naam: record.resultaat || '',
-      bc_gesprekstijd: record.gesprekstijd_sec,
+      bc_gesprekstijd: Number(record.gesprekstijd_sec) || 0,
       bc_beldatum: record.beldatum || '',
       normalized_date: record.beldatum || '',
       day_name: record.day_name,
@@ -74,9 +77,7 @@ const Index = () => {
       annual_value: record.annual_value,
       is_recurring: record.is_recurring,
       is_sale: record.is_sale,
-      call_duration_min: Math.round(record.gesprekstijd_sec / 60),
-      // Spread raw_data for compatibility
-      ...(record.raw_data || {}),
+      call_duration_min: Math.round((Number(record.gesprekstijd_sec) || 0) / 60),
     }));
   }, [callRecords]);
 
