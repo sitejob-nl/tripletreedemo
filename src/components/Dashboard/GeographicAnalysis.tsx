@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { ProcessedCallRecord } from '@/types/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin, AlertCircle } from 'lucide-react';
+import { MapPin, AlertCircle, Loader2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useGeocoding } from '@/hooks/useGeocoding';
 
 interface GeographicAnalysisProps {
   data: ProcessedCallRecord[];
@@ -223,10 +224,11 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
 
-  // Extract location data from records
-  const locationData = useMemo(() => {
-    const cityStats: Record<string, { calls: number; sales: number; annualValue: number }> = {};
-    let recordsWithLocation = 0;
+  // Extract location data from records - Phase 1: get all cities and stats
+  const { cityStats, unknownCities, recordsWithLocation, totalRecords } = useMemo(() => {
+    const stats: Record<string, { calls: number; sales: number; annualValue: number }> = {};
+    const unknown: string[] = [];
+    let withLocation = 0;
 
     data.forEach((record) => {
       // FIX: Haal locatie uit raw_data, niet direct uit record
@@ -248,37 +250,51 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
         
       // Filter out postcodes (4 digits + 2 letters)
       if (city && typeof city === 'string' && city.trim() && !isPostcode(city)) {
-        recordsWithLocation++;
+        withLocation++;
         const normalized = city.toLowerCase().trim();
         
-        if (!cityStats[normalized]) {
-          cityStats[normalized] = { calls: 0, sales: 0, annualValue: 0 };
+        if (!stats[normalized]) {
+          stats[normalized] = { calls: 0, sales: 0, annualValue: 0 };
         }
         
-        cityStats[normalized].calls++;
+        stats[normalized].calls++;
         if (record.is_sale) {
-          cityStats[normalized].sales++;
-          cityStats[normalized].annualValue += record.annual_value;
+          stats[normalized].sales++;
+          stats[normalized].annualValue += record.annual_value;
+        }
+        
+        // Check if we need to geocode this city
+        if (!getCoordinatesForCity(normalized) && !unknown.includes(normalized)) {
+          unknown.push(normalized);
         }
       }
     });
 
-    // Convert to array with coordinates
+    return { cityStats: stats, unknownCities: unknown, recordsWithLocation: withLocation, totalRecords: data.length };
+  }, [data]);
+
+  // Geocode unknown cities
+  const { geocodedCoordinates, isLoading: isGeocoding } = useGeocoding(unknownCities);
+
+  // Phase 2: Build locations with both static and geocoded coordinates
+  const locationData = useMemo(() => {
     const locations = Object.entries(cityStats)
       .map(([city, stats]) => {
-        const coords = getCoordinatesForCity(city);
+        // First try static coordinates, then geocoded
+        const coords = getCoordinatesForCity(city) || geocodedCoordinates[city] || null;
         return coords ? {
           city: city.charAt(0).toUpperCase() + city.slice(1),
           ...stats,
           conversion: stats.calls > 0 ? (stats.sales / stats.calls) * 100 : 0,
           coordinates: coords,
+          isGeocoded: !getCoordinatesForCity(city),
         } : null;
       })
       .filter((l): l is NonNullable<typeof l> => l !== null)
       .sort((a, b) => b.sales - a.sales);
 
-    return { locations, recordsWithLocation, totalRecords: data.length };
-  }, [data]);
+    return { locations, recordsWithLocation, totalRecords };
+  }, [cityStats, geocodedCoordinates, recordsWithLocation, totalRecords]);
 
   // Initialize map
   useEffect(() => {
@@ -364,7 +380,18 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
         <div>
           <p className="text-sm text-muted-foreground">
             <strong>{locationData.recordsWithLocation}</strong> van <strong>{locationData.totalRecords}</strong> records 
-            hebben locatiedata ({coveragePercent}%). Alleen records met bekende plaatsen worden getoond.
+            hebben locatiedata ({coveragePercent}%). 
+            {isGeocoding && (
+              <span className="inline-flex items-center gap-1 ml-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Onbekende steden worden opgezocht...
+              </span>
+            )}
+            {!isGeocoding && unknownCities.length > 0 && Object.keys(geocodedCoordinates).length > 0 && (
+              <span className="text-green-600 ml-2">
+                {Object.keys(geocodedCoordinates).length} steden via geocoding gevonden!
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -375,6 +402,7 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
           <CardTitle className="flex items-center gap-2 text-lg">
             <MapPin size={20} className="text-primary" />
             Geografische Spreiding
+            {isGeocoding && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </CardTitle>
         </CardHeader>
         <CardContent>

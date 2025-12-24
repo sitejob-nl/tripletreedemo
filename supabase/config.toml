@@ -2,3 +2,6 @@ project_id = "tvsdbztjqksxybxjwtrf"
 
 [functions.sync-project]
 verify_jwt = false
+
+[functions.geocode-city]
+verify_jwt = false
