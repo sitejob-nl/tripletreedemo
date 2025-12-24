@@ -39,5 +39,10 @@ export interface DayStats {
   oneoff: number;
   annualValue: number;
   annualValueRecurring: number;
+  annualValueOneoff: number;
   durationSec: number;
+  totalAttempts: number;
+  totalAmount: number;
+  negativeResults: Record<string, number>;
+  negativeCount: number;
 }
