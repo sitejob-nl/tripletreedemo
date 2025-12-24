@@ -1,8 +1,18 @@
 import { useMemo, useState } from 'react';
 import { ProcessedCallRecord, DayStats } from '@/types/dashboard';
-import { ChevronDown, ChevronUp, ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 interface WeekComparisonProps {
   data: ProcessedCallRecord[];
@@ -162,22 +172,45 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
   };
 
   const metrics = [
-    { label: 'Aantal gesprekken', getValue: (s: WeekStats) => s.calls, format: 'number' },
-    { label: 'Aantal positief', getValue: (s: WeekStats) => s.sales, format: 'number' },
-    { label: 'Doorlopende machtigingen', getValue: (s: WeekStats) => s.recurring, format: 'number' },
-    { label: 'Eenmalige machtigingen', getValue: (s: WeekStats) => s.oneoff, format: 'number' },
-    { label: 'Totaal belpogingen', getValue: (s: WeekStats) => s.totalAttempts, format: 'number' },
-    { label: 'Aantal negatief', getValue: (s: WeekStats) => s.negativeCount, format: 'number', inverse: true },
-    { label: 'Jaarwaarde Totaal', getValue: (s: WeekStats) => s.annualValue, format: 'currency' },
-    { label: 'Jaarwaarde Doorlopend', getValue: (s: WeekStats) => s.annualValueRecurring, format: 'currency' },
-    { label: 'Gemiddeld donatiebedrag', getValue: (s: WeekStats) => calcAvgAmount(s), format: 'currency' },
-    { label: 'Aantal beluren', getValue: (s: WeekStats) => calcHours(s), format: 'decimal' },
-    { label: 'Sales per uur', getValue: (s: WeekStats) => calcSalesPerHour(s), format: 'decimal' },
-    { label: 'Bruto Conversie', getValue: (s: WeekStats) => calcConversion(s), format: 'percent' },
-    { label: 'Investering (Excl BTW)', getValue: (s: WeekStats) => calcInvestment(s), format: 'currency', inverse: true },
-    { label: 'Investering per donateur', getValue: (s: WeekStats) => calcCostPerDonor(s), format: 'currency', inverse: true },
-    { label: 'ROI', getValue: (s: WeekStats) => calcROI(s), format: 'multiplier' },
+    { key: 'calls', label: 'Aantal gesprekken', getValue: (s: WeekStats) => s.calls, format: 'number', color: '#22c55e' },
+    { key: 'sales', label: 'Aantal positief', getValue: (s: WeekStats) => s.sales, format: 'number', color: '#16a34a' },
+    { key: 'recurring', label: 'Doorlopende machtigingen', getValue: (s: WeekStats) => s.recurring, format: 'number', color: '#15803d' },
+    { key: 'oneoff', label: 'Eenmalige machtigingen', getValue: (s: WeekStats) => s.oneoff, format: 'number', color: '#166534' },
+    { key: 'attempts', label: 'Totaal belpogingen', getValue: (s: WeekStats) => s.totalAttempts, format: 'number', color: '#14532d' },
+    { key: 'negative', label: 'Aantal negatief', getValue: (s: WeekStats) => s.negativeCount, format: 'number', inverse: true, color: '#ef4444' },
+    { key: 'annualValue', label: 'Jaarwaarde Totaal', getValue: (s: WeekStats) => s.annualValue, format: 'currency', color: '#3b82f6' },
+    { key: 'annualValueRecurring', label: 'Jaarwaarde Doorlopend', getValue: (s: WeekStats) => s.annualValueRecurring, format: 'currency', color: '#2563eb' },
+    { key: 'avgAmount', label: 'Gemiddeld donatiebedrag', getValue: (s: WeekStats) => calcAvgAmount(s), format: 'currency', color: '#1d4ed8' },
+    { key: 'hours', label: 'Aantal beluren', getValue: (s: WeekStats) => calcHours(s), format: 'decimal', color: '#8b5cf6' },
+    { key: 'salesPerHour', label: 'Sales per uur', getValue: (s: WeekStats) => calcSalesPerHour(s), format: 'decimal', color: '#7c3aed' },
+    { key: 'conversion', label: 'Bruto Conversie', getValue: (s: WeekStats) => calcConversion(s), format: 'percent', color: '#6d28d9' },
+    { key: 'investment', label: 'Investering (Excl BTW)', getValue: (s: WeekStats) => calcInvestment(s), format: 'currency', inverse: true, color: '#06b6d4' },
+    { key: 'costPerDonor', label: 'Investering per donateur', getValue: (s: WeekStats) => calcCostPerDonor(s), format: 'currency', inverse: true, color: '#0891b2' },
+    { key: 'roi', label: 'ROI', getValue: (s: WeekStats) => calcROI(s), format: 'multiplier', color: '#0e7490' },
   ];
+
+  // Chart metric options grouped by category
+  const chartMetricOptions = [
+    { group: 'Resultaten', options: metrics.slice(0, 6) },
+    { group: 'Financieel', options: metrics.slice(6, 9) },
+    { group: 'Productiviteit', options: metrics.slice(9, 12) },
+    { group: 'Investering', options: metrics.slice(12) },
+  ];
+
+  const [selectedChartMetrics, setSelectedChartMetrics] = useState<string[]>(['sales', 'annualValue', 'conversion']);
+
+  // Chart data - all weeks sorted chronologically for the trend
+  const chartData = useMemo(() => {
+    return Object.values(weekStats)
+      .sort((a, b) => a.weekNumber - b.weekNumber)
+      .map(stats => {
+        const dataPoint: Record<string, number | string> = { week: `Week ${stats.weekNumber}` };
+        metrics.forEach(metric => {
+          dataPoint[metric.key] = metric.getValue(stats);
+        });
+        return dataPoint;
+      });
+  }, [weekStats]);
 
   const formatValue = (value: number, format: string) => {
     switch (format) {
@@ -194,8 +227,20 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
     }
   };
 
+  const toggleChartMetric = (key: string) => {
+    setSelectedChartMetrics(prev => {
+      if (prev.includes(key)) {
+        return prev.filter(k => k !== key);
+      }
+      if (prev.length >= 4) {
+        return [...prev.slice(1), key];
+      }
+      return [...prev, key];
+    });
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Week Selection */}
       <div className="bg-card rounded-xl border border-border p-4">
         <h3 className="text-sm font-semibold text-foreground mb-3">Selecteer weken om te vergelijken</h3>
@@ -218,6 +263,89 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
           <p className="text-sm text-muted-foreground mt-2">Selecteer minimaal één week om te vergelijken.</p>
         )}
       </div>
+
+      {/* Trend Chart */}
+      {chartData.length > 1 && (
+        <div className="bg-card rounded-xl border border-border p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <h3 className="text-sm font-semibold text-foreground">Trend over weken</h3>
+            <div className="flex flex-wrap gap-2">
+              {chartMetricOptions.map(group => (
+                <div key={group.group} className="flex flex-wrap gap-1">
+                  {group.options.map(metric => (
+                    <button
+                      key={metric.key}
+                      onClick={() => toggleChartMetric(metric.key)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        selectedChartMetrics.includes(metric.key)
+                          ? 'text-white'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                      style={selectedChartMetrics.includes(metric.key) ? { backgroundColor: metric.color } : {}}
+                    >
+                      {metric.label.length > 15 ? metric.label.substring(0, 15) + '...' : metric.label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis 
+                  dataKey="week" 
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                />
+                <YAxis 
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                    color: 'hsl(var(--foreground))',
+                  }}
+                  formatter={(value: number, name: string) => {
+                    const metric = metrics.find(m => m.key === name);
+                    if (metric) {
+                      return [formatValue(value, metric.format), metric.label];
+                    }
+                    return [value, name];
+                  }}
+                />
+                <Legend 
+                  formatter={(value) => {
+                    const metric = metrics.find(m => m.key === value);
+                    return metric?.label || value;
+                  }}
+                />
+                {selectedChartMetrics.map(key => {
+                  const metric = metrics.find(m => m.key === key);
+                  if (!metric) return null;
+                  return (
+                    <Line
+                      key={key}
+                      type="monotone"
+                      dataKey={key}
+                      stroke={metric.color}
+                      strokeWidth={2}
+                      dot={{ fill: metric.color, strokeWidth: 2, r: 4 }}
+                      activeDot={{ r: 6, strokeWidth: 0 }}
+                    />
+                  );
+                })}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">Klik op de metrics hierboven om ze aan de grafiek toe te voegen of te verwijderen (max 4).</p>
+        </div>
+      )}
 
       {/* Comparison Table */}
       {filteredStats.length > 0 && (
