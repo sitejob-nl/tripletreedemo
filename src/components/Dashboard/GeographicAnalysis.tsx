@@ -16,6 +16,7 @@ import { useGeocoding } from '@/hooks/useGeocoding';
 
 interface GeographicAnalysisProps {
   data: ProcessedCallRecord[];
+  locationCol?: string; // Geconfigureerd locatieveld uit mapping config
 }
 
 // Dutch city coordinates (approximate)
@@ -219,7 +220,7 @@ const getCoordinatesForCity = (city: string): [number, number] | null => {
   return null;
 };
 
-export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
+export const GeographicAnalysis = ({ data, locationCol }: GeographicAnalysisProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -235,18 +236,26 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
       const rawData = (record as any).raw_data || record;
       if (!rawData) return;
       
-      // Try multiple possible field names for location
-      const city = 
-        rawData.Plaats || 
-        rawData.plaats || 
-        rawData.Post_Woonplaats ||
-        rawData.post_woonplaats ||
-        rawData.Woonplaats ||
-        rawData.woonplaats ||
-        rawData.stad ||
-        rawData.Stad ||
-        rawData.city ||
-        rawData.City;
+      // Als locationCol geconfigureerd is, gebruik dat veld, anders fallback naar auto-detectie
+      let city: string | undefined;
+      
+      if (locationCol && locationCol.trim()) {
+        // Gebruik het geconfigureerde veld
+        city = rawData[locationCol];
+      } else {
+        // Fallback: probeer meerdere mogelijke veldnamen
+        city = 
+          rawData.Plaats || 
+          rawData.plaats || 
+          rawData.Post_Woonplaats ||
+          rawData.post_woonplaats ||
+          rawData.Woonplaats ||
+          rawData.woonplaats ||
+          rawData.stad ||
+          rawData.Stad ||
+          rawData.city ||
+          rawData.City;
+      }
         
       // Filter out postcodes (4 digits + 2 letters)
       if (city && typeof city === 'string' && city.trim() && !isPostcode(city)) {
@@ -271,7 +280,7 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
     });
 
     return { cityStats: stats, unknownCities: unknown, recordsWithLocation: withLocation, totalRecords: data.length };
-  }, [data]);
+  }, [data, locationCol]);
 
   // Geocode unknown cities
   const { geocodedCoordinates, isLoading: isGeocoding } = useGeocoding(unknownCities);

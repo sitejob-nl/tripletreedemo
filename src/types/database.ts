@@ -4,6 +4,7 @@ export interface MappingConfig {
   amount_col: string;
   freq_col: string;
   reason_col?: string;
+  location_col?: string; // Veld voor locatie/stad data
   freq_map: Record<string, number>;
   sale_results: string[];
 }

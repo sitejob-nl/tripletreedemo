@@ -31,6 +31,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [amountCol, setAmountCol] = useState(project.mapping_config.amount_col);
   const [freqCol, setFreqCol] = useState(project.mapping_config.freq_col);
   const [reasonCol, setReasonCol] = useState(project.mapping_config.reason_col || '');
+  const [locationCol, setLocationCol] = useState(project.mapping_config.location_col || '');
   const [saleResults, setSaleResults] = useState<string[]>(project.mapping_config.sale_results || []);
   const [freqMap, setFreqMap] = useState<Record<string, number>>(project.mapping_config.freq_map || {});
   const [newFreqKey, setNewFreqKey] = useState('');
@@ -44,6 +45,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setAmountCol(project.mapping_config.amount_col);
     setFreqCol(project.mapping_config.freq_col);
     setReasonCol(project.mapping_config.reason_col || '');
+    setLocationCol(project.mapping_config.location_col || '');
     setSaleResults(project.mapping_config.sale_results || []);
     setFreqMap(project.mapping_config.freq_map || {});
   }, [project.id]);
@@ -53,6 +55,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       amount_col: amountCol,
       freq_col: freqCol,
       reason_col: reasonCol,
+      location_col: locationCol,
       freq_map: freqMap,
       sale_results: saleResults,
     };
@@ -150,7 +153,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             📋 Kolom Mappings
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pt-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label className="text-xs text-muted-foreground">Bedrag Kolom</Label>
                 <Select value={amountCol} onValueChange={setAmountCol}>
@@ -188,6 +191,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                     <SelectValue placeholder="Selecteer veld..." />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">-- Geen --</SelectItem>
                     {availableFields.map((field) => (
                       <SelectItem key={field} value={field}>
                         {field}
@@ -196,10 +200,26 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">📍 Locatie/Stad Kolom</Label>
+                <Select value={locationCol} onValueChange={setLocationCol}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Selecteer veld..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">-- Automatisch detecteren --</SelectItem>
+                    {availableFields.map((field) => (
+                      <SelectItem key={field} value={field}>
+                        {field}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Wordt gebruikt voor geografische analyse op de kaart.
+                </p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Selecteer de juiste kolommen uit de beschikbare velden in je data.
-            </p>
           </AccordionContent>
         </AccordionItem>
 
