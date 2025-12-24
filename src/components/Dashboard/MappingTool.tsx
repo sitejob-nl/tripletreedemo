@@ -11,6 +11,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useProjectFieldOptions } from '@/hooks/useProjectFieldOptions';
 
 interface MappingToolProps {
   project: DBProject;
@@ -25,9 +33,10 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [reasonCol, setReasonCol] = useState(project.mapping_config.reason_col || '');
   const [saleResults, setSaleResults] = useState<string[]>(project.mapping_config.sale_results || []);
   const [freqMap, setFreqMap] = useState<Record<string, number>>(project.mapping_config.freq_map || {});
-  const [newSaleResult, setNewSaleResult] = useState('');
   const [newFreqKey, setNewFreqKey] = useState('');
   const [newFreqValue, setNewFreqValue] = useState('');
+
+  const { availableFields, availableResults, isLoading } = useProjectFieldOptions(project.id);
 
   // Reset state when project changes
   useEffect(() => {
@@ -50,10 +59,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     await onSave(project.id, hourlyRate, mappingConfig);
   };
 
-  const addSaleResult = () => {
-    if (newSaleResult.trim() && !saleResults.includes(newSaleResult.trim())) {
-      setSaleResults([...saleResults, newSaleResult.trim()]);
-      setNewSaleResult('');
+  const addSaleResult = (result: string) => {
+    if (result && !saleResults.includes(result)) {
+      setSaleResults([...saleResults, result]);
     }
   };
 
@@ -78,6 +86,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setFreqMap(updated);
   };
 
+  const availableResultsFiltered = availableResults.filter((r) => !saleResults.includes(r));
+
   return (
     <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
       <div className="flex justify-between items-center mb-6">
@@ -90,7 +100,19 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             Beheer veldmappings, tarieven en sales resultaten.
           </p>
         </div>
+        {isLoading && (
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <Loader2 size={14} className="animate-spin" />
+            Velden laden...
+          </span>
+        )}
       </div>
+
+      {availableFields.length === 0 && !isLoading && (
+        <div className="bg-muted/50 rounded-lg p-4 mb-4 text-sm text-muted-foreground">
+          ⚠️ Geen data beschikbaar voor dit project. Sync eerst data om de beschikbare velden te zien.
+        </div>
+      )}
 
       <Accordion type="single" collapsible defaultValue="financial" className="space-y-4">
         {/* Financial Settings */}
@@ -131,35 +153,52 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label className="text-xs text-muted-foreground">Bedrag Kolom</Label>
-                <Input
-                  value={amountCol}
-                  onChange={(e) => setAmountCol(e.target.value)}
-                  placeholder="bijv. termijnbedrag"
-                  className="mt-1"
-                />
+                <Select value={amountCol} onValueChange={setAmountCol}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Selecteer veld..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableFields.map((field) => (
+                      <SelectItem key={field} value={field}>
+                        {field}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Frequentie Kolom</Label>
-                <Input
-                  value={freqCol}
-                  onChange={(e) => setFreqCol(e.target.value)}
-                  placeholder="bijv. frequentie"
-                  className="mt-1"
-                />
+                <Select value={freqCol} onValueChange={setFreqCol}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Selecteer veld..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableFields.map((field) => (
+                      <SelectItem key={field} value={field}>
+                        {field}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Opzegreden Kolom</Label>
-                <Input
-                  value={reasonCol}
-                  onChange={(e) => setReasonCol(e.target.value)}
-                  placeholder="bijv. opzegreden"
-                  className="mt-1"
-                />
+                <Select value={reasonCol} onValueChange={setReasonCol}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Selecteer veld..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableFields.map((field) => (
+                      <SelectItem key={field} value={field}>
+                        {field}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Tip: De code zoekt automatisch ook naar alternatieve veldnamen (termijnbedrag, Bedrag,
-              frequentie, Frequentie).
+              Selecteer de juiste kolommen uit de beschikbare velden in je data.
             </p>
           </AccordionContent>
         </AccordionItem>
@@ -171,7 +210,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pt-4">
             <p className="text-xs text-muted-foreground">
-              Resultaatnamen die als "verkoop" worden geteld voor de rapportages.
+              Selecteer welke resultaten als "verkoop" worden geteld voor de rapportages.
             </p>
             <div className="flex flex-wrap gap-2">
               {saleResults.map((result) => (
@@ -190,18 +229,26 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                 </Badge>
               ))}
             </div>
-            <div className="flex gap-2">
-              <Input
-                value={newSaleResult}
-                onChange={(e) => setNewSaleResult(e.target.value)}
-                placeholder="Nieuw resultaat toevoegen..."
-                className="flex-1"
-                onKeyDown={(e) => e.key === 'Enter' && addSaleResult()}
-              />
-              <Button onClick={addSaleResult} size="sm" variant="outline">
-                <Plus size={16} />
-              </Button>
-            </div>
+            {availableResultsFiltered.length > 0 ? (
+              <Select onValueChange={addSaleResult} value="">
+                <SelectTrigger className="w-full md:w-80">
+                  <SelectValue placeholder="Resultaat toevoegen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableResultsFiltered.map((result) => (
+                    <SelectItem key={result} value={result}>
+                      {result}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                {availableResults.length === 0
+                  ? 'Geen resultaten beschikbaar in de data.'
+                  : 'Alle beschikbare resultaten zijn al geselecteerd.'}
+              </p>
+            )}
           </AccordionContent>
         </AccordionItem>
 
