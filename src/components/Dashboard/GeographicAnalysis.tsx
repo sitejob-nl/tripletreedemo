@@ -22,6 +22,7 @@ const DUTCH_CITIES: Record<string, [number, number]> = {
   amsterdam: [4.9041, 52.3676],
   rotterdam: [4.4777, 51.9244],
   'den haag': [4.3007, 52.0705],
+  's-gravenhage': [4.3007, 52.0705],
   utrecht: [5.1214, 52.0907],
   eindhoven: [5.4697, 51.4416],
   groningen: [6.5665, 53.2194],
@@ -35,7 +36,9 @@ const DUTCH_CITIES: Record<string, [number, number]> = {
   apeldoorn: [5.9699, 52.2112],
   amersfoort: [5.3878, 52.1561],
   zaanstad: [4.8184, 52.4575],
+  zaandam: [4.8166, 52.4389],
   'den bosch': [5.3055, 51.6978],
+  's-hertogenbosch': [5.3055, 51.6978],
   zwolle: [6.0830, 52.5168],
   maastricht: [5.6909, 50.8514],
   leiden: [4.4971, 52.1601],
@@ -74,13 +77,139 @@ const DUTCH_CITIES: Record<string, [number, number]> = {
   barneveld: [5.5841, 52.1405],
   raalte: [6.2748, 52.3871],
   dalfsen: [6.2531, 52.5068],
+  // Extra steden
+  klundert: [4.5319, 51.6595],
+  laren: [5.2275, 52.2568],
+  gasselte: [6.7840, 52.9549],
+  weesp: [5.0420, 52.3076],
+  westervoort: [5.9700, 51.9550],
+  rozendaal: [5.9622, 52.0108],
+  'alphen aan den rijn': [4.6579, 52.1292],
+  'sint jansklooster': [6.0425, 52.6750],
+  heesch: [5.5249, 51.7350],
+  'de lier': [4.2536, 51.9717],
+  harmelen: [4.9628, 52.0892],
+  wieringerwerf: [5.0339, 52.8506],
+  urk: [5.6000, 52.6622],
+  ijsselstein: [5.0420, 52.0235],
+  amstelveen: [4.8634, 52.3008],
+  drachten: [6.1015, 53.1082],
+  zwijndrecht: [4.6333, 51.8167],
+  'tull en t waal': [5.1475, 52.0089],
+  almelo: [6.6683, 52.3567],
+  schiedam: [4.3897, 51.9225],
+  spijkenisse: [4.3291, 51.8450],
+  capelle: [4.5780, 51.9292],
+  'capelle aan den ijssel': [4.5780, 51.9292],
+  nieuwegein: [5.0836, 52.0286],
+  'bergen op zoom': [4.2917, 51.4950],
+  veghel: [5.5469, 51.6167],
+  uden: [5.6189, 51.6606],
+  cuijk: [5.8783, 51.7272],
+  boxmeer: [5.9472, 51.6456],
+  weert: [5.7083, 51.2517],
+  roermond: [5.9875, 51.1942],
+  sittard: [5.8681, 50.9997],
+  geleen: [5.8283, 50.9744],
+  kerkrade: [6.0625, 50.8656],
+  landgraaf: [6.0231, 50.8892],
+  hengelo: [6.7933, 52.2656],
+  oldenzaal: [6.9286, 52.3131],
+  hardenberg: [6.6217, 52.5750],
+  hoogeveen: [6.4756, 52.7239],
+  meppel: [6.1936, 52.6956],
+  steenwijk: [6.1167, 52.7867],
+  kampen: [5.9117, 52.5550],
+  elburg: [5.8350, 52.4461],
+  hattem: [6.0672, 52.4750],
+  epe: [5.9833, 52.3500],
+  vaassen: [5.9617, 52.2867],
+  heerde: [6.0417, 52.3917],
+  wapenveld: [6.0667, 52.4333],
+  'de bilt': [5.1808, 52.1083],
+  bilthoven: [5.2000, 52.1333],
+  bunnik: [5.1983, 52.0667],
+  culemborg: [5.2283, 51.9550],
+  vianen: [5.0917, 51.9883],
+  houten: [5.1683, 52.0283],
+  'nieuwerkerk aan den ijssel': [4.6183, 51.9667],
+  waddinxveen: [4.6533, 52.0450],
+  bodegraven: [4.7483, 52.0850],
+  boskoop: [4.6583, 52.0750],
+  naaldwijk: [4.2033, 51.9933],
+  'monster': [4.1683, 52.0283],
+  wateringen: [4.2883, 52.0167],
+  rijswijk: [4.3250, 52.0383],
+  voorburg: [4.3583, 52.0717],
+  leidschendam: [4.3917, 52.0833],
+  wassenaar: [4.4017, 52.1450],
+  katwijk: [4.4017, 52.2000],
+  noordwijk: [4.4433, 52.2367],
+  lisse: [4.5567, 52.2583],
+  sassenheim: [4.5233, 52.2267],
+  voorhout: [4.4867, 52.2217],
+  noordwijkerhout: [4.4933, 52.2617],
+  hillegom: [4.5833, 52.2917],
+  bennebroek: [4.6017, 52.3217],
+  heemstede: [4.6250, 52.3517],
+  bloemendaal: [4.6200, 52.4033],
+  zandvoort: [4.5333, 52.3750],
+  hoofddorp: [4.6889, 52.3025],
+  schiphol: [4.7642, 52.3086],
+  badhoevedorp: [4.7833, 52.3417],
+  zwanenburg: [4.7500, 52.3750],
+  halfweg: [4.7500, 52.3917],
+  santpoort: [4.6333, 52.4333],
+  driehuis: [4.6333, 52.4500],
+  beverwijk: [4.6567, 52.4833],
+  heemskerk: [4.6667, 52.5167],
+  uitgeest: [4.7083, 52.5267],
+  akersloot: [4.7333, 52.5583],
+  castricum: [4.6617, 52.5467],
+  limmen: [4.7000, 52.5683],
+  egmond: [4.6283, 52.6183],
+  bergen: [4.7000, 52.6667],
+  schoorl: [4.6833, 52.7000],
+  callantsoog: [4.6917, 52.8417],
+  julianadorp: [4.7333, 52.8917],
+  'anna paulowna': [4.8167, 52.8617],
+  breezand: [4.8000, 52.8917],
+  wieringen: [4.9333, 52.9083],
+  hippolytushoef: [4.9667, 52.9250],
+  oosterland: [4.7583, 52.9583],
+  schagen: [4.7983, 52.7883],
+  tuitjenhorn: [4.7500, 52.7667],
+  warmenhuizen: [4.7333, 52.7167],
+  harenkarspel: [4.7667, 52.7333],
+  langedijk: [4.7833, 52.6833],
+  'sint pancras': [4.8000, 52.6667],
+  koedijk: [4.7500, 52.6333],
+  heiloo: [4.7000, 52.6000],
+  scharwoude: [4.9833, 52.6333],
+  oudkarspel: [4.8000, 52.6917],
 };
 
+// Check if value is a Dutch postcode (4 digits + 2 letters)
+const isPostcode = (val: string): boolean => /^\d{4}\s?[A-Za-z]{2}$/.test(val.trim());
+
 const getCoordinatesForCity = (city: string): [number, number] | null => {
-  const normalized = city.toLowerCase().trim();
+  // Normalize: lowercase, trim, handle apostrophes
+  const normalized = city.toLowerCase().trim()
+    .replace(/['´`]/g, "'")
+    .replace(/\s+/g, ' ');
+  
+  // Direct match
   if (DUTCH_CITIES[normalized]) return DUTCH_CITIES[normalized];
   
-  // Try partial match
+  // Try without apostrophe
+  const withoutApostrophe = normalized.replace(/'/g, '');
+  for (const [key, coords] of Object.entries(DUTCH_CITIES)) {
+    if (key === withoutApostrophe || key.replace(/'/g, '') === withoutApostrophe) {
+      return coords;
+    }
+  }
+  
+  // Try partial match both ways
   for (const [key, coords] of Object.entries(DUTCH_CITIES)) {
     if (normalized.includes(key) || key.includes(normalized)) {
       return coords;
@@ -100,7 +229,10 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
     let recordsWithLocation = 0;
 
     data.forEach((record) => {
-      const rawData = record as any;
+      // FIX: Haal locatie uit raw_data, niet direct uit record
+      const rawData = (record as any).raw_data || record;
+      if (!rawData) return;
+      
       // Try multiple possible field names for location
       const city = 
         rawData.Plaats || 
@@ -114,7 +246,8 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
         rawData.city ||
         rawData.City;
         
-      if (city && typeof city === 'string' && city.trim()) {
+      // Filter out postcodes (4 digits + 2 letters)
+      if (city && typeof city === 'string' && city.trim() && !isPostcode(city)) {
         recordsWithLocation++;
         const normalized = city.toLowerCase().trim();
         
