@@ -97,7 +97,7 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
         return (
           <td key={day} className="px-6 py-4 text-right text-foreground">
             {isCurrency
-              ? `€ ${(typeof val === 'number' ? val : parseFloat(val as string)).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`
+              ? `€ ${(typeof val === 'number' ? val : parseFloat(val as string)).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
               : isPercent
               ? `${(typeof val === 'number' ? val : parseFloat(val as string)).toFixed(1)}%`
               : val}
@@ -107,11 +107,11 @@ export const ReportMatrix = ({ data, hourlyRate, selectedWeek }: ReportMatrixPro
       <td className="px-6 py-4 text-right font-bold text-foreground bg-muted/30">
         {isCalculation
           ? isCurrency
-            ? `€ ${(typeof isCalculation(aggregated.total) === 'number' ? isCalculation(aggregated.total) : parseFloat(isCalculation(aggregated.total) as string)).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`
+            ? `€ ${(typeof isCalculation(aggregated.total) === 'number' ? isCalculation(aggregated.total) : parseFloat(isCalculation(aggregated.total) as string)).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             : isCalculation(aggregated.total)
           : valueKey
           ? isCurrency
-            ? `€ ${(aggregated.total[valueKey] as number).toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`
+            ? `€ ${(aggregated.total[valueKey] as number).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
             : aggregated.total[valueKey]
           : ''}
       </td>

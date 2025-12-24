@@ -161,16 +161,16 @@ const Index = () => {
       ['Eenmalige machtigingen', ...days.map(d => aggregated[d].oneoff), aggregated.total.oneoff],
       ['', '', '', '', '', '', '', '', ''],
       ['FINANCIEEL', '', '', '', '', '', '', '', ''],
-      ['Jaarwaarde Totaal', ...days.map(d => `€ ${aggregated[d].annualValue.toFixed(2)}`), `€ ${aggregated.total.annualValue.toFixed(2)}`],
-      ['Jaarwaarde Doorlopend', ...days.map(d => `€ ${aggregated[d].annualValueRecurring.toFixed(2)}`), `€ ${aggregated.total.annualValueRecurring.toFixed(2)}`],
+      ['Jaarwaarde Totaal', ...days.map(d => `€ ${aggregated[d].annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), `€ ${aggregated.total.annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+      ['Jaarwaarde Doorlopend', ...days.map(d => `€ ${aggregated[d].annualValueRecurring.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), `€ ${aggregated.total.annualValueRecurring.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
       ['', '', '', '', '', '', '', '', ''],
       ['PRODUCTIVITEIT', '', '', '', '', '', '', '', ''],
       ['Aantal beluren', ...days.map(d => calcHours(aggregated[d].durationSec).toFixed(1)), calcHours(aggregated.total.durationSec).toFixed(1)],
       ['Bruto Conversie', ...days.map(d => aggregated[d].calls > 0 ? `${((aggregated[d].sales / aggregated[d].calls) * 100).toFixed(1)}%` : '0%'), aggregated.total.calls > 0 ? `${((aggregated.total.sales / aggregated.total.calls) * 100).toFixed(1)}%` : '0%'],
       ['', '', '', '', '', '', '', '', ''],
       ['INVESTERING', '', '', '', '', '', '', '', ''],
-      ['Investering (Excl BTW)', ...days.map(d => `€ ${calcInvestment(aggregated[d].durationSec).toFixed(2)}`), `€ ${calcInvestment(aggregated.total.durationSec).toFixed(2)}`],
-      ['Investering per donateur', ...days.map(d => aggregated[d].sales > 0 ? `€ ${(calcInvestment(aggregated[d].durationSec) / aggregated[d].sales).toFixed(2)}` : '€ 0.00'), aggregated.total.sales > 0 ? `€ ${(calcInvestment(aggregated.total.durationSec) / aggregated.total.sales).toFixed(2)}` : '€ 0.00'],
+      ['Investering (Excl BTW)', ...days.map(d => `€ ${calcInvestment(aggregated[d].durationSec).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), `€ ${calcInvestment(aggregated.total.durationSec).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
+      ['Investering per donateur', ...days.map(d => aggregated[d].sales > 0 ? `€ ${(calcInvestment(aggregated[d].durationSec) / aggregated[d].sales).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '€ 0,00'), aggregated.total.sales > 0 ? `€ ${(calcInvestment(aggregated.total.durationSec) / aggregated.total.sales).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '€ 0,00'],
     ];
 
     // Create workbook and worksheet
@@ -402,14 +402,14 @@ const Index = () => {
                     />
                     <KPICard
                       title="Jaarwaarde"
-                      value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`}
+                      value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       subtext="Totale opbrengst"
                       icon={DollarSign}
                       variant="blue"
                     />
                     <KPICard
                       title="Kosten per Donateur"
-                      value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}`}
+                      value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                       subtext={`O.b.v. €${hourlyRate}/u`}
                       icon={TrendingUp}
                       variant={costPerDonor > 50 ? 'pink' : 'orange'}

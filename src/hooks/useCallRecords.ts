@@ -24,19 +24,50 @@ const calculateValuesFromRaw = (
     return { annualValue: 0, isSale: false, isRecurring: false };
   }
 
-  // Get amount and frequency from raw_data using mapping
-  const amountRaw = rawData[mappingConfig.amount_col];
-  const freqRaw = rawData[mappingConfig.freq_col];
+  // Try multiple field names for amount
+  const amountRaw = rawData[mappingConfig.amount_col] 
+    || rawData['termijnbedrag'] 
+    || rawData['Bedrag'];
 
-  if (!amountRaw || !freqRaw) {
+  // Try multiple field names for frequency
+  const freqRaw = rawData[mappingConfig.freq_col] 
+    || rawData['frequentie'] 
+    || rawData['Frequentie'];
+
+  if (!amountRaw) {
     return { annualValue: 0, isSale, isRecurring: false };
   }
 
   const amount = parseDutchFloat(amountRaw);
-  const freqKey = String(freqRaw).toLowerCase().trim();
-  const multiplier = mappingConfig.freq_map[freqKey] || 1;
 
-  const isOneOff = freqKey.includes('eenmalig') || freqKey === '1';
+  // Determine multiplier from frequency or resultaat
+  let multiplier = 1;
+  let isOneOff = false;
+
+  if (freqRaw) {
+    const freqNum = parseInt(String(freqRaw), 10);
+    if (!isNaN(freqNum) && freqNum > 0) {
+      // Frequency is already a number (e.g., 12, 1, 4)
+      multiplier = freqNum;
+      isOneOff = freqNum === 1;
+    } else {
+      // Frequency is text (e.g., "maandelijks")
+      const freqKey = String(freqRaw).toLowerCase().trim();
+      multiplier = mappingConfig.freq_map[freqKey] || 1;
+      isOneOff = freqKey.includes('eenmalig') || freqKey === '1';
+    }
+  } else if (resultaat) {
+    // Fallback: derive frequency from resultaat name
+    const resultLower = resultaat.toLowerCase();
+    if (resultLower.includes('maand')) {
+      multiplier = 12;
+    } else if (resultLower.includes('kwartaal')) {
+      multiplier = 4;
+    } else if (resultLower.includes('jaar')) {
+      multiplier = 1;
+    }
+    isOneOff = resultLower.includes('eenmalig');
+  }
 
   return {
     annualValue: amount * multiplier,
