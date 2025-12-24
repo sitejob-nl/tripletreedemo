@@ -22,6 +22,33 @@ interface Project {
   mapping_config: any;
 }
 
+// Helper functie om Europees datumformaat (dd-mm-yyyy) naar ISO (yyyy-mm-dd) te converteren
+const convertEuropeanToISO = (dateStr: string | null): string | null => {
+  if (!dateStr) return null;
+  
+  // Check of het al ISO formaat is (yyyy-mm-dd)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  // Converteer van dd-mm-yyyy naar yyyy-mm-dd
+  const parts = dateStr.split('-');
+  if (parts.length === 3 && parts[0].length <= 2) {
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  
+  // Probeer andere scheidingstekens (bijv. /)
+  const slashParts = dateStr.split('/');
+  if (slashParts.length === 3 && slashParts[0].length <= 2) {
+    const [day, month, year] = slashParts;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  
+  console.warn(`Could not parse date format: ${dateStr}`);
+  return dateStr; // Return original als we het niet kunnen parsen
+};
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -134,17 +161,20 @@ Deno.serve(async (req) => {
       for (let i = 0; i < records.length; i += batchSize) {
         const batch = records.slice(i, i + batchSize);
         
-        const recordsToUpsert = batch.map((record) => ({
-          basicall_record_id: record.record_id,
-          project_id: project.id,
-          beldatum: record.beldatum || null,
-          beltijd: record.beltijd || null,
-          gesprekstijd_sec: record.gesprekstijd_sec || 0,
-          resultaat: record.resultaat || null,
-          week_number: record.beldatum ? getWeekNumber(record.beldatum) : null,
-          raw_data: record,
-          synced_at: new Date().toISOString(),
-        }));
+        const recordsToUpsert = batch.map((record) => {
+          const isoDate = convertEuropeanToISO(record.beldatum);
+          return {
+            basicall_record_id: record.record_id,
+            project_id: project.id,
+            beldatum: isoDate,
+            beltijd: record.beltijd || null,
+            gesprekstijd_sec: record.gesprekstijd_sec || 0,
+            resultaat: record.resultaat || null,
+            week_number: isoDate ? getWeekNumber(isoDate) : null,
+            raw_data: record,
+            synced_at: new Date().toISOString(),
+          };
+        });
 
         const { error: upsertError } = await supabase
           .from('call_records')
