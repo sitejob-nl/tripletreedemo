@@ -1,4 +1,4 @@
-import { Filter, LayoutDashboard, FileSpreadsheet, ChevronRight } from 'lucide-react';
+import { Filter, LayoutDashboard, FileSpreadsheet, ChevronRight, BarChart3 } from 'lucide-react';
 import { Role, ViewMode, Project } from '@/types/dashboard';
 
 interface HeaderProps {
@@ -61,19 +61,19 @@ export const Header = ({
             <div className="flex bg-muted/50 p-1.5 rounded-xl border border-border">
               <button
                 onClick={() => onViewModeChange('report')}
-                className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   viewMode === 'report'
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <FileSpreadsheet size={16} /> Rapportage
+                  <FileSpreadsheet size={16} /> Rapport
                 </div>
               </button>
               <button
                 onClick={() => onViewModeChange('dashboard')}
-                className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   viewMode === 'dashboard'
                     ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
@@ -81,6 +81,18 @@ export const Header = ({
               >
                 <div className="flex items-center gap-2">
                   <LayoutDashboard size={16} /> Visueel
+                </div>
+              </button>
+              <button
+                onClick={() => onViewModeChange('analytics')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  viewMode === 'analytics'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <BarChart3 size={16} /> Analyse
                 </div>
               </button>
             </div>

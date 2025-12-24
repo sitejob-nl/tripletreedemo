@@ -1,5 +1,6 @@
 export type Role = 'admin' | 'client';
-export type ViewMode = 'dashboard' | 'report';
+export type ViewMode = 'dashboard' | 'report' | 'analytics';
+export type AnalyticsTab = 'geographic' | 'attempts' | 'results' | 'time';
 export type Project = 'hersenstichting' | 'anbo' | 'cliniclowns';
 
 export interface RawCallRecord {
