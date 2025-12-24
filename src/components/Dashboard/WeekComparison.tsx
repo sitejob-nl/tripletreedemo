@@ -13,6 +13,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
+import { createEmptyStats } from '@/lib/statsHelpers';
 
 interface WeekComparisonProps {
   data: ProcessedCallRecord[];
@@ -27,21 +28,6 @@ const parseDutchFloat = (val: unknown): number => {
   const str = String(val).replace(/[^\d,.-]/g, '').replace(',', '.');
   return parseFloat(str) || 0;
 };
-
-const createEmptyStats = (): DayStats => ({
-  calls: 0,
-  sales: 0,
-  recurring: 0,
-  oneoff: 0,
-  annualValue: 0,
-  annualValueRecurring: 0,
-  annualValueOneoff: 0,
-  durationSec: 0,
-  totalAttempts: 0,
-  totalAmount: 0,
-  negativeResults: {},
-  negativeCount: 0,
-});
 
 interface WeekStats extends DayStats {
   weekNumber: number;
