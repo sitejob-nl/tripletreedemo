@@ -486,7 +486,10 @@ const Index = () => {
                           </TabsTrigger>
                         </TabsList>
                         <TabsContent value="geographic">
-                          <GeographicAnalysis data={processedData} />
+                          <GeographicAnalysis 
+                            data={processedData} 
+                            locationCol={currentProject?.mapping_config?.location_col}
+                          />
                         </TabsContent>
                         <TabsContent value="attempts">
                           <CallAttemptsAnalysis data={processedData} />
