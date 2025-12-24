@@ -100,7 +100,20 @@ export const GeographicAnalysis = ({ data }: GeographicAnalysisProps) => {
     let recordsWithLocation = 0;
 
     data.forEach((record) => {
-      const city = (record as any).Plaats || (record as any).plaats;
+      const rawData = record as any;
+      // Try multiple possible field names for location
+      const city = 
+        rawData.Plaats || 
+        rawData.plaats || 
+        rawData.Post_Woonplaats ||
+        rawData.post_woonplaats ||
+        rawData.Woonplaats ||
+        rawData.woonplaats ||
+        rawData.stad ||
+        rawData.Stad ||
+        rawData.city ||
+        rawData.City;
+        
       if (city && typeof city === 'string' && city.trim()) {
         recordsWithLocation++;
         const normalized = city.toLowerCase().trim();

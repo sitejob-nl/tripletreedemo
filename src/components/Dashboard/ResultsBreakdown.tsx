@@ -31,14 +31,20 @@ interface ResultsBreakdownProps {
 const categorizeResult = (result: string): 'positive' | 'neutral' | 'negative' => {
   const lowerResult = result.toLowerCase();
   
-  // Positive: sales, donations, agreements
+  // Positive: sales, donations, agreements, frequencies (indicate sales)
   if (
     lowerResult.includes('sale') ||
     lowerResult.includes('donateur') ||
     lowerResult.includes('toezegging') ||
     lowerResult.includes('akkoord') ||
     lowerResult.includes('positief') ||
-    lowerResult.includes('machtiging')
+    lowerResult.includes('machtiging') ||
+    lowerResult.includes('maandelijks') ||
+    lowerResult.includes('jaarlijks') ||
+    lowerResult.includes('kwartaal') ||
+    lowerResult.includes('wil lid') ||
+    lowerResult.includes('afspraak') ||
+    lowerResult.includes('behouden')
   ) {
     return 'positive';
   }
