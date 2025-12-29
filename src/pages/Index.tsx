@@ -116,6 +116,7 @@ const Index = () => {
   const reportMatrixProcessedData: ProcessedCallRecord[] = useMemo(() => {
     return reportMatrixData.map((record) => ({
       ...(record.raw_data || {}),
+      raw_data: record.raw_data, // Keep raw_data as property for ReportMatrix frequency detection
       id: parseInt(record.basicall_record_id.toString()),
       bc_result_naam: record.resultaat || '',
       bc_gesprekstijd: Number(record.gesprekstijd_sec) || 0,
