@@ -136,29 +136,29 @@ export const detectFrequency = (freq: unknown): FrequencyType => {
   
   const lower = String(freq).toLowerCase().trim();
   
-  // Monthly - include short codes
-  if (lower === 'maand' || lower === 'maandelijks' || lower === 'per maand' || lower === '12' || lower === 'mnd' || lower === 'm') {
+  // One-off FIRST (to catch "eenmalig" before other patterns)
+  if (lower.includes('eenmalig') || lower === '0' || lower === 'e') {
+    return 'oneoff';
+  }
+  
+  // Monthly - substring matching
+  if (lower.includes('maand') || lower.includes('mnd') || lower === '12' || lower === 'm') {
     return 'monthly';
   }
   
-  // Quarterly - include short codes
-  if (lower === 'kwartaal' || lower === 'per kwartaal' || lower === '4' || lower === 'k') {
+  // Quarterly - substring matching
+  if (lower.includes('kwartaal') || lower === '4' || lower === 'k') {
     return 'quarterly';
   }
   
-  // Half yearly - include short codes
-  if (lower === 'halfjaar' || lower === 'half jaar' || lower === 'per half jaar' || lower === '2' || lower === 'h') {
+  // Half yearly - substring matching
+  if (lower.includes('halfjaar') || lower.includes('half jaar') || lower === '2' || lower === 'h') {
     return 'halfYearly';
   }
   
-  // Yearly - include short codes
-  if (lower === 'jaar' || lower === 'jaarlijks' || lower === 'per jaar' || lower === '1' || lower === 'j') {
+  // Yearly - substring matching (check after monthly to avoid "maandelijks" matching "jaar")
+  if (lower.includes('jaar') || lower === '1' || lower === 'j') {
     return 'yearly';
-  }
-  
-  // One-off
-  if (lower === 'eenmalig' || lower === 'eenmalige' || lower === '0' || lower === 'e') {
-    return 'oneoff';
   }
   
   return 'oneoff';

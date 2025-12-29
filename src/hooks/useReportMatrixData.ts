@@ -46,7 +46,16 @@ const calculateValuesFromRaw = (
       isOneOff = freqNum === 1;
     } else {
       const freqKey = String(freqRaw).toLowerCase().trim();
-      multiplier = mappingConfig.freq_map[freqKey] || 1;
+      
+      // Substring matching voor freq_map keys
+      let foundMultiplier = 1;
+      for (const [mapKey, mapValue] of Object.entries(mappingConfig.freq_map)) {
+        if (freqKey.includes(mapKey.toLowerCase())) {
+          foundMultiplier = mapValue;
+          break;
+        }
+      }
+      multiplier = foundMultiplier;
       isOneOff = freqKey.includes('eenmalig') || freqKey === '1';
     }
   } else if (resultaat) {
