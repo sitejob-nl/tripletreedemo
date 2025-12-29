@@ -76,7 +76,7 @@ const Index = () => {
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
 
   // Fetch KPI aggregates (totals over ALL records, not paginated)
-  const { data: kpiAggregates } = useKPIAggregates({
+  const { data: kpiAggregates, isLoading: kpiLoading } = useKPIAggregates({
     projectId: currentProject?.id,
     weekNumber: selectedWeek === 'all' ? 'all' : Number(selectedWeek),
     mappingConfig: currentProject?.mapping_config
@@ -440,10 +440,11 @@ const Index = () => {
                       <>
                         <KPICard
                           title="Behouden"
-                          value={processedData.filter((d) => d.is_sale).length}
+                          value={totalSales}
                           subtext={selectedWeek === 'all' ? 'Totaal 2025' : `Week ${selectedWeek}`}
                           icon={Shield}
                           variant="green"
+                          isLoading={kpiLoading}
                         />
                         <KPICard
                           title="Behouden Waarde"
@@ -451,13 +452,15 @@ const Index = () => {
                           subtext="Jaarwaarde behouden"
                           icon={DollarSign}
                           variant="blue"
+                          isLoading={kpiLoading}
                         />
                         <KPICard
                           title="Retentie Ratio"
-                          value={processedData.length > 0 ? `${((totalSales / processedData.length) * 100).toFixed(1)}%` : '0%'}
+                          value={kpiAggregates?.totalRecords ? `${((totalSales / kpiAggregates.totalRecords) * 100).toFixed(1)}%` : '0%'}
                           subtext="Behouden / Totaal"
                           icon={TrendingUp}
                           variant="purple"
+                          isLoading={kpiLoading}
                         />
                         <KPICard
                           title="Inzet Uren"
@@ -465,6 +468,7 @@ const Index = () => {
                           subtext="Totale beltijd"
                           icon={Users}
                           variant="cyan"
+                          isLoading={kpiLoading}
                         />
                       </>
                     ) : (
@@ -475,6 +479,7 @@ const Index = () => {
                           subtext={selectedWeek === 'all' ? 'Totaal 2025' : `Sales in Week ${selectedWeek}`}
                           icon={CheckCircle}
                           variant="green"
+                          isLoading={kpiLoading}
                         />
                         <KPICard
                           title="Jaarwaarde"
@@ -482,6 +487,7 @@ const Index = () => {
                           subtext="Totale opbrengst"
                           icon={DollarSign}
                           variant="blue"
+                          isLoading={kpiLoading}
                         />
                         <KPICard
                           title="Kosten per Donateur"
@@ -489,6 +495,7 @@ const Index = () => {
                           subtext={`O.b.v. €${hourlyRate}/u`}
                           icon={TrendingUp}
                           variant={costPerDonor > 50 ? 'pink' : 'orange'}
+                          isLoading={kpiLoading}
                         />
                         <KPICard
                           title="Inzet Uren"
@@ -496,6 +503,7 @@ const Index = () => {
                           subtext="Totale beltijd"
                           icon={Users}
                           variant="cyan"
+                          isLoading={kpiLoading}
                         />
                       </>
                     )}
