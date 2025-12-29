@@ -62,13 +62,15 @@ export const useConfigPreview = ({
         const rawData = record.raw_data as Record<string, any> | null;
         const isSale = saleResults.includes(record.resultaat || '');
 
-        // Get raw values
-        const amountRaw = rawData?.[mappingConfig.amount_col] 
+        // Get raw values - use normalized names first, then fallback
+        const amountRaw = rawData?.['amount']
+          || rawData?.[mappingConfig.amount_col] 
           || rawData?.['termijnbedrag'] 
           || rawData?.['Bedrag']
           || null;
         
-        const freqRaw = rawData?.[mappingConfig.freq_col]
+        const freqRaw = rawData?.['frequency']
+          || rawData?.[mappingConfig.freq_col]
           || rawData?.['frequentie']
           || rawData?.['Frequentie']
           || null;

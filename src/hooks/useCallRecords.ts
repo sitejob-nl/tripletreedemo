@@ -46,8 +46,10 @@ const calculateValuesFromRaw = (
   // Check if it's a sale
   const isSale = mappingConfig.sale_results?.includes(resultaat || '') || false;
 
-  // Try multiple field names for frequency (needed for frequency_type even if not a sale)
-  const freqRaw = rawData[mappingConfig.freq_col] 
+  // Use normalized field names first, then fallback to config col, then legacy names
+  // After sync normalization, 'frequency' and 'amount' should be standard
+  const freqRaw = rawData['frequency'] 
+    || rawData[mappingConfig.freq_col] 
     || rawData['frequentie'] 
     || rawData['Frequentie'];
 
@@ -64,8 +66,9 @@ const calculateValuesFromRaw = (
     };
   }
 
-  // Try multiple field names for amount
-  const amountRaw = rawData[mappingConfig.amount_col] 
+  // Use normalized field names first, then fallback to config col, then legacy names
+  const amountRaw = rawData['amount'] 
+    || rawData[mappingConfig.amount_col] 
     || rawData['termijnbedrag'] 
     || rawData['Bedrag'];
 
