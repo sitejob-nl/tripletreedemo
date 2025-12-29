@@ -19,6 +19,7 @@ import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
 import { useTotalRecordCount } from '@/hooks/useTotalRecordCount';
+import { useKPIAggregates } from '@/hooks/useKPIAggregates';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
@@ -74,6 +75,13 @@ const Index = () => {
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
 
+  // Fetch KPI aggregates (totals over ALL records, not paginated)
+  const { data: kpiAggregates } = useKPIAggregates({
+    projectId: currentProject?.id,
+    weekNumber: selectedWeek === 'all' ? 'all' : Number(selectedWeek),
+    mappingConfig: currentProject?.mapping_config
+  });
+
   // Convert DB records to ProcessedCallRecord format for existing components
   const processedData: ProcessedCallRecord[] = useMemo(() => {
     return callRecords.map((record) => ({
@@ -112,13 +120,10 @@ const Index = () => {
     };
   }, [currentProject]);
 
-  // Calculate totals for KPI cards
-  const totalSales = processedData.filter((d) => d.is_sale).length;
-  const totalAnnualValue = processedData.reduce(
-    (acc, curr) => acc + (curr.is_sale ? curr.annual_value : 0),
-    0
-  );
-  const totalHours = processedData.reduce((acc, c) => acc + c.bc_gesprekstijd, 0) / 3600;
+  // KPI values from aggregated data (over ALL records)
+  const totalSales = kpiAggregates?.totalSales ?? 0;
+  const totalAnnualValue = kpiAggregates?.totalAnnualValue ?? 0;
+  const totalHours = (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
   const hourlyRate = currentMapping.hourly_rate;
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
