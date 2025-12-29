@@ -189,7 +189,7 @@ const Index = () => {
     days.forEach((d) => (aggregated[d] = { calls: 0, sales: 0, recurring: 0, oneoff: 0, annualValue: 0, annualValueRecurring: 0, durationSec: 0 }));
     aggregated.total = { calls: 0, sales: 0, recurring: 0, oneoff: 0, annualValue: 0, annualValueRecurring: 0, durationSec: 0 };
 
-    processedData.forEach((record) => {
+    reportMatrixProcessedData.forEach((record) => {
       const day = record.day_name.toLowerCase();
       if (!aggregated[day]) return;
 
@@ -331,7 +331,7 @@ const Index = () => {
       title: 'Export succesvol',
       description: `Rapport geëxporteerd als ${filename}`,
     });
-  }, [processedData, hourlyRate, selectedWeek, currentProject, selectedProjectKey, toast]);
+  }, [reportMatrixProcessedData, hourlyRate, selectedWeek, currentProject, selectedProjectKey, toast]);
 
   // Project keys for sidebar (from database)
   const projectKeys = projects.map((p) => p.project_key);
