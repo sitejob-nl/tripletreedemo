@@ -274,14 +274,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_project_kpi_totals: {
-        Args: { p_project_id: string; p_week_number?: number }
-        Returns: {
-          total_gesprekstijd_sec: number
-          total_records: number
-          total_sales: number
-        }[]
-      }
+      get_project_kpi_totals:
+        | {
+            Args: { p_project_id: string; p_week_number?: number }
+            Returns: {
+              total_gesprekstijd_sec: number
+              total_records: number
+              total_sales: number
+            }[]
+          }
+        | {
+            Args: {
+              p_project_id: string
+              p_sale_results?: string[]
+              p_week_number?: number
+            }
+            Returns: {
+              total_gesprekstijd_sec: number
+              total_records: number
+              total_sales: number
+            }[]
+          }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

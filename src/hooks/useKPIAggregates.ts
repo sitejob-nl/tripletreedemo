@@ -16,10 +16,18 @@ interface UseKPIAggregatesOptions {
   mappingConfig?: MappingConfig;
 }
 
+// Default sale results if not configured
+const DEFAULT_SALE_RESULTS = ['Sale', 'Donateur', 'Toezegging', 'Afspraak', 'Positief', 'Verkoop', 'Ja', 'Akkoord'];
+
 export const useKPIAggregates = ({ projectId, weekNumber, mappingConfig }: UseKPIAggregatesOptions) => {
+  // Get sale results from mapping config or use defaults
+  const saleResults = mappingConfig?.sale_results?.length 
+    ? mappingConfig.sale_results 
+    : DEFAULT_SALE_RESULTS;
+
   // Query 1: Get basic aggregates from database function
   const basicAggregatesQuery = useQuery({
-    queryKey: ['kpi_basic_aggregates', projectId, weekNumber],
+    queryKey: ['kpi_basic_aggregates', projectId, weekNumber, saleResults],
     queryFn: async () => {
       if (!projectId) return null;
       
@@ -28,7 +36,8 @@ export const useKPIAggregates = ({ projectId, weekNumber, mappingConfig }: UseKP
       const { data, error } = await supabase
         .rpc('get_project_kpi_totals', {
           p_project_id: projectId,
-          p_week_number: weekParam
+          p_week_number: weekParam,
+          p_sale_results: saleResults
         });
       
       if (error) throw error;
@@ -47,7 +56,7 @@ export const useKPIAggregates = ({ projectId, weekNumber, mappingConfig }: UseKP
 
   // Query 2: Get annual value by fetching only sales records
   const annualValueQuery = useQuery({
-    queryKey: ['kpi_annual_value', projectId, weekNumber, mappingConfig?.amount_col, mappingConfig?.freq_col],
+    queryKey: ['kpi_annual_value', projectId, weekNumber, mappingConfig?.amount_col, mappingConfig?.freq_col, saleResults],
     queryFn: async () => {
       if (!projectId || !mappingConfig?.amount_col || !mappingConfig?.freq_col) {
         return 0;
@@ -58,7 +67,7 @@ export const useKPIAggregates = ({ projectId, weekNumber, mappingConfig }: UseKP
         .from('call_records')
         .select('raw_data')
         .eq('project_id', projectId)
-        .in('resultaat', ['Sale', 'Donateur', 'Toezegging', 'Afspraak', 'Positief', 'Verkoop', 'Ja', 'Akkoord']);
+        .in('resultaat', saleResults);
       
       if (weekNumber !== 'all') {
         query = query.eq('week_number', weekNumber);
