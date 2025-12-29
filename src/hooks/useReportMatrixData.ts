@@ -69,10 +69,33 @@ const calculateValuesFromRaw = (
   };
 };
 
-const getDayName = (dateStr: string | null): string => {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('nl-NL', { weekday: 'long' });
+const getDayName = (beldatumDate: string | null, beldatum: string | null): string => {
+  // Prioritize beldatum_date (ISO format YYYY-MM-DD) 
+  if (beldatumDate) {
+    const date = new Date(beldatumDate);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleDateString('nl-NL', { weekday: 'long' });
+    }
+  }
+  
+  // Fallback: parse beldatum (DD-MM-YYYY format) manually
+  if (beldatum) {
+    const match = beldatum.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+    if (match) {
+      const [, day, month, year] = match;
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('nl-NL', { weekday: 'long' });
+      }
+    }
+    // Last resort: try direct parsing (for ISO format in beldatum)
+    const date = new Date(beldatum);
+    if (!isNaN(date.getTime())) {
+      return date.toLocaleDateString('nl-NL', { weekday: 'long' });
+    }
+  }
+  
+  return '';
 };
 
 /**
@@ -122,7 +145,7 @@ export const useReportMatrixData = (
           annual_value: annualValue,
           is_sale: isSale,
           is_recurring: isRecurring,
-          day_name: getDayName(record.beldatum),
+          day_name: getDayName(record.beldatum_date, record.beldatum),
         };
       });
     },
