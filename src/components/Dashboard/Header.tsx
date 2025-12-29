@@ -1,5 +1,6 @@
-import { Filter, LayoutDashboard, FileSpreadsheet, ChevronRight, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, ChevronRight, BarChart3 } from 'lucide-react';
 import { Role, ViewMode, Project } from '@/types/dashboard';
+import { DateFilterSelector, DateFilterType, DateRange } from './DateFilterSelector';
 
 interface HeaderProps {
   project: Project;
@@ -9,6 +10,11 @@ interface HeaderProps {
   viewMode: ViewMode;
   onWeekChange: (week: string) => void;
   onViewModeChange: (mode: ViewMode) => void;
+  // New date filter props
+  dateFilterType: DateFilterType;
+  onDateFilterTypeChange: (type: DateFilterType) => void;
+  dateRange: DateRange;
+  onDateRangeChange: (range: DateRange) => void;
 }
 
 export const Header = ({
@@ -19,6 +25,10 @@ export const Header = ({
   viewMode,
   onWeekChange,
   onViewModeChange,
+  dateFilterType,
+  onDateFilterTypeChange,
+  dateRange,
+  onDateRangeChange,
 }: HeaderProps) => {
   return (
     <header className="bg-card shadow-sm border-b border-border px-8 py-5 flex flex-col gap-4 sticky top-0 z-20">
@@ -32,26 +42,26 @@ export const Header = ({
         <div>
           <h2 className="text-2xl font-bold text-card-foreground capitalize">{project}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {selectedWeek === 'all' ? 'Totaaloverzicht van alle weken' : `Weekrapportage (Week ${selectedWeek})`}
+            {dateFilterType === 'week' 
+              ? (selectedWeek === 'all' ? 'Totaaloverzicht van alle weken' : `Weekrapportage (Week ${selectedWeek})`)
+              : (dateRange.start && dateRange.end 
+                  ? `Periode: ${dateRange.start.toLocaleDateString('nl-NL')} - ${dateRange.end.toLocaleDateString('nl-NL')}`
+                  : 'Selecteer een periode'
+                )
+            }
           </p>
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center bg-muted/50 rounded-xl px-4 py-2 border border-border">
-            <Filter size={16} className="text-muted-foreground mr-2" />
-            <select
-              className="bg-transparent text-sm font-medium text-foreground outline-none cursor-pointer"
-              value={selectedWeek}
-              onChange={(e) => onWeekChange(e.target.value)}
-            >
-              <option value="all">Alle Weken</option>
-              {availableWeeks.map((w) => (
-                <option key={w} value={w}>
-                  Week {w}
-                </option>
-              ))}
-            </select>
-          </div>
+          <DateFilterSelector
+            filterType={dateFilterType}
+            onFilterTypeChange={onDateFilterTypeChange}
+            selectedWeek={selectedWeek}
+            availableWeeks={availableWeeks}
+            onWeekChange={onWeekChange}
+            dateRange={dateRange}
+            onDateRangeChange={onDateRangeChange}
+          />
 
           {role === 'admin' ? (
             <span className="bg-warning/10 text-warning px-4 py-2 rounded-xl text-xs font-bold border border-warning/20">

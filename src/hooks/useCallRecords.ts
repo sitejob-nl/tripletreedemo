@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DBCallRecord, DBProject, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
+import { DBProject, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
+import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
 
 interface UseCallRecordsOptions {
   projectId?: string;
@@ -10,20 +11,57 @@ interface UseCallRecordsOptions {
   pageSize?: number;
 }
 
+// Extended type with frequency_type for Fase 2
+export interface ProcessedDBCallRecordWithFreq extends ProcessedDBCallRecord {
+  frequency_type: FrequencyType;
+  frequency_multiplier: number;
+  frequency_matched_key: string | null;
+}
+
 const calculateValuesFromRaw = (
   rawData: Record<string, any> | null,
   resultaat: string | null,
   mappingConfig: MappingConfig
-): { annualValue: number; isSale: boolean; isRecurring: boolean } => {
+): { 
+  annualValue: number; 
+  isSale: boolean; 
+  isRecurring: boolean; 
+  frequencyType: FrequencyType;
+  frequencyMultiplier: number;
+  frequencyMatchedKey: string | null;
+} => {
+  const defaultResult = { 
+    annualValue: 0, 
+    isSale: false, 
+    isRecurring: false,
+    frequencyType: 'oneoff' as FrequencyType,
+    frequencyMultiplier: 1,
+    frequencyMatchedKey: null as string | null,
+  };
+
   if (!rawData || !mappingConfig) {
-    return { annualValue: 0, isSale: false, isRecurring: false };
+    return defaultResult;
   }
 
   // Check if it's a sale
   const isSale = mappingConfig.sale_results?.includes(resultaat || '') || false;
 
+  // Try multiple field names for frequency (needed for frequency_type even if not a sale)
+  const freqRaw = rawData[mappingConfig.freq_col] 
+    || rawData['frequentie'] 
+    || rawData['Frequentie'];
+
+  // Use centralized frequency detection
+  const freqResult = detectFrequencyFromConfig(freqRaw, mappingConfig.freq_map);
+
   if (!isSale) {
-    return { annualValue: 0, isSale: false, isRecurring: false };
+    return {
+      ...defaultResult,
+      isSale: false,
+      frequencyType: freqResult.type,
+      frequencyMultiplier: freqResult.multiplier,
+      frequencyMatchedKey: freqResult.matchedKey,
+    };
   }
 
   // Try multiple field names for amount
@@ -31,59 +69,26 @@ const calculateValuesFromRaw = (
     || rawData['termijnbedrag'] 
     || rawData['Bedrag'];
 
-  // Try multiple field names for frequency
-  const freqRaw = rawData[mappingConfig.freq_col] 
-    || rawData['frequentie'] 
-    || rawData['Frequentie'];
-
   if (!amountRaw) {
-    return { annualValue: 0, isSale, isRecurring: false };
+    return {
+      annualValue: 0, 
+      isSale, 
+      isRecurring: !freqResult.isOneOff,
+      frequencyType: freqResult.type,
+      frequencyMultiplier: freqResult.multiplier,
+      frequencyMatchedKey: freqResult.matchedKey,
+    };
   }
 
   const amount = parseDutchFloat(amountRaw);
 
-  // Determine multiplier from frequency or resultaat
-  let multiplier = 1;
-  let isOneOff = false;
-
-  if (freqRaw) {
-    const freqNum = parseInt(String(freqRaw), 10);
-    if (!isNaN(freqNum) && freqNum > 0) {
-      // Frequency is already a number (e.g., 12, 1, 4)
-      multiplier = freqNum;
-      isOneOff = freqNum === 1;
-    } else {
-      // Frequency is text (e.g., "maandelijks")
-      const freqKey = String(freqRaw).toLowerCase().trim();
-      
-      // Substring matching voor freq_map keys
-      let foundMultiplier = 1;
-      for (const [mapKey, mapValue] of Object.entries(mappingConfig.freq_map)) {
-        if (freqKey.includes(mapKey.toLowerCase())) {
-          foundMultiplier = mapValue;
-          break;
-        }
-      }
-      multiplier = foundMultiplier;
-      isOneOff = freqKey.includes('eenmalig') || freqKey === '1';
-    }
-  } else if (resultaat) {
-    // Fallback: derive frequency from resultaat name
-    const resultLower = resultaat.toLowerCase();
-    if (resultLower.includes('maand')) {
-      multiplier = 12;
-    } else if (resultLower.includes('kwartaal')) {
-      multiplier = 4;
-    } else if (resultLower.includes('jaar')) {
-      multiplier = 1;
-    }
-    isOneOff = resultLower.includes('eenmalig');
-  }
-
   return {
-    annualValue: amount * multiplier,
+    annualValue: amount * freqResult.multiplier,
     isSale,
-    isRecurring: !isOneOff,
+    isRecurring: !freqResult.isOneOff,
+    frequencyType: freqResult.type,
+    frequencyMultiplier: freqResult.multiplier,
+    frequencyMatchedKey: freqResult.matchedKey,
   };
 };
 
@@ -124,7 +129,7 @@ export const useCallRecords = (
 
   return useQuery({
     queryKey: ['call_records', project?.id, weekNumber, page, pageSize],
-    queryFn: async (): Promise<ProcessedDBCallRecord[]> => {
+    queryFn: async (): Promise<ProcessedDBCallRecordWithFreq[]> => {
       if (!project) return [];
 
       // Calculate range for server-side pagination
@@ -149,8 +154,8 @@ export const useCallRecords = (
       }
 
       // Process each record with mapping config
-      return (data || []).map((record): ProcessedDBCallRecord => {
-        const { annualValue, isSale, isRecurring } = calculateValuesFromRaw(
+      return (data || []).map((record): ProcessedDBCallRecordWithFreq => {
+        const calculated = calculateValuesFromRaw(
           record.raw_data as Record<string, any> | null,
           record.resultaat,
           project.mapping_config
@@ -159,10 +164,13 @@ export const useCallRecords = (
         return {
           ...record,
           raw_data: record.raw_data as Record<string, any> | null,
-          annual_value: annualValue,
-          is_sale: isSale,
-          is_recurring: isRecurring,
+          annual_value: calculated.annualValue,
+          is_sale: calculated.isSale,
+          is_recurring: calculated.isRecurring,
           day_name: getDayName(record.beldatum_date, record.beldatum),
+          frequency_type: calculated.frequencyType,
+          frequency_multiplier: calculated.frequencyMultiplier,
+          frequency_matched_key: calculated.frequencyMatchedKey,
         };
       });
     },

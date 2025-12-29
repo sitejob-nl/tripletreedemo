@@ -1,6 +1,107 @@
 import { DayStats, FreqBreakdown, InboundStats } from '@/types/dashboard';
 import { ProjectType, MappingConfig } from '@/types/database';
 
+// ============= FREQUENCY DETECTION (CENTRALIZED) =============
+
+export type FrequencyType = 'monthly' | 'quarterly' | 'halfYearly' | 'yearly' | 'oneoff';
+
+export interface FrequencyDetectionResult {
+  type: FrequencyType;
+  multiplier: number;
+  matchedKey: string | null;
+  isOneOff: boolean;
+}
+
+/**
+ * Centralized frequency detection that uses the project's freq_map configuration.
+ * This is the single source of truth for frequency detection.
+ * 
+ * @param freqRaw - Raw frequency value from raw_data (string, number, or null)
+ * @param freqMap - Frequency mapping from project's mapping_config
+ * @returns FrequencyDetectionResult with type, multiplier, matchedKey, and isOneOff
+ */
+export const detectFrequencyFromConfig = (
+  freqRaw: unknown,
+  freqMap: Record<string, number>
+): FrequencyDetectionResult => {
+  const defaultResult: FrequencyDetectionResult = {
+    type: 'oneoff',
+    multiplier: 1,
+    matchedKey: null,
+    isOneOff: true,
+  };
+
+  if (!freqRaw) return defaultResult;
+
+  const freqStr = String(freqRaw).toLowerCase().trim();
+  
+  // Check if it's a numeric value first
+  const freqNum = parseInt(freqStr, 10);
+  if (!isNaN(freqNum) && freqNum > 0 && freqStr === String(freqNum)) {
+    // It's a pure number (e.g., "12", "4", "1")
+    return {
+      type: mapMultiplierToType(freqNum),
+      multiplier: freqNum,
+      matchedKey: `(numeriek: ${freqNum})`,
+      isOneOff: freqNum === 1,
+    };
+  }
+
+  // Check one-off patterns first (highest priority)
+  if (freqStr.includes('eenmalig') || freqStr === '0' || freqStr === 'e') {
+    return {
+      type: 'oneoff',
+      multiplier: 1,
+      matchedKey: 'eenmalig',
+      isOneOff: true,
+    };
+  }
+
+  // Try to match against freq_map using substring matching
+  for (const [mapKey, mapValue] of Object.entries(freqMap)) {
+    const lowerMapKey = mapKey.toLowerCase();
+    if (freqStr.includes(lowerMapKey) || lowerMapKey.includes(freqStr)) {
+      return {
+        type: mapMultiplierToType(mapValue),
+        multiplier: mapValue,
+        matchedKey: mapKey,
+        isOneOff: mapValue === 1 && !freqStr.includes('jaar'),
+      };
+    }
+  }
+
+  // Fallback: use pattern matching for common terms
+  if (freqStr.includes('maand') || freqStr.includes('mnd') || freqStr === 'm') {
+    return { type: 'monthly', multiplier: 12, matchedKey: '(patroon: maand)', isOneOff: false };
+  }
+  if (freqStr.includes('kwartaal') || freqStr === 'k') {
+    return { type: 'quarterly', multiplier: 4, matchedKey: '(patroon: kwartaal)', isOneOff: false };
+  }
+  if (freqStr.includes('halfjaar') || freqStr.includes('half jaar') || freqStr === 'h') {
+    return { type: 'halfYearly', multiplier: 2, matchedKey: '(patroon: halfjaar)', isOneOff: false };
+  }
+  if (freqStr.includes('jaar') || freqStr === 'j') {
+    return { type: 'yearly', multiplier: 1, matchedKey: '(patroon: jaar)', isOneOff: false };
+  }
+
+  return defaultResult;
+};
+
+/**
+ * Map a multiplier number to a FrequencyType
+ */
+const mapMultiplierToType = (multiplier: number): FrequencyType => {
+  switch (multiplier) {
+    case 12: return 'monthly';
+    case 4: return 'quarterly';
+    case 2: return 'halfYearly';
+    case 1: return 'yearly';
+    default: return multiplier > 4 ? 'monthly' : 'yearly';
+  }
+};
+
+// ============= STATS HELPERS =============
+
 export const createEmptyFreqBreakdown = (): FreqBreakdown => ({
   count: 0,
   annualValue: 0,
@@ -128,40 +229,10 @@ export const isUnreachable = (resultName: string): boolean => {
   return UNREACHABLE_RESULTS.some(r => lower.includes(r));
 };
 
-// Frequency detection from raw_data.frequentie
-export type FrequencyType = 'monthly' | 'quarterly' | 'halfYearly' | 'yearly' | 'oneoff';
-
+// Legacy wrapper - uses the new centralized function with empty freq_map for backwards compatibility
 export const detectFrequency = (freq: unknown): FrequencyType => {
-  if (!freq) return 'oneoff';
-  
-  const lower = String(freq).toLowerCase().trim();
-  
-  // One-off FIRST (to catch "eenmalig" before other patterns)
-  if (lower.includes('eenmalig') || lower === '0' || lower === 'e') {
-    return 'oneoff';
-  }
-  
-  // Monthly - substring matching
-  if (lower.includes('maand') || lower.includes('mnd') || lower === '12' || lower === 'm') {
-    return 'monthly';
-  }
-  
-  // Quarterly - substring matching
-  if (lower.includes('kwartaal') || lower === '4' || lower === 'k') {
-    return 'quarterly';
-  }
-  
-  // Half yearly - substring matching
-  if (lower.includes('halfjaar') || lower.includes('half jaar') || lower === '2' || lower === 'h') {
-    return 'halfYearly';
-  }
-  
-  // Yearly - substring matching (check after monthly to avoid "maandelijks" matching "jaar")
-  if (lower.includes('jaar') || lower === '1' || lower === 'j') {
-    return 'yearly';
-  }
-  
-  return 'oneoff';
+  const result = detectFrequencyFromConfig(freq, {});
+  return result.type;
 };
 
 export const getFrequencyLabel = (type: FrequencyType): string => {
