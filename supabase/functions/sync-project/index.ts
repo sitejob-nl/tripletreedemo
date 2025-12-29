@@ -146,12 +146,16 @@ Deno.serve(async (req) => {
       const records: BasiCallRecord[] = await basicallResponse.json();
       console.log(`Received ${records.length} records from BasiCall`);
 
-      // Calculate week number helper
+      // ISO-8601 week number (week 1 = week met eerste donderdag van het jaar)
       const getWeekNumber = (dateStr: string): number => {
         const date = new Date(dateStr);
-        const startOfYear = new Date(date.getFullYear(), 0, 1);
-        const days = Math.floor((date.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
-        return Math.ceil((days + startOfYear.getDay() + 1) / 7);
+        // Maak een UTC date om timezone issues te voorkomen
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        // Zet naar de donderdag van de huidige week (ISO-8601)
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        // Bereken het weeknummer
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
       };
 
       // Process and upsert records
