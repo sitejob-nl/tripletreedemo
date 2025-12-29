@@ -6,6 +6,8 @@ import { parseDutchFloat } from '@/lib/dataProcessing';
 interface UseCallRecordsOptions {
   projectId?: string;
   weekNumber?: number | 'all';
+  page?: number;
+  pageSize?: number;
 }
 
 const calculateValuesFromRaw = (
@@ -86,18 +88,23 @@ export const useCallRecords = (
   project: DBProject | undefined,
   options: UseCallRecordsOptions = {}
 ) => {
-  const { weekNumber = 'all' } = options;
+  const { weekNumber = 'all', page = 1, pageSize = 100 } = options;
 
   return useQuery({
-    queryKey: ['call_records', project?.id, weekNumber],
+    queryKey: ['call_records', project?.id, weekNumber, page, pageSize],
     queryFn: async (): Promise<ProcessedDBCallRecord[]> => {
       if (!project) return [];
+
+      // Calculate range for server-side pagination
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
 
       let query = supabase
         .from('call_records')
         .select('*')
         .eq('project_id', project.id)
-        .order('beldatum', { ascending: false });
+        .order('beldatum_date', { ascending: false, nullsFirst: false })
+        .range(from, to);
 
       if (weekNumber !== 'all') {
         query = query.eq('week_number', weekNumber);
