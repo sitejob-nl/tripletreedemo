@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye, MapPin, Phone, PieChart, Clock, GitCompare, Shield } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
@@ -75,6 +75,13 @@ const Index = () => {
 
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
+
+  // Auto-select most recent week when available weeks are loaded
+  useEffect(() => {
+    if (availableWeeks.length > 0 && selectedWeek === 'all') {
+      setSelectedWeek(availableWeeks[0]); // First item is most recent (sorted descending)
+    }
+  }, [availableWeeks]);
 
   // Fetch KPI aggregates (totals over ALL records, not paginated)
   const { data: kpiAggregates, isLoading: kpiLoading } = useKPIAggregates({
