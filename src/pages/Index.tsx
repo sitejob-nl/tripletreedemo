@@ -18,6 +18,7 @@ import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/das
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
+import { useTotalRecordCount } from '@/hooks/useTotalRecordCount';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +32,8 @@ const Index = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   const [selectedWeek, setSelectedWeek] = useState<string | number>('all');
   const [viewAsClient, setViewAsClient] = useState(false);
+  const [dashboardPage, setDashboardPage] = useState(1);
+  const [dashboardPageSize, setDashboardPageSize] = useState(100);
   
   const { user, signOut, loading: authLoading } = useAuth();
   const { data: userRole, isLoading: roleLoading } = useUserRole(user?.id);
@@ -51,12 +54,22 @@ const Index = () => {
     [projects, selectedProjectKey]
   );
 
-  // Fetch call records for current project
+  // Fetch call records for current project with server-side pagination
   const { 
     data: callRecords = [], 
     isLoading: recordsLoading,
     error: recordsError 
-  } = useCallRecords(currentProject, { weekNumber: selectedWeek === 'all' ? 'all' : Number(selectedWeek) });
+  } = useCallRecords(currentProject, { 
+    weekNumber: selectedWeek === 'all' ? 'all' : Number(selectedWeek),
+    page: dashboardPage,
+    pageSize: dashboardPageSize
+  });
+
+  // Fetch total record count for pagination
+  const { data: totalRecordCount = 0 } = useTotalRecordCount(
+    currentProject?.id, 
+    selectedWeek === 'all' ? 'all' : Number(selectedWeek)
+  );
 
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
@@ -520,7 +533,14 @@ const Index = () => {
                       )}
                     </div>
                   ) : viewMode === 'dashboard' ? (
-                    <DashboardView data={processedData} />
+                    <DashboardView 
+                      data={processedData} 
+                      totalRecords={totalRecordCount}
+                      currentPage={dashboardPage}
+                      pageSize={dashboardPageSize}
+                      onPageChange={setDashboardPage}
+                      onPageSizeChange={setDashboardPageSize}
+                    />
                   ) : (
                     <div className="space-y-6">
                       <h3 className="font-bold text-foreground text-lg">Geavanceerde Analyse</h3>
