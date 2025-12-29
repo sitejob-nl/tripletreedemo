@@ -47,7 +47,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [lostResults, setLostResults] = useState<string[]>(project.mapping_config.lost_results || []);
   const [partialSuccessResults, setPartialSuccessResults] = useState<string[]>(project.mapping_config.partial_success_results || []);
 
-  const { availableFields, availableResults, isLoading } = useProjectFieldOptions(project.id);
+  const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
 
   useEffect(() => {
     setProjectType(project.project_type || 'outbound');
@@ -256,7 +256,18 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
               ))}
             </div>
             <div className="flex gap-2">
-              <Input value={newFreqKey} onChange={(e) => setNewFreqKey(e.target.value)} placeholder="Frequentie tekst..." className="flex-1" />
+              <Select value={newFreqKey} onValueChange={setNewFreqKey}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Selecteer frequentie..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableFrequencyValues
+                    .filter(f => !Object.keys(freqMap).includes(f))
+                    .map(freq => (
+                      <SelectItem key={freq} value={freq}>{freq}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
               <Input type="number" value={newFreqValue} onChange={(e) => setNewFreqValue(e.target.value)} placeholder="Mult." className="w-20" />
               <Button onClick={addFreqMapping} size="sm" variant="outline"><Plus size={16} /></Button>
             </div>

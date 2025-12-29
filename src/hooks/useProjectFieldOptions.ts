@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-export const useProjectFieldOptions = (projectId: string | undefined) => {
+export const useProjectFieldOptions = (projectId: string | undefined, freqCol?: string) => {
   const fieldsQuery = useQuery({
     queryKey: ['project-fields', projectId],
     queryFn: async () => {
@@ -41,9 +41,36 @@ export const useProjectFieldOptions = (projectId: string | undefined) => {
     enabled: !!projectId,
   });
 
+  const frequencyValuesQuery = useQuery({
+    queryKey: ['project-frequency-values', projectId, freqCol],
+    queryFn: async () => {
+      if (!projectId || !freqCol) return [];
+      
+      const { data } = await supabase
+        .from('call_records')
+        .select('raw_data')
+        .eq('project_id', projectId)
+        .not('raw_data', 'is', null)
+        .limit(1000);
+      
+      const uniqueFreqs = new Set<string>();
+      data?.forEach(record => {
+        const rawData = record.raw_data as Record<string, unknown>;
+        const freqValue = rawData?.[freqCol];
+        if (freqValue && String(freqValue).trim()) {
+          uniqueFreqs.add(String(freqValue).trim().toLowerCase());
+        }
+      });
+      
+      return Array.from(uniqueFreqs).sort();
+    },
+    enabled: !!projectId && !!freqCol,
+  });
+
   return {
     availableFields: fieldsQuery.data || [],
     availableResults: resultsQuery.data || [],
-    isLoading: fieldsQuery.isLoading || resultsQuery.isLoading,
+    availableFrequencyValues: frequencyValuesQuery.data || [],
+    isLoading: fieldsQuery.isLoading || resultsQuery.isLoading || frequencyValuesQuery.isLoading,
   };
 };
