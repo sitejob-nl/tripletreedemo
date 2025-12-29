@@ -64,6 +64,38 @@ export type Database = {
           },
         ]
       }
+      customer_projects: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       error_logs: {
         Row: {
           component_name: string | null

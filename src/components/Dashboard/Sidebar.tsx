@@ -1,4 +1,4 @@
-import { LogOut, ChevronRight, Settings, Users, Code } from 'lucide-react';
+import { LogOut, ChevronRight, Settings, Users, Code, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Project, Role } from '@/types/dashboard';
 import logo from '@/assets/triple-tree-logo.png';
@@ -50,6 +50,12 @@ export const Sidebar = ({
               className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
             >
               <Users size={16} /> Gebruikers
+            </Link>
+            <Link 
+              to="/admin/customers" 
+              className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <Building2 size={16} /> Klantenbeheer
             </Link>
           </>
         )}

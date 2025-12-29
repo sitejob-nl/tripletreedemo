@@ -10,6 +10,7 @@ import { errorLogger } from "@/lib/errorLogger";
 import Index from "./pages/Index";
 import Admin from "./pages/Admin";
 import AdminUsers from "./pages/AdminUsers";
+import AdminCustomers from "./pages/AdminCustomers";
 import Developer from "./pages/Developer";
 import ApiDocs from "./pages/ApiDocs";
 import Auth from "./pages/Auth";
@@ -35,6 +36,7 @@ const App = () => {
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
+              <Route path="/admin/customers" element={<ProtectedRoute requireAdmin><AdminCustomers /></ProtectedRoute>} />
               <Route path="/developer" element={<ProtectedRoute requireSuperAdmin><Developer /></ProtectedRoute>} />
               <Route path="/developer/api-docs" element={<ProtectedRoute requireSuperAdmin><ApiDocs /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
