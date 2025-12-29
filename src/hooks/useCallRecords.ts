@@ -188,7 +188,7 @@ export const useAvailableWeeks = (projectId?: string) => {
       }
 
       const weeks = new Set(data?.map((d) => d.week_number as number) || []);
-      return Array.from(weeks).sort((a, b) => a - b);
+      return Array.from(weeks).sort((a, b) => b - a); // Sort descending (most recent week first)
     },
     enabled: !!projectId,
   });
