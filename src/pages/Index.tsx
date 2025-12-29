@@ -28,6 +28,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Navigate } from 'react-router-dom';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { DateFilterType, DateRange } from '@/components/Dashboard/DateFilterSelector';
 
 const Index = () => {
   const [selectedProjectKey, setSelectedProjectKey] = useState<string>('hersenstichting');
@@ -36,6 +37,10 @@ const Index = () => {
   const [viewAsClient, setViewAsClient] = useState(false);
   const [dashboardPage, setDashboardPage] = useState(1);
   const [dashboardPageSize, setDashboardPageSize] = useState(100);
+  
+  // Date filter state
+  const [dateFilterType, setDateFilterType] = useState<DateFilterType>('week');
+  const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
   
   const { user, signOut, loading: authLoading } = useAuth();
   const { data: userRole, isLoading: roleLoading } = useUserRole(user?.id);
@@ -388,6 +393,10 @@ const Index = () => {
           viewMode={viewMode}
           onWeekChange={(week) => setSelectedWeek(week)}
           onViewModeChange={setViewMode}
+          dateFilterType={dateFilterType}
+          onDateFilterTypeChange={setDateFilterType}
+          dateRange={dateRange}
+          onDateRangeChange={setDateRange}
         />
         
         {/* Admin toggle to view as client */}

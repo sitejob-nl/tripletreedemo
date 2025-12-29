@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing } from 'lucide-react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Eye, RefreshCw, AlertTriangle } from 'lucide-react';
 import { DBProject, MappingConfig, ProjectType } from '@/types/database';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useProjectFieldOptions } from '@/hooks/useProjectFieldOptions';
+import { useConfigPreview } from '@/hooks/useConfigPreview';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface MappingToolProps {
   project: DBProject;
@@ -48,6 +57,25 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [partialSuccessResults, setPartialSuccessResults] = useState<string[]>(project.mapping_config.partial_success_results || []);
 
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
+
+  // Build current mapping config for preview
+  const currentMappingConfig: MappingConfig = {
+    amount_col: amountCol,
+    freq_col: freqCol,
+    reason_col: reasonCol === EMPTY_VALUE ? '' : reasonCol,
+    location_col: locationCol === AUTO_VALUE ? '' : locationCol,
+    freq_map: freqMap,
+    sale_results: saleResults,
+    retention_results: retentionResults,
+    lost_results: lostResults,
+    partial_success_results: partialSuccessResults,
+  };
+
+  const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
+    projectId: project.id,
+    mappingConfig: currentMappingConfig,
+    sampleSize: 5,
+  });
 
   useEffect(() => {
     setProjectType(project.project_type || 'outbound');
@@ -271,6 +299,106 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
               <Input type="number" value={newFreqValue} onChange={(e) => setNewFreqValue(e.target.value)} placeholder="Mult." className="w-20" />
               <Button onClick={addFreqMapping} size="sm" variant="outline"><Plus size={16} /></Button>
             </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Config Preview */}
+        <AccordionItem value="preview" className="border border-border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-semibold">
+            <div className="flex items-center gap-2">
+              <Eye size={16} />
+              Preview Berekening ({previewRecords?.length || 0} sales)
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4 pt-4">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs text-muted-foreground">
+                Toont hoe de huidige configuratie de eerste 5 sales records berekent.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchPreview()}
+                disabled={previewLoading}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw size={14} className={previewLoading ? 'animate-spin' : ''} />
+                Ververs
+              </Button>
+            </div>
+
+            {previewLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 size={24} className="animate-spin text-muted-foreground" />
+              </div>
+            ) : previewRecords && previewRecords.length > 0 ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-20">Record</TableHead>
+                      <TableHead>Resultaat</TableHead>
+                      <TableHead className="text-right">Bedrag</TableHead>
+                      <TableHead>Freq. Input</TableHead>
+                      <TableHead>Match</TableHead>
+                      <TableHead className="text-right">Mult.</TableHead>
+                      <TableHead className="text-right">Jaarwaarde</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewRecords.map((record) => (
+                      <TableRow key={record.recordId}>
+                        <TableCell className="font-mono text-xs">#{record.recordId}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-xs">{record.resultaat}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {record.amountRaw ?? '-'}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {record.freqRaw ?? <span className="text-muted-foreground">-</span>}
+                        </TableCell>
+                        <TableCell>
+                          {record.matchedKey ? (
+                            <Badge variant="outline" className="text-xs">
+                              {record.matchedKey}
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive" className="text-xs">
+                              Geen match
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {record.multiplier}x
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          €{record.annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <AlertTriangle size={24} className="mb-2" />
+                <p className="text-sm">Geen sales records gevonden.</p>
+                <p className="text-xs">Controleer of de positieve resultaten correct zijn geconfigureerd.</p>
+              </div>
+            )}
+
+            {previewRecords && previewRecords.some(r => !r.matchedKey) && (
+              <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-amber-500">
+                    <strong>Waarschuwing:</strong> Sommige records hebben geen frequentie match. 
+                    Voeg de ontbrekende frequenties toe aan de Frequentie Mapping om accurate jaarwaarden te berekenen.
+                  </div>
+                </div>
+              </div>
+            )}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
