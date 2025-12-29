@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.geocode-city]
 verify_jwt = false
+
+[functions.create-customer]
+verify_jwt = true
