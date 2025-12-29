@@ -20,12 +20,12 @@ export const Sidebar = ({
   isSuperAdmin = false
 }: SidebarProps) => {
   const projectColors = ['bg-kpi-orange-text', 'bg-kpi-blue-text', 'bg-kpi-green-text', 'bg-kpi-purple-text', 'bg-kpi-cyan-text'];
-  return <aside className="w-full md:w-64 bg-black border-r border-border flex-shrink-0 flex flex-col">
-      <div className="p-6 border-b border-border py-[25px] px-0 flex items-center justify-center">
+  return <aside className="w-full md:w-64 bg-black border-r border-border flex-shrink-0 flex flex-col h-screen sticky top-0">
+      <div className="p-6 border-b border-border py-[25px] px-0 flex items-center justify-center flex-shrink-0">
         <img src={logo} alt="Triple Tree Logo" className="h-12 w-auto object-contain" />
       </div>
 
-      <nav className="p-4 space-y-1 flex-1">
+      <nav className="p-4 space-y-1 flex-1 overflow-y-auto min-h-0">
         <div className="text-xs uppercase text-gray-400 font-bold px-3 mb-3 mt-2">
           Campagnes
         </div>
@@ -36,7 +36,7 @@ export const Sidebar = ({
           </button>)}
       </nav>
 
-      <div className="mt-auto p-4 border-t border-gray-800 space-y-1">
+      <div className="p-4 border-t border-gray-800 space-y-1 flex-shrink-0">
         {role === 'admin' && (
           <>
             <Link 
