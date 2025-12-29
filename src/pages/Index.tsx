@@ -20,6 +20,7 @@ import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
 import { useTotalRecordCount } from '@/hooks/useTotalRecordCount';
 import { useKPIAggregates } from '@/hooks/useKPIAggregates';
+import { useReportMatrixData } from '@/hooks/useReportMatrixData';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
@@ -82,7 +83,16 @@ const Index = () => {
     mappingConfig: currentProject?.mapping_config
   });
 
-  // Convert DB records to ProcessedCallRecord format for existing components
+  // Fetch ALL records for selected week for ReportMatrix (no pagination)
+  const { 
+    data: reportMatrixData = [], 
+    isLoading: reportMatrixLoading 
+  } = useReportMatrixData(
+    currentProject,
+    selectedWeek === 'all' ? 'all' : Number(selectedWeek)
+  );
+
+  // Convert DB records to ProcessedCallRecord format for DashboardView (paginated)
   const processedData: ProcessedCallRecord[] = useMemo(() => {
     return callRecords.map((record) => ({
       // Spread raw_data FIRST so explicit fields override string values
@@ -101,6 +111,24 @@ const Index = () => {
       call_duration_min: Math.round((Number(record.gesprekstijd_sec) || 0) / 60),
     }));
   }, [callRecords]);
+
+  // Convert report matrix data to ProcessedCallRecord format (full week data, no pagination)
+  const reportMatrixProcessedData: ProcessedCallRecord[] = useMemo(() => {
+    return reportMatrixData.map((record) => ({
+      ...(record.raw_data || {}),
+      id: parseInt(record.basicall_record_id.toString()),
+      bc_result_naam: record.resultaat || '',
+      bc_gesprekstijd: Number(record.gesprekstijd_sec) || 0,
+      bc_beldatum: record.beldatum || '',
+      normalized_date: record.beldatum || '',
+      day_name: record.day_name,
+      week_number: record.week_number || 0,
+      annual_value: record.annual_value,
+      is_recurring: record.is_recurring,
+      is_sale: record.is_sale,
+      call_duration_min: Math.round((Number(record.gesprekstijd_sec) || 0) / 60),
+    }));
+  }, [reportMatrixData]);
 
   // Create mapping from project config for existing components
   const currentMapping: ProjectMapping = useMemo(() => {
@@ -534,9 +562,20 @@ const Index = () => {
                           mappingConfig={currentProject.mapping_config}
                           amountCol={currentProject.mapping_config.amount_col}
                         />
+                      ) : selectedWeek === 'all' ? (
+                        <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">
+                          <p className="text-muted-foreground">
+                            Selecteer een specifieke week om het gedetailleerde weekoverzicht te zien.
+                          </p>
+                        </div>
+                      ) : reportMatrixLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                          <span className="ml-3 text-muted-foreground">Week data laden...</span>
+                        </div>
                       ) : (
                         <ReportMatrix
-                          data={processedData}
+                          data={reportMatrixProcessedData}
                           hourlyRate={hourlyRate}
                           vatRate={currentProject?.vat_rate || 21}
                           selectedWeek={selectedWeek}
