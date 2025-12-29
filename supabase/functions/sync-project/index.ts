@@ -22,6 +22,85 @@ interface Project {
   mapping_config: any;
 }
 
+// Kolomnaam normalisatie mapping - varianten naar standaard namen
+const COLUMN_NORMALIZATION_MAP: Record<string, string> = {
+  // Amount/Bedrag variations -> 'amount'
+  'bedrag': 'amount',
+  'Bedrag': 'amount',
+  'BEDRAG': 'amount',
+  'amount': 'amount',
+  'Amount': 'amount',
+  'AMOUNT': 'amount',
+  'termijnbedrag': 'amount',
+  'Termijnbedrag': 'amount',
+  'TERMIJNBEDRAG': 'amount',
+  'nbedrag': 'amount',
+  'Nbedrag': 'amount',
+  'NBEDRAG': 'amount',
+  'donatiebedrag': 'amount',
+  'DonatieBedrag': 'amount',
+  'DONATIEBEDRAG': 'amount',
+  
+  // Frequency variations -> 'frequency'
+  'frequentie': 'frequency',
+  'Frequentie': 'frequency',
+  'FREQUENTIE': 'frequency',
+  'frequency': 'frequency',
+  'Frequency': 'frequency',
+  'FREQUENCY': 'frequency',
+  'ntermijn': 'frequency',
+  'Ntermijn': 'frequency',
+  'NTERMIJN': 'frequency',
+  'termijn': 'frequency',
+  'Termijn': 'frequency',
+  'TERMIJN': 'frequency',
+  
+  // Location/City variations -> 'location'
+  'woonplaats': 'location',
+  'Woonplaats': 'location',
+  'WOONPLAATS': 'location',
+  'stad': 'location',
+  'Stad': 'location',
+  'STAD': 'location',
+  'city': 'location',
+  'City': 'location',
+  'CITY': 'location',
+  'plaats': 'location',
+  'Plaats': 'location',
+  'PLAATS': 'location',
+  
+  // Reason variations -> 'reason'
+  'opzegreden': 'reason',
+  'Opzegreden': 'reason',
+  'OPZEGREDEN': 'reason',
+  'reden': 'reason',
+  'Reden': 'reason',
+  'REDEN': 'reason',
+  'reason': 'reason',
+  'Reason': 'reason',
+  'REASON': 'reason',
+};
+
+/**
+ * Normaliseert kolomnamen in raw_data naar standaard namen.
+ * Behoudt originele velden EN voegt genormaliseerde velden toe.
+ */
+const normalizeRawData = (rawData: Record<string, any>): Record<string, any> => {
+  const normalized = { ...rawData };
+  
+  for (const [originalKey, value] of Object.entries(rawData)) {
+    const normalizedKey = COLUMN_NORMALIZATION_MAP[originalKey];
+    if (normalizedKey && normalizedKey !== originalKey) {
+      // Voeg genormaliseerde key toe (overschrijf niet als al bestaat)
+      if (!(normalizedKey in normalized)) {
+        normalized[normalizedKey] = value;
+      }
+    }
+  }
+  
+  return normalized;
+};
+
 // Helper functie om Europees datumformaat (dd-mm-yyyy) naar ISO (yyyy-mm-dd) te converteren
 const convertEuropeanToISO = (dateStr: string | null): string | null => {
   if (!dateStr) return null;
@@ -167,6 +246,9 @@ Deno.serve(async (req) => {
         
         const recordsToUpsert = batch.map((record) => {
           const isoDate = convertEuropeanToISO(record.beldatum);
+          // Normaliseer kolomnamen in raw_data
+          const normalizedRawData = normalizeRawData(record);
+          
           return {
             basicall_record_id: record.record_id,
             project_id: project.id,
@@ -175,7 +257,7 @@ Deno.serve(async (req) => {
             gesprekstijd_sec: record.gesprekstijd_sec || 0,
             resultaat: record.resultaat || null,
             week_number: isoDate ? getWeekNumber(isoDate) : null,
-            raw_data: record,
+            raw_data: normalizedRawData, // Nu met genormaliseerde kolomnamen
             synced_at: new Date().toISOString(),
           };
         });
