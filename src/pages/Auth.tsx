@@ -30,7 +30,7 @@ export default function Auth() {
   } = useToast();
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate('/dashboard');
     }
   }, [user, navigate]);
   const validateForm = () => {
