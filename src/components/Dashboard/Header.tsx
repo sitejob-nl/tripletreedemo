@@ -1,6 +1,7 @@
 import { LayoutDashboard, FileSpreadsheet, ChevronRight, BarChart3 } from 'lucide-react';
 import { Role, ViewMode, Project } from '@/types/dashboard';
 import { DateFilterSelector, DateFilterType, DateRange } from './DateFilterSelector';
+import { HelpDialog } from './HelpDialog';
 import { WeekYear } from '@/hooks/useCallRecords';
 
 interface HeaderProps {
@@ -54,6 +55,8 @@ export const Header = ({
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
+          <HelpDialog />
+          
           <DateFilterSelector
             filterType={dateFilterType}
             onFilterTypeChange={onDateFilterTypeChange}
