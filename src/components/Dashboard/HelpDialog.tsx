@@ -40,7 +40,7 @@ export const HelpDialog = () => {
             {/* Jaarwaarde */}
             <AccordionItem value="jaarwaarde">
               <AccordionTrigger className="text-left font-semibold">
-                💰 Jaarwaarde Berekening
+                Jaarwaarde Berekening
               </AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm">
                 <p className="text-muted-foreground">
@@ -68,7 +68,7 @@ export const HelpDialog = () => {
             {/* Conversie */}
             <AccordionItem value="conversie">
               <AccordionTrigger className="text-left font-semibold">
-                📊 Conversie Berekeningen
+                Conversie Berekeningen
               </AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm">
                 <div className="space-y-4">
@@ -98,7 +98,7 @@ export const HelpDialog = () => {
             {/* Investering */}
             <AccordionItem value="investering">
               <AccordionTrigger className="text-left font-semibold">
-                💵 Investering & Kosten
+                Investering & Kosten
               </AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm">
                 <div className="space-y-4">
@@ -129,7 +129,7 @@ export const HelpDialog = () => {
             {/* ROI */}
             <AccordionItem value="roi">
               <AccordionTrigger className="text-left font-semibold">
-                📈 ROI & Terugverdientijd
+                ROI & Terugverdientijd
               </AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm">
                 <div className="space-y-4">
@@ -159,7 +159,7 @@ export const HelpDialog = () => {
             {/* Negatieve Resultaten */}
             <AccordionItem value="negatief">
               <AccordionTrigger className="text-left font-semibold">
-                ❌ Negatieve Resultaten
+                Negatieve Resultaten
               </AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm">
                 <div className="space-y-4">
@@ -190,7 +190,7 @@ export const HelpDialog = () => {
             {/* Retentie (Inbound) */}
             <AccordionItem value="retentie">
               <AccordionTrigger className="text-left font-semibold">
-                🔄 Retentie Metrics (Inbound)
+                Retentie Metrics (Inbound)
               </AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm">
                 <p className="text-muted-foreground mb-3">
@@ -224,7 +224,7 @@ export const HelpDialog = () => {
             {/* Week Data */}
             <AccordionItem value="week">
               <AccordionTrigger className="text-left font-semibold">
-                📅 Week & Datum Selectie
+                Week & Datum Selectie
               </AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm">
                 <p className="text-muted-foreground">
@@ -244,7 +244,7 @@ export const HelpDialog = () => {
             {/* Gesprekstijd */}
             <AccordionItem value="gesprekstijd">
               <AccordionTrigger className="text-left font-semibold">
-                ⏱️ Gesprekstijd
+                Gesprekstijd
               </AccordionTrigger>
               <AccordionContent className="space-y-3 text-sm">
                 <p className="text-muted-foreground">
