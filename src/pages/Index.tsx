@@ -31,7 +31,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DateFilterType, DateRange } from '@/components/Dashboard/DateFilterSelector';
 
 const Index = () => {
-  const [selectedProjectKey, setSelectedProjectKey] = useState<string>('hersenstichting');
+  const [selectedProjectKey, setSelectedProjectKey] = useState<string>('');
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   const [selectedWeek, setSelectedWeek] = useState<string | number>('all');
   const [viewAsClient, setViewAsClient] = useState(false);
@@ -80,6 +80,13 @@ const Index = () => {
 
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
+
+  // Auto-select first project when projects are loaded and none selected
+  useEffect(() => {
+    if (projects.length > 0 && !selectedProjectKey) {
+      setSelectedProjectKey(projects[0].project_key);
+    }
+  }, [projects, selectedProjectKey]);
 
   // Auto-select most recent week when available weeks are loaded
   useEffect(() => {
