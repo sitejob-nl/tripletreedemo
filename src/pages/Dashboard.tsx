@@ -68,7 +68,7 @@ const Index = () => {
     isLoading: recordsLoading,
     error: recordsError 
   } = useCallRecords(currentProject, { 
-    weekNumber: selectedWeek === 'all' ? 'all' : Number(selectedWeek),
+    weekYearValue: selectedWeek === 'all' ? 'all' : String(selectedWeek),
     page: dashboardPage,
     pageSize: dashboardPageSize
   });
@@ -76,7 +76,7 @@ const Index = () => {
   // Fetch total record count for pagination
   const { data: totalRecordCount = 0 } = useTotalRecordCount(
     currentProject?.id, 
-    selectedWeek === 'all' ? 'all' : Number(selectedWeek)
+    selectedWeek === 'all' ? 'all' : String(selectedWeek)
   );
 
   // Get available weeks
@@ -92,14 +92,14 @@ const Index = () => {
   // Auto-select most recent week when available weeks are loaded
   useEffect(() => {
     if (availableWeeks.length > 0 && selectedWeek === 'all') {
-      setSelectedWeek(availableWeeks[0]); // First item is most recent (sorted descending)
+      setSelectedWeek(availableWeeks[0].value); // Use value (e.g., "2026-01") for unique identification
     }
   }, [availableWeeks]);
 
   // Fetch KPI aggregates (totals over ALL records, not paginated)
   const { data: kpiAggregates, isLoading: kpiLoading } = useKPIAggregates({
     projectId: currentProject?.id,
-    weekNumber: selectedWeek === 'all' ? 'all' : Number(selectedWeek),
+    weekYearValue: selectedWeek === 'all' ? 'all' : String(selectedWeek),
     mappingConfig: currentProject?.mapping_config
   });
 
@@ -109,7 +109,7 @@ const Index = () => {
     isLoading: reportMatrixLoading 
   } = useReportMatrixData(
     currentProject,
-    selectedWeek === 'all' ? 'all' : Number(selectedWeek)
+    selectedWeek === 'all' ? 'all' : String(selectedWeek)
   );
 
   // Convert DB records to ProcessedCallRecord format for DashboardView (paginated)

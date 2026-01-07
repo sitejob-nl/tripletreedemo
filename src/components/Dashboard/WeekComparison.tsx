@@ -15,10 +15,12 @@ import {
 } from 'recharts';
 import { createEmptyStats } from '@/lib/statsHelpers';
 
+import { WeekYear } from '@/hooks/useCallRecords';
+
 interface WeekComparisonProps {
   data: ProcessedCallRecord[];
   hourlyRate: number;
-  availableWeeks: number[];
+  availableWeeks: WeekYear[];
   amountCol?: string;
 }
 
@@ -31,26 +33,49 @@ const parseDutchFloat = (val: unknown): number => {
 
 interface WeekStats extends DayStats {
   weekNumber: number;
+  year: number;
+  weekYearKey: string; // "2026-01" format
 }
 
 export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = 'termijnbedrag' }: WeekComparisonProps) => {
-  const [selectedWeeks, setSelectedWeeks] = useState<number[]>(() => {
-    // Default: select last 2 available weeks
-    const sorted = [...availableWeeks].sort((a, b) => b - a);
-    return sorted.slice(0, Math.min(2, sorted.length));
+  const [selectedWeeks, setSelectedWeeks] = useState<string[]>(() => {
+    // Default: select last 2 available weeks (by value, e.g., "2026-01")
+    return availableWeeks.slice(0, Math.min(2, availableWeeks.length)).map(w => w.value);
   });
 
   const [sortColumn, setSortColumn] = useState<string>('weekNumber');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Aggregate stats per week
+  // Aggregate stats per week-year combination
   const weekStats = useMemo(() => {
-    const stats: Record<number, WeekStats> = {};
+    const stats: Record<string, WeekStats> = {};
     
     data.forEach((record) => {
       const weekNum = record.week_number;
-      if (!stats[weekNum]) {
-        stats[weekNum] = { ...createEmptyStats(), weekNumber: weekNum };
+      // Extract year from normalized_date or bc_beldatum
+      const dateStr = record.normalized_date || record.bc_beldatum;
+      let year = new Date().getFullYear();
+      
+      if (dateStr) {
+        // Handle both "2026-01-04" and "04-01-2026" formats
+        const isoMatch = dateStr.match(/^(\d{4})-/);
+        const nlMatch = dateStr.match(/-(\d{4})$/);
+        if (isoMatch) {
+          year = parseInt(isoMatch[1]);
+        } else if (nlMatch) {
+          year = parseInt(nlMatch[1]);
+        }
+      }
+      
+      const weekYearKey = `${year}-${String(weekNum).padStart(2, '0')}`;
+      
+      if (!stats[weekYearKey]) {
+        stats[weekYearKey] = { 
+          ...createEmptyStats(), 
+          weekNumber: weekNum, 
+          year, 
+          weekYearKey 
+        };
       }
 
       const rawData = record as unknown as { raw_data?: Record<string, unknown> };
@@ -58,25 +83,25 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
       const amount = rawData.raw_data?.[amountCol] ? parseDutchFloat(rawData.raw_data[amountCol]) : 0;
       const resultName = rawData.raw_data?.bc_result_naam as string || record.bc_result_naam || 'Onbekend';
 
-      stats[weekNum].calls++;
-      stats[weekNum].durationSec += record.bc_gesprekstijd;
-      stats[weekNum].totalAttempts += attempts;
+      stats[weekYearKey].calls++;
+      stats[weekYearKey].durationSec += record.bc_gesprekstijd;
+      stats[weekYearKey].totalAttempts += attempts;
 
       if (record.is_sale) {
-        stats[weekNum].sales++;
-        stats[weekNum].annualValue += record.annual_value;
-        stats[weekNum].totalAmount += amount;
+        stats[weekYearKey].sales++;
+        stats[weekYearKey].annualValue += record.annual_value;
+        stats[weekYearKey].totalAmount += amount;
 
         if (record.is_recurring) {
-          stats[weekNum].recurring++;
-          stats[weekNum].annualValueRecurring += record.annual_value;
+          stats[weekYearKey].recurring++;
+          stats[weekYearKey].annualValueRecurring += record.annual_value;
         } else {
-          stats[weekNum].oneoff++;
-          stats[weekNum].annualValueOneoff += record.annual_value;
+          stats[weekYearKey].oneoff++;
+          stats[weekYearKey].annualValueOneoff += record.annual_value;
         }
       } else {
-        stats[weekNum].negativeCount++;
-        stats[weekNum].negativeResults[resultName] = (stats[weekNum].negativeResults[resultName] || 0) + 1;
+        stats[weekYearKey].negativeCount++;
+        stats[weekYearKey].negativeResults[resultName] = (stats[weekYearKey].negativeResults[resultName] || 0) + 1;
       }
     });
 
@@ -114,13 +139,13 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
     return investment > 0 ? stats.annualValue / investment : 0;
   };
 
-  // Toggle week selection
-  const toggleWeek = (week: number) => {
+  // Toggle week selection (now using string keys like "2026-01")
+  const toggleWeek = (weekValue: string) => {
     setSelectedWeeks(prev => {
-      if (prev.includes(week)) {
-        return prev.filter(w => w !== week);
+      if (prev.includes(weekValue)) {
+        return prev.filter(w => w !== weekValue);
       }
-      return [...prev, week].sort((a, b) => b - a);
+      return [...prev, weekValue].sort((a, b) => b.localeCompare(a));
     });
   };
 
@@ -231,17 +256,17 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
       <div className="bg-card rounded-xl border border-border p-4">
         <h3 className="text-sm font-semibold text-foreground mb-3">Selecteer weken om te vergelijken</h3>
         <div className="flex flex-wrap gap-2">
-          {availableWeeks.sort((a, b) => b - a).map((week) => (
+          {availableWeeks.map((week) => (
             <button
-              key={week}
-              onClick={() => toggleWeek(week)}
+              key={week.value}
+              onClick={() => toggleWeek(week.value)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                selectedWeeks.includes(week)
+                selectedWeeks.includes(week.value)
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
             >
-              Week {week}
+              {week.label}
             </button>
           ))}
         </div>
