@@ -25,11 +25,13 @@ export interface DateRange {
   end: Date | null;
 }
 
+import { WeekYear } from '@/hooks/useCallRecords';
+
 interface DateFilterSelectorProps {
   filterType: DateFilterType;
   onFilterTypeChange: (type: DateFilterType) => void;
   selectedWeek: string | number;
-  availableWeeks: number[];
+  availableWeeks: WeekYear[];
   onWeekChange: (week: string) => void;
   dateRange: DateRange;
   onDateRangeChange: (range: DateRange) => void;
@@ -115,8 +117,8 @@ export const DateFilterSelector = ({
           >
             <option value="all">Alle Weken</option>
             {availableWeeks.map((w) => (
-              <option key={w} value={w}>
-                Week {w}
+              <option key={w.value} value={w.value}>
+                {w.label}
               </option>
             ))}
           </select>

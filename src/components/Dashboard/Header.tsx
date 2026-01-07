@@ -1,12 +1,13 @@
 import { LayoutDashboard, FileSpreadsheet, ChevronRight, BarChart3 } from 'lucide-react';
 import { Role, ViewMode, Project } from '@/types/dashboard';
 import { DateFilterSelector, DateFilterType, DateRange } from './DateFilterSelector';
+import { WeekYear } from '@/hooks/useCallRecords';
 
 interface HeaderProps {
   project: Project;
   role: Role;
   selectedWeek: string | number;
-  availableWeeks: number[];
+  availableWeeks: WeekYear[];
   viewMode: ViewMode;
   onWeekChange: (week: string) => void;
   onViewModeChange: (mode: ViewMode) => void;

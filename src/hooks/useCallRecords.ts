@@ -6,7 +6,7 @@ import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
 
 interface UseCallRecordsOptions {
   projectId?: string;
-  weekNumber?: number | 'all';
+  weekYearValue?: string | 'all'; // e.g., "2026-01" or "all"
   page?: number;
   pageSize?: number;
 }
@@ -128,10 +128,10 @@ export const useCallRecords = (
   project: DBProject | undefined,
   options: UseCallRecordsOptions = {}
 ) => {
-  const { weekNumber = 'all', page = 1, pageSize = 100 } = options;
+  const { weekYearValue = 'all', page = 1, pageSize = 100 } = options;
 
   return useQuery({
-    queryKey: ['call_records', project?.id, weekNumber, page, pageSize],
+    queryKey: ['call_records', project?.id, weekYearValue, page, pageSize],
     queryFn: async (): Promise<ProcessedDBCallRecordWithFreq[]> => {
       if (!project) return [];
 
@@ -146,8 +146,20 @@ export const useCallRecords = (
         .order('beldatum_date', { ascending: false, nullsFirst: false })
         .range(from, to);
 
-      if (weekNumber !== 'all') {
-        query = query.eq('week_number', weekNumber);
+      // Parse weekYearValue (e.g., "2026-01") to filter by week and year
+      if (weekYearValue !== 'all') {
+        const match = weekYearValue.match(/^(\d{4})-(\d{1,2})$/);
+        if (match) {
+          const year = parseInt(match[1]);
+          const week = parseInt(match[2]);
+          
+          // Filter by week_number and year (using beldatum_date)
+          // We need to filter where the year of beldatum_date matches
+          query = query
+            .eq('week_number', week)
+            .gte('beldatum_date', `${year}-01-01`)
+            .lte('beldatum_date', `${year}-12-31`);
+        }
       }
 
       const { data, error } = await query;
@@ -181,25 +193,58 @@ export const useCallRecords = (
   });
 };
 
-// Hook to get available weeks for a project
+// Week with year context
+export interface WeekYear {
+  week: number;
+  year: number;
+  label: string; // "Week 1 (2026)"
+  value: string; // "2026-01" for unique identification
+}
+
+// Hook to get available weeks for a project (with year context)
 export const useAvailableWeeks = (projectId?: string) => {
   return useQuery({
     queryKey: ['available_weeks', projectId],
-    queryFn: async (): Promise<number[]> => {
+    queryFn: async (): Promise<WeekYear[]> => {
       if (!projectId) return [];
 
       const { data, error } = await supabase
         .from('call_records')
-        .select('week_number')
+        .select('week_number, beldatum_date')
         .eq('project_id', projectId)
-        .not('week_number', 'is', null);
+        .not('week_number', 'is', null)
+        .not('beldatum_date', 'is', null);
 
       if (error) {
         throw new Error(`Fout bij ophalen weeks: ${error.message}`);
       }
 
-      const weeks = new Set(data?.map((d) => d.week_number as number) || []);
-      return Array.from(weeks).sort((a, b) => b - a); // Sort descending (most recent week first)
+      // Extract unique week-year combinations
+      const weekYearMap = new Map<string, WeekYear>();
+      
+      (data || []).forEach((d) => {
+        if (!d.beldatum_date || d.week_number === null) return;
+        
+        const date = new Date(d.beldatum_date);
+        const year = date.getFullYear();
+        const week = d.week_number as number;
+        const key = `${year}-${String(week).padStart(2, '0')}`;
+        
+        if (!weekYearMap.has(key)) {
+          weekYearMap.set(key, {
+            week,
+            year,
+            label: `Week ${week} (${year})`,
+            value: key,
+          });
+        }
+      });
+
+      // Sort by year desc, then week desc (most recent first)
+      return Array.from(weekYearMap.values()).sort((a, b) => {
+        if (a.year !== b.year) return b.year - a.year;
+        return b.week - a.week;
+      });
     },
     enabled: !!projectId,
   });

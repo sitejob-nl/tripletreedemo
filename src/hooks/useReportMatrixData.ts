@@ -107,6 +107,15 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
   return '';
 };
 
+// Parse weekYearValue (e.g., "2026-01") into week and year
+const parseWeekYearValue = (value: string): { week: number; year: number } | null => {
+  const match = value.match(/^(\d{4})-(\d{1,2})$/);
+  if (match) {
+    return { year: parseInt(match[1]), week: parseInt(match[2]) };
+  }
+  return null;
+};
+
 /**
  * Hook to fetch ALL call records for a specific week (without pagination)
  * This is specifically for the ReportMatrix component that needs complete data for aggregation.
@@ -116,24 +125,28 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
  */
 export const useReportMatrixData = (
   project: DBProject | undefined,
-  weekNumber: number | 'all'
+  weekYearValue: string | 'all'
 ) => {
+  const parsed = weekYearValue !== 'all' ? parseWeekYearValue(weekYearValue) : null;
+
   return useQuery({
-    queryKey: ['report_matrix_data', project?.id, weekNumber],
+    queryKey: ['report_matrix_data', project?.id, weekYearValue],
     queryFn: async (): Promise<ProcessedDBCallRecord[]> => {
       if (!project) return [];
       
       // Don't fetch all records when 'all' is selected - too many records
-      if (weekNumber === 'all') {
+      if (weekYearValue === 'all' || !parsed) {
         return [];
       }
 
-      // Fetch ALL records for the specific week (no pagination)
+      // Fetch ALL records for the specific week+year (no pagination)
       const { data, error } = await supabase
         .from('call_records')
         .select('*')
         .eq('project_id', project.id)
-        .eq('week_number', weekNumber)
+        .eq('week_number', parsed.week)
+        .gte('beldatum_date', `${parsed.year}-01-01`)
+        .lte('beldatum_date', `${parsed.year}-12-31`)
         .order('beldatum_date', { ascending: false, nullsFirst: false });
 
       if (error) {
@@ -158,7 +171,7 @@ export const useReportMatrixData = (
         };
       });
     },
-    enabled: !!project?.id && weekNumber !== 'all',
+    enabled: !!project?.id && weekYearValue !== 'all',
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 };
