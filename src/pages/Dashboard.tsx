@@ -10,6 +10,7 @@ import { InboundReportMatrix } from '@/components/Dashboard/InboundReportMatrix'
 import { WeekComparison } from '@/components/Dashboard/WeekComparison';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
+import { WelcomeScreen } from '@/components/Dashboard/WelcomeScreen';
 import { GeographicAnalysis } from '@/components/Dashboard/GeographicAnalysis';
 import { CallAttemptsAnalysis } from '@/components/Dashboard/CallAttemptsAnalysis';
 import { ResultsBreakdown } from '@/components/Dashboard/ResultsBreakdown';
@@ -440,16 +441,21 @@ const Index = () => {
             </div>
           )}
 
+          {/* Welcome Screen - Show when no project selected */}
+          {!currentProject && !isLoading && !error && (
+            <WelcomeScreen />
+          )}
+
           {/* Loading State */}
-          {isLoading && (
+          {isLoading && currentProject && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="ml-3 text-muted-foreground">Data laden...</span>
             </div>
           )}
 
-          {/* Main Content */}
-          {!isLoading && !error && (
+          {/* Main Content - Only show when project is selected */}
+          {!isLoading && !error && currentProject && (
             <>
               {effectiveRole === 'admin' && (
                 <div className="mb-8">
