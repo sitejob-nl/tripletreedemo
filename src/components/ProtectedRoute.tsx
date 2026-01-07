@@ -38,7 +38,7 @@ export function ProtectedRoute({ children, requireAdmin = false, requireSuperAdm
           <p className="text-muted-foreground mb-4">
             Je hebt geen superadmin rechten om deze pagina te bekijken.
           </p>
-          <a href="/" className="text-primary hover:underline">
+          <a href="/dashboard" className="text-primary hover:underline">
             Terug naar dashboard
           </a>
         </div>
@@ -54,7 +54,7 @@ export function ProtectedRoute({ children, requireAdmin = false, requireSuperAdm
           <p className="text-muted-foreground mb-4">
             Je hebt geen admin rechten om deze pagina te bekijken.
           </p>
-          <a href="/" className="text-primary hover:underline">
+          <a href="/dashboard" className="text-primary hover:underline">
             Terug naar dashboard
           </a>
         </div>
