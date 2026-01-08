@@ -89,10 +89,16 @@ const Index = () => {
     }
   }, [projects, selectedProjectKey]);
 
-  // Auto-select most recent week when available weeks are loaded
+  // Auto-select most recent week when available weeks change (e.g., project switch)
   useEffect(() => {
-    if (availableWeeks.length > 0 && selectedWeek === 'all') {
-      setSelectedWeek(availableWeeks[0].value); // Use value (e.g., "2026-01") for unique identification
+    if (availableWeeks.length > 0) {
+      // Check if current week is still valid for this project
+      const isCurrentWeekValid = availableWeeks.some(w => w.value === selectedWeek);
+      
+      if (selectedWeek === 'all' || !isCurrentWeekValid) {
+        // Select most recent week for this project
+        setSelectedWeek(availableWeeks[0].value);
+      }
     }
   }, [availableWeeks]);
 
