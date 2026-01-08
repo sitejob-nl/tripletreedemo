@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useProjects } from "@/hooks/useProjects";
+import { useAuth } from "@/hooks/useAuth";
 import { useCustomersWithProjects, useCreateCustomer, useLinkProjectToCustomer, useUnlinkProjectFromCustomer } from "@/hooks/useCustomerProjects";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,8 @@ import { ArrowLeft, Plus, UserPlus, Link as LinkIcon, Unlink, Loader2, Users } f
 import { Badge } from "@/components/ui/badge";
 
 export default function AdminCustomers() {
-  const { projects } = useProjects(false);
+  const { user } = useAuth();
+  const { projects } = useProjects(false, user?.id);
   const { data: customers, isLoading: customersLoading } = useCustomersWithProjects();
   const createCustomer = useCreateCustomer();
   const linkProject = useLinkProjectToCustomer();

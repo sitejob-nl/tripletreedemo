@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -14,6 +16,14 @@ export function useAuth() {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        
+        // Invalidate all cached queries on auth state changes to ensure fresh data
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+          // Use setTimeout to avoid Supabase deadlock
+          setTimeout(() => {
+            queryClient.invalidateQueries();
+          }, 0);
+        }
       }
     );
 
@@ -25,7 +35,7 @@ export function useAuth() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [queryClient]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useProjects } from "@/hooks/useProjects";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,8 @@ interface ProjectsTableProps {
 }
 
 export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
-  const { projects, isLoading } = useProjects(false);
+  const { user } = useAuth();
+  const { projects, isLoading } = useProjects(false, user?.id);
   const [search, setSearch] = useState("");
   const [showOnlyActive, setShowOnlyActive] = useState(false);
   const queryClient = useQueryClient();

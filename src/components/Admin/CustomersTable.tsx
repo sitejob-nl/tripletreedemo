@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useProjects } from "@/hooks/useProjects";
+import { useAuth } from "@/hooks/useAuth";
 import { 
   useCustomersWithProjects, 
   useCreateCustomer, 
@@ -23,7 +24,8 @@ interface CustomersTableProps {
 }
 
 export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: CustomersTableProps) {
-  const { projects } = useProjects(false);
+  const { user } = useAuth();
+  const { projects } = useProjects(false, user?.id);
   const { data: customers, isLoading } = useCustomersWithProjects();
   const createCustomer = useCreateCustomer();
   const linkProject = useLinkProjectToCustomer();
