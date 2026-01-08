@@ -1,4 +1,5 @@
 import { useProjects } from "@/hooks/useProjects";
+import { useAuth } from "@/hooks/useAuth";
 import { useCustomersWithProjects } from "@/hooks/useCustomerProjects";
 import { useUsers } from "@/hooks/useUsers";
 import { useSyncJobs } from "@/hooks/useSyncJobs";
@@ -31,7 +32,8 @@ const statusIcons: Record<string, React.ReactNode> = {
 };
 
 export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer }: AdminDashboardProps) {
-  const { projects, isLoading: projectsLoading } = useProjects(false);
+  const { user } = useAuth();
+  const { projects, isLoading: projectsLoading } = useProjects(false, user?.id);
   const { data: customers, isLoading: customersLoading } = useCustomersWithProjects();
   const { data: users, isLoading: usersLoading } = useUsers();
   const { data: syncJobs, isLoading: jobsLoading } = useSyncJobs(undefined, 5);

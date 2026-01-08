@@ -3,6 +3,7 @@ import { format, subMonths, startOfYear, startOfQuarter, endOfQuarter, subQuarte
 import { nl } from "date-fns/locale";
 import { useSyncJobs, useCreateSyncJob } from "@/hooks/useSyncJobs";
 import { useProjects } from "@/hooks/useProjects";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,7 +57,8 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 export function SyncManager() {
-  const { projects, isLoading: projectsLoading } = useProjects(false);
+  const { user } = useAuth();
+  const { projects, isLoading: projectsLoading } = useProjects(false, user?.id);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [preset, setPreset] = useState<PresetPeriod>("2024");
   const [customStart, setCustomStart] = useState("");

@@ -2,9 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DBProject, MappingConfig, ProjectType } from '@/types/database';
 
-export const useProjects = (onlyActive = true) => {
+export const useProjects = (onlyActive = true, userId?: string) => {
   const query = useQuery({
-    queryKey: ['projects', onlyActive],
+    queryKey: ['projects', onlyActive, userId],
     queryFn: async (): Promise<DBProject[]> => {
       let queryBuilder = supabase
         .from('projects')
@@ -28,6 +28,7 @@ export const useProjects = (onlyActive = true) => {
         mapping_config: project.mapping_config as unknown as MappingConfig,
       }));
     },
+    enabled: userId !== undefined,
   });
 
   return {

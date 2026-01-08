@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSyncLogs, useDbStats } from "@/hooks/useSyncLogs";
 import { useProjects } from "@/hooks/useProjects";
+import { useAuth } from "@/hooks/useAuth";
 import { useErrorLogs, useUnresolvedErrorCount, useResolveError, useDeleteError } from "@/hooks/useErrorLogs";
 import { toast } from "sonner";
 
@@ -34,9 +35,10 @@ const copyToClipboard = (text: string, label: string) => {
 };
 
 export default function Developer() {
+  const { user } = useAuth();
   const { data: syncLogs, isLoading: logsLoading } = useSyncLogs();
   const { data: stats, isLoading: statsLoading } = useDbStats();
-  const { projects } = useProjects(false);
+  const { projects } = useProjects(false, user?.id);
   const { data: errorLogs, isLoading: errorLogsLoading } = useErrorLogs();
   const { data: unresolvedCount } = useUnresolvedErrorCount();
   const resolveError = useResolveError();
