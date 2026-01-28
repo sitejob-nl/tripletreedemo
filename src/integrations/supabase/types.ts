@@ -96,6 +96,38 @@ export type Database = {
           },
         ]
       }
+      daily_logged_time: {
+        Row: {
+          date: string
+          id: string
+          project_id: string
+          synced_at: string | null
+          total_seconds: number
+        }
+        Insert: {
+          date: string
+          id?: string
+          project_id: string
+          synced_at?: string | null
+          total_seconds?: number
+        }
+        Update: {
+          date?: string
+          id?: string
+          project_id?: string
+          synced_at?: string | null
+          total_seconds?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_logged_time_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       error_logs: {
         Row: {
           component_name: string | null
