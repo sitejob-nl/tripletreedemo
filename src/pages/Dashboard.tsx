@@ -21,6 +21,7 @@ import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
 import { useTotalRecordCount } from '@/hooks/useTotalRecordCount';
 import { useKPIAggregates } from '@/hooks/useKPIAggregates';
+import { useLoggedTime } from '@/hooks/useLoggedTime';
 import { useReportMatrixData } from '@/hooks/useReportMatrixData';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
@@ -109,6 +110,12 @@ const Index = () => {
     mappingConfig: currentProject?.mapping_config
   });
 
+  // Fetch logged time for accurate cost calculation
+  const { data: loggedTime, isLoading: loggedTimeLoading } = useLoggedTime({
+    projectId: currentProject?.id,
+    weekYearValue: selectedWeek === 'all' ? 'all' : String(selectedWeek)
+  });
+
   // Fetch ALL records for selected week for ReportMatrix (no pagination)
   const { 
     data: reportMatrixData = [], 
@@ -176,10 +183,15 @@ const Index = () => {
   }, [currentProject]);
 
   // KPI values from aggregated data (over ALL records)
+  // Use logged time for cost calculation if available, fallback to gesprekstijd
   const totalSales = kpiAggregates?.totalSales ?? 0;
   const totalAnnualValue = kpiAggregates?.totalAnnualValue ?? 0;
-  const totalHours = (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
   const hourlyRate = currentMapping.hourly_rate;
+  
+  // Prefer logged time (agent login hours) over gesprekstijd (call duration)
+  const totalHours = loggedTime?.hasData 
+    ? loggedTime.totalHours 
+    : (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
 
