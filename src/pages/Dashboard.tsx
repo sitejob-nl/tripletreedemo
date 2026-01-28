@@ -629,6 +629,7 @@ const Index = () => {
                           selectedWeek={selectedWeek}
                           amountCol={currentProject?.mapping_config?.amount_col}
                           freqCol={currentProject?.mapping_config?.freq_col}
+                          loggedTimeHours={loggedTime?.hasData ? loggedTime.totalHours : undefined}
                         />
                       )}
                     </div>
