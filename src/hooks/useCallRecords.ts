@@ -213,7 +213,12 @@ export const useAvailableWeeks = (projectId?: string) => {
         .select('week_number, beldatum_date')
         .eq('project_id', projectId)
         .not('week_number', 'is', null)
-        .not('beldatum_date', 'is', null);
+        .not('beldatum_date', 'is', null)
+        // CRITICAL: Supabase/PostgREST has a default 1000 row limit.
+        // If a project has >1000 records, we must order by most recent and
+        // explicitly request a larger range so the latest weeks are included.
+        .order('beldatum_date', { ascending: false, nullsFirst: false })
+        .range(0, 4999);
 
       if (error) {
         throw new Error(`Fout bij ophalen weeks: ${error.message}`);
