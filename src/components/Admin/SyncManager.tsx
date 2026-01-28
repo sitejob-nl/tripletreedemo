@@ -65,10 +65,15 @@ export function SyncManager() {
   const [customEnd, setCustomEnd] = useState("");
   const [filterProject, setFilterProject] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [isCreatingMultiple, setIsCreatingMultiple] = useState(false);
   const { toast } = useToast();
 
   const { data: syncJobs, isLoading: jobsLoading } = useSyncJobs(undefined, 50);
   const createJob = useCreateSyncJob();
+
+  // Check if "all projects" is selected
+  const isAllProjects = selectedProjectId === "all";
+  const activeProjects = projects.filter(p => p.is_active);
 
   const filteredJobs = useMemo(() => {
     return syncJobs?.filter(job => {
@@ -109,17 +114,37 @@ export function SyncManager() {
     }
 
     try {
-      await createJob.mutateAsync({
-        projectId: selectedProjectId,
-        startDate,
-        endDate
-      });
+      if (isAllProjects) {
+        // Create jobs for all active projects
+        setIsCreatingMultiple(true);
+        
+        for (const project of activeProjects) {
+          await createJob.mutateAsync({
+            projectId: project.id,
+            startDate,
+            endDate
+          });
+        }
+        
+        setIsCreatingMultiple(false);
+        toast({
+          title: `${activeProjects.length} sync jobs aangemaakt`,
+          description: "De VPS pakt deze opdrachten binnenkort op."
+        });
+      } else {
+        await createJob.mutateAsync({
+          projectId: selectedProjectId,
+          startDate,
+          endDate
+        });
 
-      toast({
-        title: "Sync job aangemaakt",
-        description: "De VPS pakt deze opdracht binnenkort op."
-      });
+        toast({
+          title: "Sync job aangemaakt",
+          description: "De VPS pakt deze opdracht binnenkort op."
+        });
+      }
     } catch (error: any) {
+      setIsCreatingMultiple(false);
       toast({
         title: "Fout bij aanmaken job",
         description: error.message || "Er is iets misgegaan.",
@@ -152,13 +177,22 @@ export function SyncManager() {
                 <SelectValue placeholder="Selecteer een project..." />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all" className="font-medium text-primary">
+                  📦 Alle actieve projecten ({activeProjects.length})
+                </SelectItem>
+                <div className="border-t my-1" />
                 {projects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
-                    {project.name}
+                    {project.name} {!project.is_active && "(inactief)"}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {isAllProjects && (
+              <p className="text-xs text-muted-foreground">
+                Er worden {activeProjects.length} sync jobs aangemaakt, één per actief project.
+              </p>
+            )}
           </div>
 
           {/* Period Selection */}
@@ -222,15 +256,15 @@ export function SyncManager() {
           {/* Start Button */}
           <Button 
             onClick={handleStartSync} 
-            disabled={createJob.isPending || !selectedProjectId}
+            disabled={createJob.isPending || isCreatingMultiple || !selectedProjectId}
             className="w-full gap-2"
           >
-            {createJob.isPending ? (
+            {(createJob.isPending || isCreatingMultiple) ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Play className="h-4 w-4" />
             )}
-            Start Synchronisatie
+            {isAllProjects ? `Start Synchronisatie (${activeProjects.length} projecten)` : 'Start Synchronisatie'}
           </Button>
         </CardContent>
       </Card>
