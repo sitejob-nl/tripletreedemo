@@ -9,6 +9,7 @@ import {
   getFrequencyLabel,
   FrequencyType
 } from '@/lib/statsHelpers';
+import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 
 interface ReportMatrixProps {
   data: ProcessedCallRecord[];
@@ -19,6 +20,8 @@ interface ReportMatrixProps {
   freqCol?: string;
   /** If provided, use logged time (agent hours) instead of gesprekstijd for investment calculations */
   loggedTimeHours?: number;
+  /** Daily breakdown of logged hours per weekday */
+  dailyLoggedHours?: DailyLoggedTimeBreakdown;
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -35,7 +38,8 @@ export const ReportMatrix = ({
   selectedWeek, 
   amountCol = 'termijnbedrag',
   freqCol = 'frequentie',
-  loggedTimeHours
+  loggedTimeHours,
+  dailyLoggedHours
 }: ReportMatrixProps) => {
   const [showNegativeArgumented, setShowNegativeArgumented] = useState(false);
   const [showNegativeNotArgumented, setShowNegativeNotArgumented] = useState(false);
@@ -147,31 +151,40 @@ export const ReportMatrix = ({
   // For gesprekstijd-based calculations (calls per hour, etc.)
   const calcGesprekstijdHours = (stats: DayStats) => stats.durationSec / 3600;
   
-  // For investment calculations, prefer logged time if available (for totals row only)
-  // For individual days, we still use gesprekstijd as we don't have daily logged time breakdown
-  const calcHours = (stats: DayStats, isTotal = false) => {
-    // Use logged time for total if available, otherwise fall back to gesprekstijd
-    if (isTotal && loggedTimeHours !== undefined && loggedTimeHours > 0) {
-      return loggedTimeHours;
+  // For investment calculations, prefer logged time if available
+  // Uses daily breakdown for individual days, total for the totals column
+  const calcHours = (stats: DayStats, isTotal = false, dayName?: string) => {
+    if (isTotal) {
+      // Use total logged time if available
+      if (loggedTimeHours !== undefined && loggedTimeHours > 0) {
+        return loggedTimeHours;
+      }
+    } else if (dayName && dailyLoggedHours) {
+      // Use daily logged time for specific day if available
+      const dailyHours = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
+      if (dailyHours !== undefined && dailyHours > 0) {
+        return dailyHours;
+      }
     }
+    // Fallback to gesprekstijd
     return stats.durationSec / 3600;
   };
   
-  const calcSalesPerHour = (stats: DayStats, isTotal = false) => {
-    const hours = calcHours(stats, isTotal);
+  const calcSalesPerHour = (stats: DayStats, isTotal = false, dayName?: string) => {
+    const hours = calcHours(stats, isTotal, dayName);
     return hours > 0 ? stats.sales / hours : 0;
   };
-  const calcCallsPerHour = (stats: DayStats, isTotal = false) => {
-    const hours = calcHours(stats, isTotal);
+  const calcCallsPerHour = (stats: DayStats, isTotal = false, dayName?: string) => {
+    const hours = calcHours(stats, isTotal, dayName);
     return hours > 0 ? stats.calls / hours : 0;
   };
-  const calcInvestment = (stats: DayStats, isTotal = false) => calcHours(stats, isTotal) * hourlyRate;
-  const calcInvestmentInclVat = (stats: DayStats, isTotal = false) => calcInvestment(stats, isTotal) * (1 + vatRate / 100);
-  const calcBtwAmount = (stats: DayStats, isTotal = false) => calcInvestment(stats, isTotal) * (vatRate / 100);
-  const calcCostPerDonor = (stats: DayStats, isTotal = false) =>
-    stats.sales > 0 ? calcInvestment(stats, isTotal) / stats.sales : 0;
-  const calcCostPerDonorInclVat = (stats: DayStats, isTotal = false) =>
-    stats.sales > 0 ? calcInvestmentInclVat(stats, isTotal) / stats.sales : 0;
+  const calcInvestment = (stats: DayStats, isTotal = false, dayName?: string) => calcHours(stats, isTotal, dayName) * hourlyRate;
+  const calcInvestmentInclVat = (stats: DayStats, isTotal = false, dayName?: string) => calcInvestment(stats, isTotal, dayName) * (1 + vatRate / 100);
+  const calcBtwAmount = (stats: DayStats, isTotal = false, dayName?: string) => calcInvestment(stats, isTotal, dayName) * (vatRate / 100);
+  const calcCostPerDonor = (stats: DayStats, isTotal = false, dayName?: string) =>
+    stats.sales > 0 ? calcInvestment(stats, isTotal, dayName) / stats.sales : 0;
+  const calcCostPerDonorInclVat = (stats: DayStats, isTotal = false, dayName?: string) =>
+    stats.sales > 0 ? calcInvestmentInclVat(stats, isTotal, dayName) / stats.sales : 0;
   const calcBrutoConversion = (stats: DayStats) =>
     stats.calls > 0 ? (stats.sales / stats.calls) * 100 : 0;
   const calcNettoConversion = (stats: DayStats) => {
@@ -180,17 +193,17 @@ export const ReportMatrix = ({
   };
   const calcAvgAmount = (stats: DayStats) =>
     stats.sales > 0 ? stats.totalAmount / stats.sales : 0;
-  const calcROI = (stats: DayStats, isTotal = false) => {
-    const investment = calcInvestment(stats, isTotal);
+  const calcROI = (stats: DayStats, isTotal = false, dayName?: string) => {
+    const investment = calcInvestment(stats, isTotal, dayName);
     return investment > 0 ? stats.annualValue / investment : 0;
   };
-  const calcPaybackMonths = (stats: DayStats, isTotal = false) => {
-    const investment = calcInvestment(stats, isTotal);
+  const calcPaybackMonths = (stats: DayStats, isTotal = false, dayName?: string) => {
+    const investment = calcInvestment(stats, isTotal, dayName);
     const monthlyValue = stats.annualValue / 12;
     return monthlyValue > 0 ? investment / monthlyValue : 0;
   };
-  const calcPaybackMonthsInclVat = (stats: DayStats, isTotal = false) => {
-    const investment = calcInvestmentInclVat(stats, isTotal);
+  const calcPaybackMonthsInclVat = (stats: DayStats, isTotal = false, dayName?: string) => {
+    const investment = calcInvestmentInclVat(stats, isTotal, dayName);
     const monthlyValue = stats.annualValue / 12;
     return monthlyValue > 0 ? investment / monthlyValue : 0;
   };
@@ -204,10 +217,10 @@ export const ReportMatrix = ({
   const formatMonths = (val: number) => `${val.toFixed(1)} mnd`;
 
   // Render row with optional special total calculation
-  // If getValue takes (stats, isTotal) signature, pass isTotal=true for total column
+  // getValue can take (stats, isTotal, dayName) to use daily logged hours
   const renderRow = (
     label: string,
-    getValue: ((stats: DayStats) => number) | ((stats: DayStats, isTotal?: boolean) => number),
+    getValue: ((stats: DayStats, isTotal?: boolean, dayName?: string) => number),
     format: 'number' | 'currency' | 'percent' | 'decimal' | 'multiplier' | 'months' = 'number',
     bgClass = ''
   ) => {
@@ -227,11 +240,11 @@ export const ReportMatrix = ({
         <td className="px-4 py-3 font-medium text-foreground bg-muted/30 sticky left-0 text-sm">{label}</td>
         {days.map((day) => (
           <td key={day} className="px-4 py-3 text-right text-foreground text-sm">
-            {formatValue(getValue(aggregated[day], false))}
+            {formatValue(getValue(aggregated[day], false, day))}
           </td>
         ))}
         <td className="px-4 py-3 text-right font-bold text-foreground bg-muted/50 text-sm">
-          {formatValue(getValue(aggregated.total, true))}
+          {formatValue(getValue(aggregated.total, true, undefined))}
         </td>
       </tr>
     );
@@ -319,9 +332,9 @@ export const ReportMatrix = ({
           {renderRow('Jaarwaarde eenmalig', (s) => s.annualValueOneoff, 'currency')}
           {renderRow('Bruto conversie', calcBrutoConversion, 'percent')}
           {renderRow('Netto conversie', calcNettoConversion, 'percent')}
-          {renderRow('Aantal beluren', (s, isTotal) => calcHours(s, isTotal), 'decimal')}
-          {renderRow('Gesprekken per uur', (s, isTotal) => calcCallsPerHour(s, isTotal), 'decimal')}
-          {renderRow('Score per uur', (s, isTotal) => calcSalesPerHour(s, isTotal), 'decimal')}
+          {renderRow('Aantal beluren', (s, isTotal, dayName) => calcHours(s, isTotal, dayName), 'decimal')}
+          {renderRow('Gesprekken per uur', (s, isTotal, dayName) => calcCallsPerHour(s, isTotal, dayName), 'decimal')}
+          {renderRow('Score per uur', (s, isTotal, dayName) => calcSalesPerHour(s, isTotal, dayName), 'decimal')}
           {renderRow('Gemiddeld donatiebedrag', calcAvgAmount, 'currency')}
 
           {/* POSITIEF - FREQUENTIE BREAKDOWN */}
@@ -381,27 +394,27 @@ export const ReportMatrix = ({
 
           {/* CONVERSIE PER UUR */}
           {renderSectionHeader('Conversie per Uur', 'bg-kpi-purple', 'text-kpi-purple-text')}
-          {renderRow('Positief per uur', (s, isTotal) => calcSalesPerHour(s, isTotal), 'decimal')}
-          {renderRow('Negatief bearg. per uur', (s, isTotal) => {
-            const hours = calcHours(s, isTotal);
+          {renderRow('Positief per uur', (s, isTotal, dayName) => calcSalesPerHour(s, isTotal, dayName), 'decimal')}
+          {renderRow('Negatief bearg. per uur', (s, isTotal, dayName) => {
+            const hours = calcHours(s, isTotal, dayName);
             return hours > 0 ? s.negativeArgumentedCount / hours : 0;
           }, 'decimal')}
-          {renderRow('Negatief niet bearg. per uur', (s, isTotal) => {
-            const hours = calcHours(s, isTotal);
+          {renderRow('Negatief niet bearg. per uur', (s, isTotal, dayName) => {
+            const hours = calcHours(s, isTotal, dayName);
             return hours > 0 ? s.negativeNotArgumentedCount / hours : 0;
           }, 'decimal')}
-          {renderRow('Gesprekken per uur', (s, isTotal) => calcCallsPerHour(s, isTotal), 'decimal', 'bg-muted/20')}
+          {renderRow('Gesprekken per uur', (s, isTotal, dayName) => calcCallsPerHour(s, isTotal, dayName), 'decimal', 'bg-muted/20')}
 
           {/* INVESTERING */}
           {renderSectionHeader('Investering', 'bg-kpi-cyan', 'text-kpi-cyan-text')}
-          {renderRow('Investering (Excl BTW)', (s, isTotal) => calcInvestment(s, isTotal), 'currency')}
-          {renderRow(`BTW ${vatRate}%`, (s, isTotal) => calcBtwAmount(s, isTotal), 'currency')}
-          {renderRow('Investering (Incl BTW)', (s, isTotal) => calcInvestmentInclVat(s, isTotal), 'currency')}
-          {renderRow('Investering per donateur (Excl BTW)', (s, isTotal) => calcCostPerDonor(s, isTotal), 'currency')}
-          {renderRow('Investering per donateur (Incl BTW)', (s, isTotal) => calcCostPerDonorInclVat(s, isTotal), 'currency')}
-          {renderRow('Terugverdientijd (Excl BTW)', (s, isTotal) => calcPaybackMonths(s, isTotal), 'months')}
-          {renderRow('Terugverdientijd (Incl BTW)', (s, isTotal) => calcPaybackMonthsInclVat(s, isTotal), 'months')}
-          {renderRow('ROI', (s, isTotal) => calcROI(s, isTotal), 'multiplier')}
+          {renderRow('Investering (Excl BTW)', (s, isTotal, dayName) => calcInvestment(s, isTotal, dayName), 'currency')}
+          {renderRow(`BTW ${vatRate}%`, (s, isTotal, dayName) => calcBtwAmount(s, isTotal, dayName), 'currency')}
+          {renderRow('Investering (Incl BTW)', (s, isTotal, dayName) => calcInvestmentInclVat(s, isTotal, dayName), 'currency')}
+          {renderRow('Investering per donateur (Excl BTW)', (s, isTotal, dayName) => calcCostPerDonor(s, isTotal, dayName), 'currency')}
+          {renderRow('Investering per donateur (Incl BTW)', (s, isTotal, dayName) => calcCostPerDonorInclVat(s, isTotal, dayName), 'currency')}
+          {renderRow('Terugverdientijd (Excl BTW)', (s, isTotal, dayName) => calcPaybackMonths(s, isTotal, dayName), 'months')}
+          {renderRow('Terugverdientijd (Incl BTW)', (s, isTotal, dayName) => calcPaybackMonthsInclVat(s, isTotal, dayName), 'months')}
+          {renderRow('ROI', (s, isTotal, dayName) => calcROI(s, isTotal, dayName), 'multiplier')}
 
           {/* BELPOGINGEN */}
           {renderSectionHeader('Belpogingen', 'bg-muted/80', 'text-foreground')}
