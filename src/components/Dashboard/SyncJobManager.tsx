@@ -65,10 +65,14 @@ export function SyncJobManager() {
   const [preset, setPreset] = useState<PresetPeriod>("2024");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [isCreatingMultiple, setIsCreatingMultiple] = useState(false);
   const { toast } = useToast();
 
   const { data: syncJobs, isLoading: jobsLoading } = useSyncJobs(undefined, 10);
   const createJob = useCreateSyncJob();
+
+  // Check if "all projects" is selected
+  const isAllProjects = selectedProjectId === "all";
 
   const handleStartSync = async () => {
     if (!selectedProjectId) {
@@ -101,17 +105,38 @@ export function SyncJobManager() {
     }
 
     try {
-      await createJob.mutateAsync({
-        projectId: selectedProjectId,
-        startDate,
-        endDate
-      });
+      if (isAllProjects) {
+        // Create jobs for all active projects
+        setIsCreatingMultiple(true);
+        const activeProjects = projects.filter(p => p.is_active);
+        
+        for (const project of activeProjects) {
+          await createJob.mutateAsync({
+            projectId: project.id,
+            startDate,
+            endDate
+          });
+        }
+        
+        setIsCreatingMultiple(false);
+        toast({
+          title: `${activeProjects.length} sync jobs aangemaakt`,
+          description: "De VPS pakt deze opdrachten binnenkort op."
+        });
+      } else {
+        await createJob.mutateAsync({
+          projectId: selectedProjectId,
+          startDate,
+          endDate
+        });
 
-      toast({
-        title: "Sync job aangemaakt",
-        description: "De VPS pakt deze opdracht binnenkort op."
-      });
+        toast({
+          title: "Sync job aangemaakt",
+          description: "De VPS pakt deze opdracht binnenkort op."
+        });
+      }
     } catch (error: any) {
+      setIsCreatingMultiple(false);
       toast({
         title: "Fout bij aanmaken job",
         description: error.message || "Er is iets misgegaan.",
@@ -142,13 +167,22 @@ export function SyncJobManager() {
               <SelectValue placeholder="Selecteer een project..." />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all" className="font-medium text-primary">
+                📦 Alle actieve projecten ({projects.filter(p => p.is_active).length})
+              </SelectItem>
+              <div className="border-t my-1" />
               {projects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
-                  {project.name}
+                  {project.name} {!project.is_active && "(inactief)"}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {isAllProjects && (
+            <p className="text-xs text-muted-foreground">
+              Er worden {projects.filter(p => p.is_active).length} sync jobs aangemaakt, één per actief project.
+            </p>
+          )}
         </div>
 
         {/* Period Selection */}
@@ -212,15 +246,15 @@ export function SyncJobManager() {
         {/* Start Button */}
         <Button 
           onClick={handleStartSync} 
-          disabled={createJob.isPending || !selectedProjectId}
+          disabled={createJob.isPending || isCreatingMultiple || !selectedProjectId}
           className="w-full gap-2"
         >
-          {createJob.isPending ? (
+          {(createJob.isPending || isCreatingMultiple) ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Play className="h-4 w-4" />
           )}
-          Start Synchronisatie
+          {isAllProjects ? `Start Synchronisatie (${projects.filter(p => p.is_active).length} projecten)` : 'Start Synchronisatie'}
         </Button>
 
         {/* Recent Jobs */}
