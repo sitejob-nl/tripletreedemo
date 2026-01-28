@@ -1,11 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfISOWeek, endOfISOWeek, setISOWeek, setYear, format } from 'date-fns';
+import { startOfISOWeek, endOfISOWeek, setISOWeek, setYear, format, getDay } from 'date-fns';
+
+// Daily breakdown of logged time per weekday
+export interface DailyLoggedTimeBreakdown {
+  maandag: number;
+  dinsdag: number;
+  woensdag: number;
+  donderdag: number;
+  vrijdag: number;
+  zaterdag: number;
+  zondag: number;
+}
 
 interface LoggedTimeData {
   totalSeconds: number;
   totalHours: number;
   hasData: boolean;
+  /** Hours per day of week (only populated when a specific week is selected) */
+  dailyHours?: DailyLoggedTimeBreakdown;
 }
 
 interface UseLoggedTimeOptions {
@@ -35,6 +48,17 @@ const getWeekDateRange = (weekYearValue: string): { startDate: string; endDate: 
   };
 };
 
+// Map JS getDay() (0=Sunday) to Dutch day names
+const dayIndexToDutch: Record<number, keyof DailyLoggedTimeBreakdown> = {
+  0: 'zondag',
+  1: 'maandag',
+  2: 'dinsdag',
+  3: 'woensdag',
+  4: 'donderdag',
+  5: 'vrijdag',
+  6: 'zaterdag',
+};
+
 export const useLoggedTime = ({ projectId, weekYearValue }: UseLoggedTimeOptions) => {
   return useQuery({
     queryKey: ['logged_time', projectId, weekYearValue],
@@ -50,7 +74,8 @@ export const useLoggedTime = ({ projectId, weekYearValue }: UseLoggedTimeOptions
         .eq('project_id', projectId);
       
       // Filter on date range if specific week selected
-      if (weekYearValue && weekYearValue !== 'all') {
+      const isSpecificWeek = weekYearValue && weekYearValue !== 'all';
+      if (isSpecificWeek) {
         const range = getWeekDateRange(weekYearValue);
         if (range) {
           query = query
@@ -66,10 +91,36 @@ export const useLoggedTime = ({ projectId, weekYearValue }: UseLoggedTimeOptions
       const totalSeconds = data?.reduce((sum, r) => sum + (r.total_seconds || 0), 0) || 0;
       const totalHours = totalSeconds / 3600;
       
+      // Build daily breakdown for specific week selection
+      let dailyHours: DailyLoggedTimeBreakdown | undefined;
+      if (isSpecificWeek && data && data.length > 0) {
+        dailyHours = {
+          maandag: 0,
+          dinsdag: 0,
+          woensdag: 0,
+          donderdag: 0,
+          vrijdag: 0,
+          zaterdag: 0,
+          zondag: 0,
+        };
+        
+        data.forEach((record) => {
+          if (record.date) {
+            const date = new Date(record.date);
+            const dayIndex = getDay(date);
+            const dayName = dayIndexToDutch[dayIndex];
+            if (dayName) {
+              dailyHours![dayName] += (record.total_seconds || 0) / 3600;
+            }
+          }
+        });
+      }
+      
       return { 
         totalSeconds, 
         totalHours,
-        hasData: (data?.length || 0) > 0
+        hasData: (data?.length || 0) > 0,
+        dailyHours,
       };
     },
     enabled: !!projectId
