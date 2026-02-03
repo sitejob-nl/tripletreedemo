@@ -1,208 +1,152 @@
 
 
-## Plan: Integratie daily_logged_time Tabel voor Kostenberekening
+# Plan: PII-velden verwijderen uit raw_data
 
-### Overzicht
+## Samenvatting
+De veldnamen in BasiCall data variëren inderdaad sterk per project (bijv. `Telefoon` vs `Phone`, `achternaam` vs `Achternaam`, `IBAN` vs `Rekeningnummer`). De beste oplossing is een **blacklist-benadering**: verwijder alle velden die matchen met PII-patronen, ongeacht exacte schrijfwijze.
 
-De VPS sync script gaat nu ook de daadwerkelijke ingelogde tijd van agents ophalen via `Project.getIngelogdeTijden`. Dit is nauwkeuriger dan de gesommeerde gesprekstijd (`gesprekstijd_sec`) die nu wordt gebruikt. Ik ga:
+## Gevonden PII-velden in huidige data
 
-1. De nieuwe database tabel aanmaken
-2. RLS policies toevoegen
-3. Een hook maken om deze data op te halen
-4. Het Dashboard bijwerken om de echte kosten te berekenen
+| Categorie | Voorbeelden gevonden in database |
+|-----------|--------------------------------|
+| **Namen** | `Achternaam`, `achternaam`, `Voornaam`, `Tussenvoegsel`, `First_Name`, `Contact_Middlename`, `Aanhef` |
+| **Telefoon** | `Telefoon`, `bc_bmn_telefoon`, `FoutiefMobiel`, `FoutiefTelefoonVast` |
+| **Email** | `Email`, `E_mail`, `E-mail`, `emailadres`, `email_naar_yasmina` |
+| **Adres** | `Address`, `Straat`, `Billing_Street`, `Aanvullend_adres`, `Billing_Housenumber` |
+| **Postcode** | `Postcode`, `Billing_Zipcode`, `bc_bmn_postcode` |
+| **Bankgegevens** | `IBAN`, `BIC`, `Rekeningnummer_laatste_drie` |
+| **Identificatie** | `Donateursnummer`, `Donatienummer`, `Klantnummer`, `ContactID`, `AccountID` |
+| **Gevoelige data** | `Geboortedatum`, `geslacht`, `Geslacht` |
 
----
+## Te behouden velden (locatie voor kaart)
+- `Plaats`, `plaats`, `Post_Woonplaats`, `Woonplaats`, `woonplaats`
+- `City`, `Billing_City`, `Stad`  
+- `provincie` (voor regionale analyse)
 
-### Stap 1: Database Migratie
+## Voorgestelde oplossing
 
-Nieuwe tabel `daily_logged_time` aanmaken:
+### Aanpak: Pattern-based blacklist
+In plaats van elke exacte veldnaam te noemen, gebruik regex-achtige patronen die hoofdletterongevoelig matchen:
 
-```sql
-CREATE TABLE public.daily_logged_time (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  project_id uuid NOT NULL,
-  date date NOT NULL,
-  total_seconds integer NOT NULL DEFAULT 0,
-  synced_at timestamp with time zone DEFAULT now(),
+```text
+PII_PATTERNS (te verwijderen):
+├── *naam* (maar NIET *agentnaam, *result_naam)
+├── *name* (behalve agentnaam)
+├── *telefoon*, *phone*, *mobiel*
+├── *email*, *mail* (behalve email_verwerking)  
+├── *adres*, *address*, *straat*, *street*
+├── *postcode*, *zipcode* (postcode ≠ woonplaats)
+├── *iban*, *bic*, *rekening*, *bank*
+├── *geboortedatum*, *birthdate*
+├── *klantnummer*, *donateur*, *contactid*, *accountid*
+└── *aanhef*, *geslacht*, *gender*
+
+TE BEHOUDEN:
+├── *plaats*, *city*, *woonplaats*, *stad*
+├── *provincie*, *province*
+├── bc_* velden (BasiCall metadata)
+├── *bedrag*, *amount*, *termijn*
+├── *frequentie*, *frequency*
+└── *result*, *beldatum*, *gesprekstijd*
+```
+
+### Implementatielocatie
+Dit moet in de **VPS sync script** worden ingebouwd, zodat PII nooit in de database terechtkomt.
+
+## Technische specificatie voor Kas
+
+### Functie: `stripPIIFromRawData(rawData)`
+
+```javascript
+const PII_BLACKLIST_PATTERNS = [
+  // Namen (uitgezonderd agentnaam, result_naam)
+  /^(?!bc_agentnaam$|bc_result_naam$).*naam$/i,
+  /^(?!bc_agentnaam$|bc_result_naam$).*name$/i,
+  /voorletter/i, /tussenvoegsel/i, /aanhef/i,
   
-  CONSTRAINT daily_logged_time_pkey PRIMARY KEY (id),
-  CONSTRAINT daily_logged_time_project_id_fkey 
-    FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE,
-  CONSTRAINT daily_logged_time_unique_project_date UNIQUE (project_id, date)
-);
+  // Contact
+  /telefoon/i, /phone/i, /mobiel/i, /mobile/i,
+  /email/i, /e-mail/i, /e_mail/i, /^mail/i,
+  
+  // Adres (behalve woonplaats/plaats/city/stad)
+  /^(?!.*plaats|.*city|.*stad|.*woonplaats|.*provincie).*adres/i,
+  /street/i, /straat/i,
+  /^postcode$/i, /zipcode/i, /bc_bmn_postcode/i,
+  /huisnummer/i, /housenumber/i,
+  
+  // Bank/Financieel identificatie
+  /iban/i, /^bic$/i, /rekening/i, /bank.*nummer/i,
+  
+  // Persoonlijke identificatie  
+  /geboortedatum/i, /birthdate/i, /birth_date/i,
+  /geslacht/i, /gender/i,
+  /klantnummer/i, /donateur.*nummer/i, /donatienummer/i,
+  /contactid/i, /accountid/i, /contact_id/i, /account_id/i,
+  
+  // Case-safe IDs (Salesforce)
+  /casesafeid/i,
+];
 
-CREATE INDEX idx_daily_logged_time_project_id ON public.daily_logged_time(project_id);
-CREATE INDEX idx_daily_logged_time_date ON public.daily_logged_time(date);
-```
+// Velden die expliciet NIET verwijderd mogen worden
+const WHITELIST_PATTERNS = [
+  /bc_agentnaam/i,
+  /bc_result_naam/i,
+  /bc_email_verwerking/i,
+  /plaats/i, /woonplaats/i, /city/i, /stad/i,
+  /provincie/i, /province/i,
+  /billing_city/i,
+];
 
-**RLS Policies** (zelfde patroon als call_records):
-
-```sql
-ALTER TABLE public.daily_logged_time ENABLE ROW LEVEL SECURITY;
-
--- Admins en superadmins kunnen alles zien
-CREATE POLICY "Admins can view all logged time"
-ON public.daily_logged_time FOR SELECT
-USING (
-  has_role(auth.uid(), 'admin'::app_role) 
-  OR has_role(auth.uid(), 'superadmin'::app_role)
-);
-
--- Customers kunnen eigen projecten zien
-CREATE POLICY "Customers can view own project logged time"
-ON public.daily_logged_time FOR SELECT
-USING (
-  EXISTS (
-    SELECT 1 FROM customer_projects
-    WHERE customer_projects.project_id = daily_logged_time.project_id
-    AND customer_projects.user_id = auth.uid()
-  )
-);
-```
-
----
-
-### Stap 2: Nieuwe Hook `useLoggedTime.ts`
-
-Creëer een nieuwe hook voor het ophalen van ingelogde tijd:
-
-```typescript
-// src/hooks/useLoggedTime.ts
-
-interface LoggedTimeData {
-  totalSeconds: number;
-  totalHours: number;
-  totalCost: number;
+function stripPIIFromRawData(rawData) {
+  const cleaned = {};
+  
+  for (const [key, value] of Object.entries(rawData)) {
+    // Check whitelist first - always keep these
+    const isWhitelisted = WHITELIST_PATTERNS.some(p => p.test(key));
+    if (isWhitelisted) {
+      cleaned[key] = value;
+      continue;
+    }
+    
+    // Check blacklist - remove if matches
+    const isBlacklisted = PII_BLACKLIST_PATTERNS.some(p => p.test(key));
+    if (!isBlacklisted) {
+      cleaned[key] = value;
+    }
+  }
+  
+  return cleaned;
 }
-
-interface UseLoggedTimeOptions {
-  projectId?: string;
-  weekYearValue?: string | 'all';
-  hourlyRate: number;
-}
-
-export const useLoggedTime = ({ projectId, weekYearValue, hourlyRate }: UseLoggedTimeOptions) => {
-  return useQuery({
-    queryKey: ['logged_time', projectId, weekYearValue],
-    queryFn: async (): Promise<LoggedTimeData> => {
-      // Bouw query op basis van week/year filter
-      let query = supabase
-        .from('daily_logged_time')
-        .select('total_seconds, date')
-        .eq('project_id', projectId);
-      
-      // Filter op week als specifieke week geselecteerd
-      if (weekYearValue && weekYearValue !== 'all') {
-        // Parse "2026-01" naar week en year
-        // Filter dates die in die week vallen
-      }
-      
-      const { data, error } = await query;
-      
-      const totalSeconds = data?.reduce((sum, r) => sum + r.total_seconds, 0) || 0;
-      const totalHours = totalSeconds / 3600;
-      const totalCost = totalHours * hourlyRate;
-      
-      return { totalSeconds, totalHours, totalCost };
-    },
-    enabled: !!projectId
-  });
-};
 ```
 
----
+### Integratie in sync script
+```javascript
+// In de upsert loop, vóór opslag:
+const cleanedRawData = stripPIIFromRawData(normalizeRawData(record));
 
-### Stap 3: Update Dashboard.tsx
-
-Wijzig de kostenberekening om de echte ingelogde tijd te gebruiken:
-
-**Huidige situatie (regel 181-184):**
-```typescript
-const totalHours = (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600; // Gesprekstijd
-const totalCost = totalHours * hourlyRate;
-```
-
-**Nieuwe situatie:**
-```typescript
-// Gebruik echte inlogtijd als beschikbaar, anders fallback naar gesprekstijd
-const { data: loggedTime, isLoading: loggedTimeLoading } = useLoggedTime({
-  projectId: currentProject?.id,
-  weekYearValue: selectedWeek,
-  hourlyRate: currentMapping.hourly_rate
-});
-
-// Fallback naar gesprekstijd als inlogtijd niet beschikbaar
-const totalHours = loggedTime?.totalHours ?? (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
-const totalCost = loggedTime?.totalCost ?? totalHours * hourlyRate;
-```
-
----
-
-### Stap 4: Update KPI Aggregates Hook (optioneel)
-
-Breid `useKPIAggregates` uit om ook de logged time mee te nemen via een JOIN of aparte query.
-
-Alternatief: Maak een database functie:
-
-```sql
-CREATE OR REPLACE FUNCTION get_project_logged_time(
-  p_project_id uuid,
-  p_start_date date DEFAULT NULL,
-  p_end_date date DEFAULT NULL
-)
-RETURNS TABLE(total_seconds bigint, total_hours numeric, total_cost numeric)
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    COALESCE(SUM(dlt.total_seconds), 0)::BIGINT,
-    COALESCE(SUM(dlt.total_seconds) / 3600.0, 0)::NUMERIC,
-    COALESCE(SUM(dlt.total_seconds) / 3600.0 * p.hourly_rate, 0)::NUMERIC
-  FROM daily_logged_time dlt
-  JOIN projects p ON dlt.project_id = p.id
-  WHERE dlt.project_id = p_project_id
-    AND (p_start_date IS NULL OR dlt.date >= p_start_date)
-    AND (p_end_date IS NULL OR dlt.date <= p_end_date);
-END;
-$$;
-```
-
----
-
-### Stap 5: Visualisatie Verbetering (optioneel)
-
-Voeg een aparte KPI kaart toe voor "Inzet Uren" die de echte inlogtijd toont, of pas de bestaande kaart aan om duidelijk te maken dat dit de agent-tijd is (niet gesprekstijd).
-
----
-
-### Technische Details
-
-**Week filtering:**
-De `daily_logged_time` tabel gebruikt `date` in plaats van `week_number`. Om te filteren op week:
-
-```typescript
-// Parse "2026-01" naar start/end date
-const getWeekDateRange = (weekYearValue: string) => {
-  const [year, week] = weekYearValue.split('-').map(Number);
-  // Bereken eerste en laatste dag van ISO week
+const recordsToUpsert = batch.map((record) => ({
+  // ... andere velden
+  raw_data: cleanedRawData, // Nu zonder PII
   // ...
-};
+}));
 ```
 
-**Fallback strategie:**
-- Als er nog geen `daily_logged_time` data is → gebruik `gesprekstijd_sec` (huidige gedrag)
-- Dit zorgt voor backwards compatibility
+## Optioneel: Bestaande data opschonen
 
----
+Na implementatie kan Kas ook een eenmalige cleanup doen van bestaande records:
 
-### Samenvatting Wijzigingen
+```sql
+-- Dit moet door Kas worden uitgevoerd na implementatie van de nieuwe sync
+-- Update alle bestaande records om PII te verwijderen
+-- (exacte query afhankelijk van PostgreSQL JSONB functies)
+```
 
-| Bestand | Actie |
-|---------|-------|
-| `supabase/migrations/...` | Nieuwe tabel + RLS policies |
-| `src/hooks/useLoggedTime.ts` | Nieuwe hook (aanmaken) |
-| `src/pages/Dashboard.tsx` | Import hook, gebruik echte kosten |
-| `src/hooks/useKPIAggregates.ts` | Optioneel: integreer logged time |
+## Voordelen van deze aanpak
+1. **Flexibel**: Werkt ongeacht exacte veldnaam of hoofdlettergebruik
+2. **Veilig**: Nieuwe PII-velden worden automatisch geblokkeerd als ze matchen
+3. **Behoudend**: Locatiedata voor de kaart blijft beschikbaar
+4. **Eenmalig**: Hoeft alleen in VPS sync script, niet per project
+
+## Alternatief: Frontend masking
+Als backup kan de frontend ook een display-filter krijgen die PII-velden niet toont, maar dit lost het kernprobleem niet op (data staat nog steeds in de database).
 
