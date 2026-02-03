@@ -1,59 +1,30 @@
-
-
 # Plan: PII-velden verwijderen uit raw_data
 
-## Samenvatting
-De veldnamen in BasiCall data variëren inderdaad sterk per project (bijv. `Telefoon` vs `Phone`, `achternaam` vs `Achternaam`, `IBAN` vs `Rekeningnummer`). De beste oplossing is een **blacklist-benadering**: verwijder alle velden die matchen met PII-patronen, ongeacht exacte schrijfwijze.
+**Status: ✅ GOEDGEKEURD - Klaar voor implementatie door Kas**
 
-## Gevonden PII-velden in huidige data
+## Samenvatting
+De veldnamen in BasiCall data variëren sterk per project (bijv. `Telefoon` vs `Phone`, `achternaam` vs `Achternaam`, `IBAN` vs `Rekeningnummer`). De oplossing is een **blacklist-benadering**: verwijder alle velden die matchen met PII-patronen, ongeacht exacte schrijfwijze.
+
+## Te verwijderen PII-velden (patronen)
 
 | Categorie | Voorbeelden gevonden in database |
 |-----------|--------------------------------|
-| **Namen** | `Achternaam`, `achternaam`, `Voornaam`, `Tussenvoegsel`, `First_Name`, `Contact_Middlename`, `Aanhef` |
+| **Namen** | `Achternaam`, `Voornaam`, `Tussenvoegsel`, `First_Name`, `Contact_Middlename`, `Aanhef` |
 | **Telefoon** | `Telefoon`, `bc_bmn_telefoon`, `FoutiefMobiel`, `FoutiefTelefoonVast` |
-| **Email** | `Email`, `E_mail`, `E-mail`, `emailadres`, `email_naar_yasmina` |
-| **Adres** | `Address`, `Straat`, `Billing_Street`, `Aanvullend_adres`, `Billing_Housenumber` |
+| **Email** | `Email`, `E_mail`, `E-mail`, `emailadres` |
+| **Adres** | `Address`, `Straat`, `Billing_Street`, `Billing_Housenumber` |
 | **Postcode** | `Postcode`, `Billing_Zipcode`, `bc_bmn_postcode` |
 | **Bankgegevens** | `IBAN`, `BIC`, `Rekeningnummer_laatste_drie` |
-| **Identificatie** | `Donateursnummer`, `Donatienummer`, `Klantnummer`, `ContactID`, `AccountID` |
-| **Gevoelige data** | `Geboortedatum`, `geslacht`, `Geslacht` |
+| **Identificatie** | `Donateursnummer`, `Klantnummer`, `ContactID`, `AccountID` |
+| **Gevoelige data** | `Geboortedatum`, `geslacht` |
 
 ## Te behouden velden (locatie voor kaart)
-- `Plaats`, `plaats`, `Post_Woonplaats`, `Woonplaats`, `woonplaats`
-- `City`, `Billing_City`, `Stad`  
+- `Plaats`, `Post_Woonplaats`, `Woonplaats`, `City`, `Billing_City`, `Stad`
 - `provincie` (voor regionale analyse)
 
-## Voorgestelde oplossing
+---
 
-### Aanpak: Pattern-based blacklist
-In plaats van elke exacte veldnaam te noemen, gebruik regex-achtige patronen die hoofdletterongevoelig matchen:
-
-```text
-PII_PATTERNS (te verwijderen):
-├── *naam* (maar NIET *agentnaam, *result_naam)
-├── *name* (behalve agentnaam)
-├── *telefoon*, *phone*, *mobiel*
-├── *email*, *mail* (behalve email_verwerking)  
-├── *adres*, *address*, *straat*, *street*
-├── *postcode*, *zipcode* (postcode ≠ woonplaats)
-├── *iban*, *bic*, *rekening*, *bank*
-├── *geboortedatum*, *birthdate*
-├── *klantnummer*, *donateur*, *contactid*, *accountid*
-└── *aanhef*, *geslacht*, *gender*
-
-TE BEHOUDEN:
-├── *plaats*, *city*, *woonplaats*, *stad*
-├── *provincie*, *province*
-├── bc_* velden (BasiCall metadata)
-├── *bedrag*, *amount*, *termijn*
-├── *frequentie*, *frequency*
-└── *result*, *beldatum*, *gesprekstijd*
-```
-
-### Implementatielocatie
-Dit moet in de **VPS sync script** worden ingebouwd, zodat PII nooit in de database terechtkomt.
-
-## Technische specificatie voor Kas
+## Technische specificatie voor Kas (VPS sync script)
 
 ### Functie: `stripPIIFromRawData(rawData)`
 
@@ -83,7 +54,7 @@ const PII_BLACKLIST_PATTERNS = [
   /klantnummer/i, /donateur.*nummer/i, /donatienummer/i,
   /contactid/i, /accountid/i, /contact_id/i, /account_id/i,
   
-  // Case-safe IDs (Salesforce)
+  // Salesforce IDs
   /casesafeid/i,
 ];
 
@@ -131,22 +102,14 @@ const recordsToUpsert = batch.map((record) => ({
 }));
 ```
 
-## Optioneel: Bestaande data opschonen
+---
 
-Na implementatie kan Kas ook een eenmalige cleanup doen van bestaande records:
+## Na implementatie: Bestaande data opschonen
 
-```sql
--- Dit moet door Kas worden uitgevoerd na implementatie van de nieuwe sync
--- Update alle bestaande records om PII te verwijderen
--- (exacte query afhankelijk van PostgreSQL JSONB functies)
-```
+Kas kan een eenmalige cleanup doen van bestaande records met een SQL script dat de JSONB velden filtert.
 
-## Voordelen van deze aanpak
+## Voordelen
 1. **Flexibel**: Werkt ongeacht exacte veldnaam of hoofdlettergebruik
-2. **Veilig**: Nieuwe PII-velden worden automatisch geblokkeerd als ze matchen
+2. **Veilig**: Nieuwe PII-velden worden automatisch geblokkeerd
 3. **Behoudend**: Locatiedata voor de kaart blijft beschikbaar
-4. **Eenmalig**: Hoeft alleen in VPS sync script, niet per project
-
-## Alternatief: Frontend masking
-Als backup kan de frontend ook een display-filter krijgen die PII-velden niet toont, maar dit lost het kernprobleem niet op (data staat nog steeds in de database).
-
+4. **Eenmalig**: Hoeft alleen in VPS sync script
