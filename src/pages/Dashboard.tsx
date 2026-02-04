@@ -758,7 +758,7 @@ const Index = () => {
                         )}
                       </div>
                       <Tabs defaultValue="comparison" className="w-full">
-                        <TabsList className="grid w-full grid-cols-5 mb-6">
+                        <TabsList className="grid w-full grid-cols-4 mb-6">
                           <TabsTrigger value="comparison" className="flex items-center gap-2">
                             <GitCompare size={16} /> Weekvergelijking
                           </TabsTrigger>
@@ -770,9 +770,6 @@ const Index = () => {
                           </TabsTrigger>
                           <TabsTrigger value="results" className="flex items-center gap-2">
                             <PieChart size={16} /> Resultaten
-                          </TabsTrigger>
-                          <TabsTrigger value="time" className="flex items-center gap-2">
-                            <Clock size={16} /> Tijdsanalyse
                           </TabsTrigger>
                         </TabsList>
                         <TabsContent value="comparison">
@@ -794,9 +791,6 @@ const Index = () => {
                         </TabsContent>
                         <TabsContent value="results">
                           <ResultsBreakdown data={analysisProcessedData} />
-                        </TabsContent>
-                        <TabsContent value="time">
-                          <TimeAnalysis data={analysisProcessedData} />
                         </TabsContent>
                       </Tabs>
                     </div>
