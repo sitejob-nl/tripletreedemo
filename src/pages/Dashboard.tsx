@@ -47,7 +47,7 @@ const Index = () => {
   
   const { user, signOut, loading: authLoading } = useAuth();
   const { data: userRole, isLoading: roleLoading } = useUserRole(user?.id);
-  const { isSuperAdmin } = useIsSuperAdmin(user?.id);
+  const { isSuperAdmin, isLoading: superAdminLoading } = useIsSuperAdmin(user?.id);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isLoggingOutRef = useRef(false);
@@ -452,7 +452,7 @@ const Index = () => {
   }
 
   // Show loading while checking auth and role
-  if (authLoading || roleLoading) {
+  if (authLoading || roleLoading || superAdminLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -475,6 +475,7 @@ const Index = () => {
         role={effectiveRole}
         onLogout={handleLogout}
         isSuperAdmin={isSuperAdmin}
+        isAdmin={isDbAdmin}
       />
 
       <main className="flex-1 overflow-y-auto">
