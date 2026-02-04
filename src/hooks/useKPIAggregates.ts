@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { MappingConfig } from '@/types/database';
+import { ResolvedDateFilter } from './useDateFilter';
 
 interface KPIAggregates {
   totalRecords: number;
@@ -12,48 +13,42 @@ interface KPIAggregates {
 
 interface UseKPIAggregatesOptions {
   projectId?: string;
-  weekYearValue?: string | 'all'; // e.g., "2026-01" or "all"
+  dateFilter?: ResolvedDateFilter;
   mappingConfig?: MappingConfig;
 }
-
-// Parse weekYearValue (e.g., "2026-01") into week and year
-const parseWeekYearValue = (value: string): { week: number; year: number } | null => {
-  const match = value.match(/^(\d{4})-(\d{1,2})$/);
-  if (match) {
-    return { year: parseInt(match[1]), week: parseInt(match[2]) };
-  }
-  return null;
-};
 
 // Default sale results if not configured
 const DEFAULT_SALE_RESULTS = ['Sale', 'Donateur', 'Toezegging', 'Afspraak', 'Positief', 'Verkoop', 'Ja', 'Akkoord'];
 
-export const useKPIAggregates = ({ projectId, weekYearValue, mappingConfig }: UseKPIAggregatesOptions) => {
-  // Get sale results from mapping config or use defaults
+export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig }: UseKPIAggregatesOptions) => {
   const saleResults = mappingConfig?.sale_results?.length 
     ? mappingConfig.sale_results 
     : DEFAULT_SALE_RESULTS;
 
-  // Parse weekYearValue for filtering
-  const parsed = weekYearValue && weekYearValue !== 'all' ? parseWeekYearValue(weekYearValue) : null;
-
-  // Query 1: Get basic aggregates from database function
-  // Note: The RPC doesn't support year filtering, so for year-specific queries we need to use the second approach
+  // Query 1: Get basic aggregates
   const basicAggregatesQuery = useQuery({
-    queryKey: ['kpi_basic_aggregates', projectId, weekYearValue, saleResults],
+    queryKey: ['kpi_basic_aggregates', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, saleResults],
     queryFn: async () => {
       if (!projectId) return null;
       
-      // If we have a specific week+year, we need to query differently
-      if (parsed) {
-        // Use direct query with year filter instead of RPC
+      // If we have date filtering, use direct query
+      if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
         let query = supabase
           .from('call_records')
           .select('gesprekstijd_sec, resultaat')
-          .eq('project_id', projectId)
-          .eq('week_number', parsed.week)
-          .gte('beldatum_date', `${parsed.year}-01-01`)
-          .lte('beldatum_date', `${parsed.year}-12-31`);
+          .eq('project_id', projectId);
+
+        // Apply date filter
+        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null && dateFilter.year !== null) {
+          query = query
+            .eq('week_number', dateFilter.weekNumber)
+            .gte('beldatum_date', `${dateFilter.year}-01-01`)
+            .lte('beldatum_date', `${dateFilter.year}-12-31`);
+        } else {
+          query = query
+            .gte('beldatum_date', dateFilter.startDate)
+            .lte('beldatum_date', dateFilter.endDate);
+        }
         
         const { data, error } = await query;
         if (error) throw error;
@@ -66,7 +61,7 @@ export const useKPIAggregates = ({ projectId, weekYearValue, mappingConfig }: Us
         };
       }
       
-      // For 'all', use the RPC
+      // For 'all' (no filtering), use the RPC
       const { data, error } = await supabase
         .rpc('get_project_kpi_totals', {
           p_project_id: projectId,
@@ -76,7 +71,6 @@ export const useKPIAggregates = ({ projectId, weekYearValue, mappingConfig }: Us
       
       if (error) throw error;
       
-      // RPC returns an array, get first row
       const result = Array.isArray(data) ? data[0] : data;
       
       return {
@@ -90,31 +84,36 @@ export const useKPIAggregates = ({ projectId, weekYearValue, mappingConfig }: Us
 
   // Query 2: Get annual value by fetching only sales records
   const annualValueQuery = useQuery({
-    queryKey: ['kpi_annual_value', projectId, weekYearValue, mappingConfig?.amount_col, mappingConfig?.freq_col, saleResults],
+    queryKey: ['kpi_annual_value', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, mappingConfig?.amount_col, mappingConfig?.freq_col, saleResults],
     queryFn: async () => {
       if (!projectId || !mappingConfig?.amount_col || !mappingConfig?.freq_col) {
         return 0;
       }
       
-      // Fetch only sales records (much smaller dataset)
       let query = supabase
         .from('call_records')
         .select('raw_data')
         .eq('project_id', projectId)
         .in('resultaat', saleResults);
       
-      if (parsed) {
-        query = query
-          .eq('week_number', parsed.week)
-          .gte('beldatum_date', `${parsed.year}-01-01`)
-          .lte('beldatum_date', `${parsed.year}-12-31`);
+      // Apply date filter
+      if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
+        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null && dateFilter.year !== null) {
+          query = query
+            .eq('week_number', dateFilter.weekNumber)
+            .gte('beldatum_date', `${dateFilter.year}-01-01`)
+            .lte('beldatum_date', `${dateFilter.year}-12-31`);
+        } else {
+          query = query
+            .gte('beldatum_date', dateFilter.startDate)
+            .lte('beldatum_date', dateFilter.endDate);
+        }
       }
       
       const { data, error } = await query;
       
       if (error) throw error;
       
-      // Calculate total annual value from sales records
       let totalAnnualValue = 0;
       const freqMap = mappingConfig.freq_map || {};
       
@@ -139,7 +138,6 @@ export const useKPIAggregates = ({ projectId, weekYearValue, mappingConfig }: Us
     enabled: !!projectId && !!mappingConfig?.amount_col && !!mappingConfig?.freq_col
   });
 
-  // Combine results
   const isLoading = basicAggregatesQuery.isLoading || annualValueQuery.isLoading;
   const error = basicAggregatesQuery.error || annualValueQuery.error;
   

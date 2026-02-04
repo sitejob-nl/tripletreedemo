@@ -20,12 +20,12 @@ import { useTotalRecordCount } from '@/hooks/useTotalRecordCount';
 import { useKPIAggregates } from '@/hooks/useKPIAggregates';
 import { useLoggedTime } from '@/hooks/useLoggedTime';
 import { useReportMatrixData } from '@/hooks/useReportMatrixData';
+import { useDateFilter, DateFilterType, DateRange } from '@/hooks/useDateFilter';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 import { useExcelExport } from '@/hooks/useExcelExport';
 import { Navigate } from 'react-router-dom';
-import { DateFilterType, DateRange } from '@/components/Dashboard/DateFilterSelector';
 
 const Index = () => {
   const [selectedProjectKey, setSelectedProjectKeyState] = useState<string>('');
@@ -45,6 +45,13 @@ const Index = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isLoggingOutRef = useRef(false);
+
+  // Resolve date filter for queries
+  const dateFilter = useDateFilter({
+    filterType: dateFilterType,
+    weekYearValue: selectedWeek === 'all' ? 'all' : String(selectedWeek),
+    dateRange,
+  });
 
   // Determine effective role based on database role and viewAsClient toggle
   const isDbAdmin = userRole?.role === 'admin' || userRole?.role === 'superadmin';
@@ -66,22 +73,19 @@ const Index = () => {
     isLoading: recordsLoading,
     error: recordsError 
   } = useCallRecords(currentProject, { 
-    weekYearValue: selectedWeek === 'all' ? 'all' : String(selectedWeek),
+    dateFilter,
     page: dashboardPage,
     pageSize: dashboardPageSize
   });
 
   // Fetch total record count for pagination
-  const { data: totalRecordCount = 0 } = useTotalRecordCount(
-    currentProject?.id, 
-    selectedWeek === 'all' ? 'all' : String(selectedWeek)
-  );
+  const { data: totalRecordCount = 0 } = useTotalRecordCount(currentProject?.id, dateFilter);
 
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
 
   // Project-data query keys that should be invalidated on project switch
-  const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count'];
+  const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis'];
 
   // Atomic project switch: cancel in-flight, remove cache, reset UI state, refetch
   const setSelectedProjectKey = useCallback((newProjectKey: string) => {
@@ -128,45 +132,39 @@ const Index = () => {
 
   // Auto-select most recent week when available weeks change
   useEffect(() => {
-    if (availableWeeks.length > 0) {
+    if (availableWeeks.length > 0 && dateFilterType === 'week') {
       const isCurrentWeekValid = availableWeeks.some(w => w.value === selectedWeek);
       
       if (selectedWeek === 'all' || !isCurrentWeekValid) {
         setSelectedWeek(availableWeeks[0].value);
       }
     }
-  }, [availableWeeks]);
+  }, [availableWeeks, dateFilterType]);
 
   // Fetch KPI aggregates (totals over ALL records, not paginated)
   const { data: kpiAggregates, isLoading: kpiLoading } = useKPIAggregates({
     projectId: currentProject?.id,
-    weekYearValue: selectedWeek === 'all' ? 'all' : String(selectedWeek),
+    dateFilter,
     mappingConfig: currentProject?.mapping_config
   });
 
   // Fetch logged time for accurate cost calculation
   const { data: loggedTime, isLoading: loggedTimeLoading } = useLoggedTime({
     projectId: currentProject?.id,
-    weekYearValue: selectedWeek === 'all' ? 'all' : String(selectedWeek)
+    dateFilter
   });
 
-  // Fetch ALL records for selected week for ReportMatrix (no pagination)
+  // Fetch ALL records for selected period for ReportMatrix (no pagination)
   const { 
     data: reportMatrixData = [], 
     isLoading: reportMatrixLoading 
-  } = useReportMatrixData(
-    currentProject,
-    selectedWeek === 'all' ? 'all' : String(selectedWeek)
-  );
+  } = useReportMatrixData(currentProject, dateFilter);
 
   // Fetch ALL records for analysis views
   const { 
     data: allRecordsForAnalysis = [], 
     isLoading: analysisLoading 
-  } = useAllCallRecordsForAnalysis(
-    currentProject,
-    selectedWeek === 'all' ? 'all' : String(selectedWeek)
-  );
+  } = useAllCallRecordsForAnalysis(currentProject, dateFilter);
 
   // Convert DB records to ProcessedCallRecord format for DashboardView (paginated)
   const processedData: ProcessedCallRecord[] = useMemo(() => {
@@ -257,11 +255,22 @@ const Index = () => {
   // Check if current project is inbound type
   const isInboundProject = currentProject?.project_type === 'inbound';
 
+  // Get display label for current filter
+  const filterLabel = useMemo(() => {
+    if (dateFilterType === 'week') {
+      return selectedWeek === 'all' ? 'Alle weken' : `Week ${selectedWeek}`;
+    }
+    if (dateRange.start && dateRange.end) {
+      return `${dateRange.start.toLocaleDateString('nl-NL')} - ${dateRange.end.toLocaleDateString('nl-NL')}`;
+    }
+    return 'Selecteer periode';
+  }, [dateFilterType, selectedWeek, dateRange]);
+
   // Excel export hook
   const { handleExportToExcel } = useExcelExport({
     data: reportMatrixProcessedData,
     hourlyRate,
-    selectedWeek,
+    selectedWeek: filterLabel,
     projectName: currentProject?.name || selectedProjectKey,
   });
 
@@ -429,7 +438,9 @@ const Index = () => {
                 <div className="text-center py-12 text-muted-foreground">
                   <p className="text-lg font-medium">Geen data beschikbaar</p>
                   <p className="text-sm mt-2">
-                    De data wordt automatisch gesynchroniseerd via de VPS sync engine.
+                    {dateFilter.isFiltering 
+                      ? 'Geen records gevonden voor de geselecteerde periode.'
+                      : 'De data wordt automatisch gesynchroniseerd via de VPS sync engine.'}
                   </p>
                 </div>
               )}
@@ -445,7 +456,7 @@ const Index = () => {
                     totalHours={totalHours}
                     costPerDonor={costPerDonor}
                     hourlyRate={hourlyRate}
-                    selectedWeek={selectedWeek}
+                    selectedWeek={filterLabel}
                     isLoading={kpiLoading}
                   />
 
@@ -453,7 +464,7 @@ const Index = () => {
                   {viewMode === 'report' ? (
                     <ReportViewSection
                       isInboundProject={isInboundProject}
-                      selectedWeek={selectedWeek}
+                      selectedWeek={filterLabel}
                       data={reportMatrixProcessedData}
                       hourlyRate={hourlyRate}
                       vatRate={currentProject?.vat_rate || 21}

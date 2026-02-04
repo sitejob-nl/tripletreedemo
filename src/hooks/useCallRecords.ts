@@ -3,10 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { DBProject, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
+import { ResolvedDateFilter } from './useDateFilter';
 
 interface UseCallRecordsOptions {
   projectId?: string;
-  weekYearValue?: string | 'all'; // e.g., "2026-01" or "all"
+  dateFilter?: ResolvedDateFilter;
   page?: number;
   pageSize?: number;
 }
@@ -43,17 +44,13 @@ const calculateValuesFromRaw = (
     return defaultResult;
   }
 
-  // Check if it's a sale
   const isSale = mappingConfig.sale_results?.includes(resultaat || '') || false;
 
-  // Use normalized field names first, then fallback to config col, then legacy names
-  // After sync normalization, 'frequency' and 'amount' should be standard
   const freqRaw = rawData['frequency'] 
     || rawData[mappingConfig.freq_col] 
     || rawData['frequentie'] 
     || rawData['Frequentie'];
 
-  // Use centralized frequency detection
   const freqResult = detectFrequencyFromConfig(freqRaw, mappingConfig.freq_map);
 
   if (!isSale) {
@@ -66,7 +63,6 @@ const calculateValuesFromRaw = (
     };
   }
 
-  // Use normalized field names first, then fallback to config col, then legacy names
   const amountRaw = rawData['amount'] 
     || rawData[mappingConfig.amount_col] 
     || rawData['termijnbedrag'] 
@@ -96,7 +92,6 @@ const calculateValuesFromRaw = (
 };
 
 const getDayName = (beldatumDate: string | null, beldatum: string | null): string => {
-  // Prioritize beldatum_date (ISO format YYYY-MM-DD) 
   if (beldatumDate) {
     const date = new Date(beldatumDate);
     if (!isNaN(date.getTime())) {
@@ -104,7 +99,6 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
     }
   }
   
-  // Fallback: parse beldatum (DD-MM-YYYY format) manually
   if (beldatum) {
     const match = beldatum.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
     if (match) {
@@ -114,7 +108,6 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
         return date.toLocaleDateString('nl-NL', { weekday: 'long' });
       }
     }
-    // Last resort: try direct parsing (for ISO format in beldatum)
     const date = new Date(beldatum);
     if (!isNaN(date.getTime())) {
       return date.toLocaleDateString('nl-NL', { weekday: 'long' });
@@ -128,14 +121,13 @@ export const useCallRecords = (
   project: DBProject | undefined,
   options: UseCallRecordsOptions = {}
 ) => {
-  const { weekYearValue = 'all', page = 1, pageSize = 100 } = options;
+  const { dateFilter, page = 1, pageSize = 100 } = options;
 
   return useQuery({
-    queryKey: ['call_records', project?.id, weekYearValue, page, pageSize],
+    queryKey: ['call_records', project?.id, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, page, pageSize],
     queryFn: async (): Promise<ProcessedDBCallRecordWithFreq[]> => {
       if (!project) return [];
 
-      // Calculate range for server-side pagination
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
@@ -146,19 +138,19 @@ export const useCallRecords = (
         .order('beldatum_date', { ascending: false, nullsFirst: false })
         .range(from, to);
 
-      // Parse weekYearValue (e.g., "2026-01") to filter by week and year
-      if (weekYearValue !== 'all') {
-        const match = weekYearValue.match(/^(\d{4})-(\d{1,2})$/);
-        if (match) {
-          const year = parseInt(match[1]);
-          const week = parseInt(match[2]);
-          
-          // Filter by week_number and year (using beldatum_date)
-          // We need to filter where the year of beldatum_date matches
+      // Apply date filter
+      if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
+        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null && dateFilter.year !== null) {
+          // Week-based: use week_number + year bounds for efficiency
           query = query
-            .eq('week_number', week)
-            .gte('beldatum_date', `${year}-01-01`)
-            .lte('beldatum_date', `${year}-12-31`);
+            .eq('week_number', dateFilter.weekNumber)
+            .gte('beldatum_date', `${dateFilter.year}-01-01`)
+            .lte('beldatum_date', `${dateFilter.year}-12-31`);
+        } else {
+          // Date range: direct date comparison
+          query = query
+            .gte('beldatum_date', dateFilter.startDate)
+            .lte('beldatum_date', dateFilter.endDate);
         }
       }
 
@@ -168,7 +160,6 @@ export const useCallRecords = (
         throw new Error(`Fout bij ophalen call records: ${error.message}`);
       }
 
-      // Process each record with mapping config
       return (data || []).map((record): ProcessedDBCallRecordWithFreq => {
         const calculated = calculateValuesFromRaw(
           record.raw_data as Record<string, any> | null,
@@ -202,14 +193,12 @@ export interface WeekYear {
 }
 
 // Hook to get available weeks for a project (with year context)
-// Uses server-side RPC for efficiency (no row limit issues)
 export const useAvailableWeeks = (projectId?: string) => {
   return useQuery({
     queryKey: ['available_weeks', projectId],
     queryFn: async (): Promise<WeekYear[]> => {
       if (!projectId) return [];
 
-      // Use RPC function for server-side DISTINCT (no row limit issues)
       const { data, error } = await supabase
         .rpc('get_available_weeks', { p_project_id: projectId });
 
@@ -218,8 +207,6 @@ export const useAvailableWeeks = (projectId?: string) => {
         throw new Error(`Fout bij ophalen weeks: ${error.message}`);
       }
 
-      // Map RPC result to WeekYear format
-      // RPC returns: { week_number: int, iso_year: int, value: string }
       const result: WeekYear[] = (data || []).map((row: { week_number: number; iso_year: number; value: string }) => ({
         week: row.week_number,
         year: row.iso_year,
@@ -227,7 +214,6 @@ export const useAvailableWeeks = (projectId?: string) => {
         value: row.value,
       }));
 
-      // Debug logging
       console.log(`[useAvailableWeeks] projectId=${projectId}, weeks=${result.length}, range=${result.length > 0 ? `${result[result.length - 1].value} → ${result[0].value}` : 'none'}`);
 
       return result;
