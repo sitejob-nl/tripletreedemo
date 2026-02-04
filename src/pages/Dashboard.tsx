@@ -57,8 +57,8 @@ const Index = () => {
   const isDbAdmin = userRole?.role === 'admin' || userRole?.role === 'superadmin';
   const effectiveRole: Role = viewAsClient ? 'client' : (isDbAdmin ? 'admin' : 'client');
 
-  // Fetch projects from Supabase - only when user is authenticated
-  const { projects, isLoading: projectsLoading, error: projectsError } = useProjects(true, user?.id);
+  // Fetch projects from Supabase - admins get full access, customers get public view
+  const { projects, isLoading: projectsLoading, error: projectsError } = useProjects(true, user?.id, isDbAdmin);
   const updateProject = useUpdateProject();
 
   // Find current project

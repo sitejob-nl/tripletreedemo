@@ -5,8 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mapbox public token (same as used in the frontend map)
-const MAPBOX_TOKEN = 'pk.eyJ1Ijoic2l0ZWpvYi1ubCIsImEiOiJjbWQzZ29pYngwNDN5MmpxbmNldTN1c3ZmIn0.unL-G3gacXta2WVCKK6Rcg';
+// Mapbox public token - centralized configuration
+// Use environment variable if set, otherwise fallback to hardcoded publishable token
+const MAPBOX_TOKEN = Deno.env.get('MAPBOX_PUBLIC_TOKEN') || 
+  'pk.eyJ1Ijoic2l0ZWpvYi1ubCIsImEiOiJjbWQzZ29pYngwNDN5MmpxbmNldTN1c3ZmIn0.unL-G3gacXta2WVCKK6Rcg';
 
 interface GeocodedCity {
   city: string;

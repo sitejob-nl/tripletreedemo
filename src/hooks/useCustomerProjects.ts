@@ -66,10 +66,11 @@ export function useCustomersWithProjects() {
         throw cpError;
       }
 
-      // Get all projects for names
+      // Get all projects for names - use public view (no token needed)
+      // Cast response to expected type since view isn't in generated types yet
       const { data: projects, error: projError } = await supabase
-        .from('projects')
-        .select('id, name, project_key');
+        .from('projects_public' as any)
+        .select('id, name, project_key') as { data: Array<{ id: string; name: string; project_key: string }> | null; error: any };
       
       if (projError) {
         console.error('Error fetching projects:', projError);

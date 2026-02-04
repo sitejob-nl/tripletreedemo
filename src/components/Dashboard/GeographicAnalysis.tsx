@@ -4,6 +4,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { ProcessedCallRecord } from '@/types/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MapPin, AlertCircle, Loader2 } from 'lucide-react';
+import { MAPBOX_PUBLIC_TOKEN } from '@/config/mapbox';
 import {
   Table,
   TableBody,
@@ -309,7 +310,7 @@ export const GeographicAnalysis = ({ data, locationCol }: GeographicAnalysisProp
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
 
-    mapboxgl.accessToken = 'pk.eyJ1Ijoic2l0ZWpvYi1ubCIsImEiOiJjbWQzZ29pYngwNDN5MmpxbmNldTN1c3ZmIn0.unL-G3gacXta2WVCKK6Rcg';
+    mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,

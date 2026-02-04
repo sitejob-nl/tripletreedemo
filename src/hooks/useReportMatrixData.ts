@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DBProject, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
+import { DBProjectBase, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { ResolvedDateFilter } from './useDateFilter';
 
@@ -104,7 +104,7 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
  * This is specifically for the ReportMatrix component that needs complete data for aggregation.
  */
 export const useReportMatrixData = (
-  project: DBProject | undefined,
+  project: DBProjectBase | undefined,
   dateFilter?: ResolvedDateFilter
 ) => {
   return useQuery({

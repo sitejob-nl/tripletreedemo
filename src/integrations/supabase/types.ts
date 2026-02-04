@@ -62,6 +62,13 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "call_records_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       customer_projects: {
@@ -94,6 +101,13 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "customer_projects_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       daily_logged_time: {
@@ -124,6 +138,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_logged_time_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects_public"
             referencedColumns: ["id"]
           },
         ]
@@ -266,6 +287,13 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sync_jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       sync_logs: {
@@ -310,6 +338,13 @@ export type Database = {
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sync_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_roles: {
@@ -335,7 +370,48 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      projects_public: {
+        Row: {
+          basicall_project_id: number | null
+          created_at: string | null
+          hourly_rate: number | null
+          id: string | null
+          is_active: boolean | null
+          mapping_config: Json | null
+          name: string | null
+          project_key: string | null
+          project_type: string | null
+          updated_at: string | null
+          vat_rate: number | null
+        }
+        Insert: {
+          basicall_project_id?: number | null
+          created_at?: string | null
+          hourly_rate?: number | null
+          id?: string | null
+          is_active?: boolean | null
+          mapping_config?: Json | null
+          name?: string | null
+          project_key?: string | null
+          project_type?: string | null
+          updated_at?: string | null
+          vat_rate?: number | null
+        }
+        Update: {
+          basicall_project_id?: number | null
+          created_at?: string | null
+          hourly_rate?: number | null
+          id?: string | null
+          is_active?: boolean | null
+          mapping_config?: Json | null
+          name?: string | null
+          project_key?: string | null
+          project_type?: string | null
+          updated_at?: string | null
+          vat_rate?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       get_available_weeks: {

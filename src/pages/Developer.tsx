@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSyncLogs, useDbStats } from "@/hooks/useSyncLogs";
-import { useProjects } from "@/hooks/useProjects";
+import { useAdminProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import { useErrorLogs, useUnresolvedErrorCount, useResolveError, useDeleteError } from "@/hooks/useErrorLogs";
 import { toast } from "sonner";
@@ -38,7 +38,8 @@ export default function Developer() {
   const { user } = useAuth();
   const { data: syncLogs, isLoading: logsLoading } = useSyncLogs();
   const { data: stats, isLoading: statsLoading } = useDbStats();
-  const { projects } = useProjects(false, user?.id);
+  // Developer page is only accessible by superadmins, so always use admin mode to see tokens
+  const { projects } = useAdminProjects(false, user?.id);
   const { data: errorLogs, isLoading: errorLogsLoading } = useErrorLogs();
   const { data: unresolvedCount } = useUnresolvedErrorCount();
   const resolveError = useResolveError();
