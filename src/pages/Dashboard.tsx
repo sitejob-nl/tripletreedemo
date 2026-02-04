@@ -86,26 +86,53 @@ const Index = () => {
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
 
-  // Wrapper function for project change with cache invalidation
+  // Project-data query keys that should be invalidated on project switch
+  const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count'];
+
+  // Atomic project switch: cancel in-flight, remove cache, reset UI state, refetch
   const setSelectedProjectKey = useCallback((newProjectKey: string) => {
-    if (newProjectKey !== selectedProjectKey) {
-      // Force invalidate all project-related queries when switching projects
-      queryClient.invalidateQueries({ queryKey: ['call_records'] });
-      queryClient.invalidateQueries({ queryKey: ['available_weeks'] });
-      queryClient.invalidateQueries({ queryKey: ['kpi_aggregates'] });
-      queryClient.invalidateQueries({ queryKey: ['logged_time'] });
-      queryClient.invalidateQueries({ queryKey: ['report_matrix_data'] });
-      queryClient.invalidateQueries({ queryKey: ['total_record_count'] });
+    if (newProjectKey === selectedProjectKey) {
+      setSelectedProjectKeyState(newProjectKey);
+      return;
     }
+
+    // Predicate to match all project-related queries
+    const projectQueryPredicate = (query: { queryKey: readonly unknown[] }) => {
+      const key = query.queryKey[0];
+      return typeof key === 'string' && PROJECT_DATA_KEYS.includes(key);
+    };
+
+    // 1. Cancel any in-flight queries
+    queryClient.cancelQueries({ predicate: projectQueryPredicate });
+
+    // 2. Remove cached data (hard refresh, not stale-while-revalidate)
+    queryClient.removeQueries({ predicate: projectQueryPredicate });
+
+    // 3. Reset UI state to avoid cross-project filter pollution
+    setSelectedWeek('all');
+    setDashboardPage(1);
+    setDateFilterType('week');
+    setDateRange({ start: null, end: null });
+
+    // 4. Update project selection
     setSelectedProjectKeyState(newProjectKey);
+
+    // 5. Refetch will happen automatically due to query dependencies
+    // but we explicitly refetch available_weeks for immediate dropdown population
+    setTimeout(() => {
+      queryClient.refetchQueries({ queryKey: ['available_weeks'] });
+    }, 0);
+
+    console.log('[ProjectSwitch] Switched to:', newProjectKey, '- cache cleared, UI reset');
   }, [selectedProjectKey, queryClient]);
 
   // Auto-select first project when projects are loaded and none selected
   useEffect(() => {
     if (projects.length > 0 && !selectedProjectKey) {
-      setSelectedProjectKeyState(projects[0].project_key);
+      // Use wrapper to ensure consistent cache handling
+      setSelectedProjectKey(projects[0].project_key);
     }
-  }, [projects, selectedProjectKey]);
+  }, [projects, selectedProjectKey, setSelectedProjectKey]);
 
   // Auto-select most recent week when available weeks change (e.g., project switch)
   useEffect(() => {
