@@ -49,6 +49,8 @@ const Index = () => {
   const { data: userRole, isLoading: roleLoading } = useUserRole(user?.id);
   const { isSuperAdmin } = useIsSuperAdmin(user?.id);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const isLoggingOutRef = useRef(false);
 
   // Determine effective role based on database role and viewAsClient toggle
   const isDbAdmin = userRole?.role === 'admin' || userRole?.role === 'superadmin';
@@ -373,33 +375,7 @@ const Index = () => {
     });
   }, [reportMatrixProcessedData, hourlyRate, selectedWeek, currentProject, selectedProjectKey, toast]);
 
-  // Project keys for sidebar (from database)
-  const projectKeys = projects.map((p) => p.project_key);
-
-  // Redirect to auth if not logged in
-  if (!authLoading && !user) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  // Show loading while checking auth and role
-  if (authLoading || roleLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="text-muted-foreground">Laden...</span>
-        </div>
-      </div>
-    );
-  }
-
-  const isLoading = projectsLoading || recordsLoading;
-  const error = projectsError || recordsError;
-
   // Robust logout handler with timeout and error handling
-  const isLoggingOutRef = useRef(false);
-  const queryClient = useQueryClient();
-  
   const handleLogout = useCallback(async () => {
     // Prevent double-click race conditions
     if (isLoggingOutRef.current) return;
@@ -425,6 +401,29 @@ const Index = () => {
       window.location.replace('/auth');
     }
   }, [signOut, queryClient]);
+
+  // Project keys for sidebar (from database)
+  const projectKeys = projects.map((p) => p.project_key);
+
+  // Redirect to auth if not logged in
+  if (!authLoading && !user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // Show loading while checking auth and role
+  if (authLoading || roleLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="text-muted-foreground">Laden...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const isLoading = projectsLoading || recordsLoading;
+  const error = projectsError || recordsError;
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans">
