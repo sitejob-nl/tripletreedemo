@@ -1,13 +1,28 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DBProject, MappingConfig, ProjectType } from '@/types/database';
+import { DBProject, DBProjectPublic, MappingConfig, ProjectType } from '@/types/database';
 
-export const useProjects = (onlyActive = true, userId?: string) => {
+/**
+ * Hook voor het ophalen van projecten.
+ * 
+ * @param onlyActive - Filter op actieve projecten (default: true)
+ * @param userId - User ID voor RLS filtering
+ * @param isAdmin - Als true, haalt volledige project data op (incl. token), anders publieke view
+ * 
+ * NOTE: Wanneer isAdmin=true, cast het resultaat naar DBProject[].
+ *       Wanneer isAdmin=false, is het een DBProjectPublic[] (geen token).
+ *       De component moet zelf zorgen voor juiste type-afhandeling.
+ */
+export function useProjects(onlyActive = true, userId?: string, isAdmin = false) {
   const query = useQuery({
-    queryKey: ['projects', onlyActive, userId],
-    queryFn: async (): Promise<DBProject[]> => {
+    queryKey: ['projects', onlyActive, userId, isAdmin],
+    queryFn: async (): Promise<DBProject[] | DBProjectPublic[]> => {
+      // Admins krijgen volledige data met tokens, reguliere users de publieke view zonder tokens
+      const tableName = isAdmin ? 'projects' : 'projects_public';
+      
+      // Type-safe query met 'as any' omdat projects_public nog niet in types.ts staat
       let queryBuilder = supabase
-        .from('projects')
+        .from(tableName as any)
         .select('*')
         .order('name');
 
@@ -22,7 +37,7 @@ export const useProjects = (onlyActive = true, userId?: string) => {
       }
 
       // Parse mapping_config from JSONB and cast project_type
-      return (data || []).map((project) => ({
+      return (data || []).map((project: any) => ({
         ...project,
         project_type: (project.project_type || 'outbound') as ProjectType,
         mapping_config: project.mapping_config as unknown as MappingConfig,
@@ -37,7 +52,18 @@ export const useProjects = (onlyActive = true, userId?: string) => {
     error: query.error,
     refetch: query.refetch,
   };
-};
+}
+
+/**
+ * Typed version for admin usage - returns DBProject[] with token
+ */
+export function useAdminProjects(onlyActive = true, userId?: string) {
+  const result = useProjects(onlyActive, userId, true);
+  return {
+    ...result,
+    projects: result.projects as DBProject[],
+  };
+}
 
 interface UpdateProjectParams {
   projectId: string;

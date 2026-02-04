@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useProjects } from "@/hooks/useProjects";
+import { useAdminProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,8 @@ interface ProjectsTableProps {
 
 export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
   const { user } = useAuth();
-  const { projects, isLoading } = useProjects(false, user?.id);
+  // Admin-only component - always use full projects table with token access
+  const { projects, isLoading } = useAdminProjects(false, user?.id);
   const [search, setSearch] = useState("");
   const [showOnlyActive, setShowOnlyActive] = useState(false);
   const queryClient = useQueryClient();

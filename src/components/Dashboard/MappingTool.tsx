@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Eye, RefreshCw, AlertTriangle } from 'lucide-react';
-import { DBProject, MappingConfig, ProjectType } from '@/types/database';
+import { DBProjectBase, MappingConfig, ProjectType } from '@/types/database';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/table';
 
 interface MappingToolProps {
-  project: DBProject;
+  project: DBProjectBase;
   onSave: (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType) => Promise<void>;
   isSaving?: boolean;
 }

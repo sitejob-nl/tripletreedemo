@@ -79,3 +79,24 @@ export interface ProcessedDBCallRecord extends DBCallRecord {
   is_recurring: boolean;
   day_name: string;
 }
+
+// Publieke project data (zonder gevoelige velden zoals basicall_token)
+// Wordt gebruikt voor reguliere gebruikers die geen toegang tot tokens nodig hebben
+export interface DBProjectPublic {
+  id: string;
+  name: string;
+  project_key: string;
+  basicall_project_id: number;
+  is_active: boolean;
+  hourly_rate: number;
+  vat_rate: number;
+  project_type: ProjectType;
+  mapping_config: MappingConfig;
+  created_at: string;
+  updated_at: string;
+  // GEEN basicall_token - dit is het verschil met DBProject
+}
+
+// Union type voor functies die zowel DBProject als DBProjectPublic accepteren
+// Gebruikt voor hooks/componenten die geen token nodig hebben
+export type DBProjectBase = DBProject | DBProjectPublic;

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DBProject } from '@/types/database';
+import { DBProjectBase } from '@/types/database';
 import { ProcessedDBCallRecordWithFreq } from './useCallRecords';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
@@ -11,7 +11,7 @@ import { ResolvedDateFilter } from './useDateFilter';
  * Used specifically for analysis views that need complete dataset statistics
  */
 export const useAllCallRecordsForAnalysis = (
-  project: DBProject | undefined,
+  project: DBProjectBase | undefined,
   dateFilter?: ResolvedDateFilter
 ) => {
   return useQuery({

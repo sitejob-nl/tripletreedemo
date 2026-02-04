@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { DBProject, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
+import { DBProjectBase, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
 import { ResolvedDateFilter } from './useDateFilter';
@@ -118,7 +118,7 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
 };
 
 export const useCallRecords = (
-  project: DBProject | undefined,
+  project: DBProjectBase | undefined,
   options: UseCallRecordsOptions = {}
 ) => {
   const { dateFilter, page = 1, pageSize = 100 } = options;
