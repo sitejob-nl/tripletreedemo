@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
-import { LogOut, ChevronRight, Settings, Users, Code, Building2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { LogOut, ChevronRight, Settings, Users, Code, Building2, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { Project, Role } from '@/types/dashboard';
 import { cn } from '@/lib/utils';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
 import logo from '@/assets/triple-tree-logo.png';
 
 interface SidebarProps {
@@ -27,17 +29,18 @@ export const Sidebar = ({
   isAdmin = false
 }: SidebarProps) => {
   const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const isActive = (path: string) => location.pathname === path;
 
   // Memoize admin menu items to prevent flickering during role state updates
   const adminMenuItems = useMemo(() => {
-    // Use explicit isAdmin prop for reliable admin status (handles superadmin too)
     if (!isAdmin) return null;
     
     return (
       <>
         <Link 
           to="/admin" 
+          onClick={() => setMobileOpen(false)}
           className={cn(
             "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
             isActive('/admin') 
@@ -49,6 +52,7 @@ export const Sidebar = ({
         </Link>
         <Link 
           to="/admin/users" 
+          onClick={() => setMobileOpen(false)}
           className={cn(
             "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
             isActive('/admin/users') 
@@ -60,6 +64,7 @@ export const Sidebar = ({
         </Link>
         <Link 
           to="/admin/customers" 
+          onClick={() => setMobileOpen(false)}
           className={cn(
             "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
             isActive('/admin/customers') 
@@ -80,6 +85,7 @@ export const Sidebar = ({
     return (
       <Link 
         to="/developer" 
+        onClick={() => setMobileOpen(false)}
         className={cn(
           "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
           isActive('/developer') 
@@ -91,28 +97,81 @@ export const Sidebar = ({
       </Link>
     );
   }, [isSuperAdmin, location.pathname]);
-  return <aside className="w-full md:w-64 bg-black border-r border-border flex-shrink-0 flex flex-col h-screen sticky top-0">
-      <div className="p-6 border-b border-border py-[25px] px-0 flex items-center justify-center flex-shrink-0">
-        <img src={logo} alt="Triple Tree Logo" className="h-12 w-auto object-contain" />
+
+  const handleProjectChange = (proj: Project) => {
+    onProjectChange(proj);
+    setMobileOpen(false);
+  };
+
+  const handleLogout = () => {
+    setMobileOpen(false);
+    onLogout();
+  };
+
+  const sidebarContent = (
+    <>
+      <div className="p-4 sm:p-6 border-b border-border py-4 sm:py-[25px] px-0 flex items-center justify-center flex-shrink-0">
+        <img src={logo} alt="Triple Tree Logo" className="h-10 sm:h-12 w-auto object-contain" />
       </div>
 
-      <nav className="p-4 space-y-1 flex-1 overflow-y-auto min-h-0">
+      <nav className="p-3 sm:p-4 space-y-1 flex-1 overflow-y-auto min-h-0">
         <div className="text-xs uppercase text-gray-400 font-bold px-3 mb-3 mt-2">
           Campagnes
         </div>
-        {projects.map((proj, idx) => <button key={proj} onClick={() => onProjectChange(proj)} className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all ${selectedProject === proj ? 'bg-primary text-primary-foreground shadow-sm' : 'text-white hover:bg-gray-800'}`}>
+        {projects.map((proj, idx) => (
+          <button 
+            key={proj} 
+            onClick={() => handleProjectChange(proj)} 
+            className={cn(
+              "w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all",
+              selectedProject === proj 
+                ? 'bg-primary text-primary-foreground shadow-sm' 
+                : 'text-white hover:bg-gray-800'
+            )}
+          >
             <div className={`w-2 h-2 rounded-full ${projectColors[idx % projectColors.length]}`}></div>
-            <span className="capitalize font-medium">{proj}</span>
+            <span className="capitalize font-medium text-sm sm:text-base">{proj}</span>
             {selectedProject === proj && <ChevronRight size={16} className="ml-auto" />}
-          </button>)}
+          </button>
+        ))}
       </nav>
 
-      <div className="p-4 border-t border-gray-800 space-y-1 flex-shrink-0">
+      <div className="p-3 sm:p-4 border-t border-gray-800 space-y-1 flex-shrink-0">
         {adminMenuItems}
         {devMenuItem}
-        <button onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">
+        <button 
+          onClick={handleLogout} 
+          className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+        >
           <LogOut size={16} /> Uitloggen
         </button>
       </div>
-    </aside>;
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile Header with Hamburger */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-black border-b border-border px-4 py-3 flex items-center justify-between">
+        <img src={logo} alt="Triple Tree Logo" className="h-8 w-auto object-contain" />
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-white hover:bg-gray-800">
+              <Menu size={24} />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-72 p-0 bg-black border-r border-border">
+            <div className="flex flex-col h-full">
+              {sidebarContent}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 bg-black border-r border-border flex-shrink-0 flex-col h-screen sticky top-0">
+        {sidebarContent}
+      </aside>
+    </>
+  );
 };

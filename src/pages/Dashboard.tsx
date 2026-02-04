@@ -498,6 +498,9 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans">
+      {/* Mobile spacer for fixed header */}
+      <div className="h-14 md:hidden flex-shrink-0" />
+      
       <Sidebar
         selectedProject={selectedProjectKey as any}
         onProjectChange={(key) => setSelectedProjectKey(key)}
@@ -525,7 +528,7 @@ const Index = () => {
         
         {/* Admin toggle to view as client */}
         {isDbAdmin && (
-          <div className="px-8 pt-4">
+          <div className="px-4 sm:px-8 pt-4">
             <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border border-border w-fit">
               <Eye size={16} className="text-muted-foreground" />
               <Label htmlFor="view-as-client" className="text-sm font-medium cursor-pointer">
@@ -540,7 +543,7 @@ const Index = () => {
           </div>
         )}
 
-        <div className="p-8 max-w-7xl mx-auto">
+        <div className="p-4 sm:p-8 max-w-7xl mx-auto">
           {/* Sync Status */}
           <div className="flex justify-end mb-4">
             <SyncStatus projectId={currentProject?.id} />
@@ -742,34 +745,42 @@ const Index = () => {
                       onPageSizeChange={setDashboardPageSize}
                     />
                   ) : (
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold text-foreground text-lg">Geavanceerde Analyse</h3>
+                    <div className="space-y-4 sm:space-y-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h3 className="font-bold text-foreground text-base sm:text-lg">Geavanceerde Analyse</h3>
                         {analysisLoading && (
-                          <span className="text-sm text-muted-foreground flex items-center gap-2">
+                          <span className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2">
                             <Loader2 className="h-4 w-4 animate-spin" />
                             Volledige dataset laden...
                           </span>
                         )}
                         {!analysisLoading && analysisProcessedData.length > 0 && (
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-xs sm:text-sm text-muted-foreground">
                             {analysisProcessedData.length.toLocaleString()} records
                           </span>
                         )}
                       </div>
                       <Tabs defaultValue="comparison" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4 mb-6">
-                          <TabsTrigger value="comparison" className="flex items-center gap-2">
-                            <GitCompare size={16} /> Weekvergelijking
+                        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-6 h-auto gap-1">
+                          <TabsTrigger value="comparison" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-2 px-2 sm:px-3">
+                            <GitCompare className="w-4 h-4 shrink-0" />
+                            <span className="hidden xs:inline sm:inline">Weekvergelijking</span>
+                            <span className="xs:hidden">Weken</span>
                           </TabsTrigger>
-                          <TabsTrigger value="geographic" className="flex items-center gap-2">
-                            <MapPin size={16} /> Geografisch
+                          <TabsTrigger value="geographic" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-2 px-2 sm:px-3">
+                            <MapPin className="w-4 h-4 shrink-0" />
+                            <span className="hidden xs:inline sm:inline">Geografisch</span>
+                            <span className="xs:hidden">Geo</span>
                           </TabsTrigger>
-                          <TabsTrigger value="attempts" className="flex items-center gap-2">
-                            <Phone size={16} /> Belpogingen
+                          <TabsTrigger value="attempts" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-2 px-2 sm:px-3">
+                            <Phone className="w-4 h-4 shrink-0" />
+                            <span className="hidden xs:inline sm:inline">Belpogingen</span>
+                            <span className="xs:hidden">Calls</span>
                           </TabsTrigger>
-                          <TabsTrigger value="results" className="flex items-center gap-2">
-                            <PieChart size={16} /> Resultaten
+                          <TabsTrigger value="results" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-2 px-2 sm:px-3">
+                            <PieChart className="w-4 h-4 shrink-0" />
+                            <span className="hidden xs:inline sm:inline">Resultaten</span>
+                            <span className="xs:hidden">Stats</span>
                           </TabsTrigger>
                         </TabsList>
                         <TabsContent value="comparison">
