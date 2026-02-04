@@ -155,9 +155,9 @@ export function useCreateCustomer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ email, password, projectIds }: { email: string; password: string; projectIds?: string[] }) => {
+    mutationFn: async ({ email, projectIds }: { email: string; password?: string; projectIds?: string[] }) => {
       const { data, error } = await supabase.functions.invoke('create-customer', {
-        body: { email, password, projectIds }
+        body: { email, projectIds }
       });
       
       if (error) throw error;
@@ -169,6 +169,7 @@ export function useCreateCustomer() {
       queryClient.invalidateQueries({ queryKey: ['customers-with-projects'] });
       queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
       queryClient.invalidateQueries({ queryKey: ['customer-projects'] });
+      queryClient.invalidateQueries({ queryKey: ['pending-invitations'] });
     },
   });
 }

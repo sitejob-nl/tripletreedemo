@@ -191,6 +191,30 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_invitations: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          invited_by: string | null
+          project_ids: string[] | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          invited_by?: string | null
+          project_ids?: string[] | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          invited_by?: string | null
+          project_ids?: string[] | null
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           basicall_project_id: number
