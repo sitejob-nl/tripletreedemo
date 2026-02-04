@@ -1,79 +1,97 @@
 
-Doel
-- Zorgen dat bij wisselen van project alle project-afhankelijke data (incl. `availableWeeks`) gegarandeerd “hard” ververst, zodat je niet blijft hangen op een subset (zoals alleen week 5 en 6).
+Doel (wat jij terecht verwacht)
+- Als je een project selecteert, moet de week-dropdown exact de weken tonen waarvoor er data is in `call_records` voor dát project. Geen “subset”, geen cache-artefacten, en geen afhankelijkheid van hoeveel records er totaal zijn.
 
-Wat ik nu zie in de code (relevant)
-- `useAvailableWeeks(projectId)` gebruikt queryKey: `['available_weeks', projectId]` en haalt weken uit `call_records` op.
-- In `Dashboard.tsx` heb je nu een wrapper `setSelectedProjectKey()` die `invalidateQueries` doet, maar:
-  - De initial auto-select (eerste project kiezen) gebruikt nog `setSelectedProjectKeyState(...)` en omzeilt dus je “hard refresh” pad.
-  - `invalidateQueries` alleen is soms niet agressief genoeg bij frustrerende “stale UI” situaties (zeker als er requests in-flight zijn of de UI nog oude data vasthoudt). Dan wil je meestal: cancel + remove + refetch, en ook je lokale UI-state resetten (week/page/datefilter) zodat je niet per ongeluk in een “rare combinatie” blijft hangen.
+Wat er echt aan de hand is (grondig + meetbaar)
+1) Er is niets “hardcoded” in de week-dropdown zelf
+- `DateFilterSelector` rendert simpelweg `availableWeeks.map(...)`.
+- Die `availableWeeks` komen uit `useAvailableWeeks(projectId)`.
 
-Hypothese voor waarom jij nog steeds alleen week 5/6 ziet
-- Niet de database: in de DB zijn er voor STC giftgevers aantoonbaar week 1 t/m 6 aanwezig.
-- Wél frontend state/cache: ergens blijft een oude `availableWeeks` set hangen of wordt niet opnieuw geladen op het moment dat de UI hem nodig heeft.
-- Daarnaast: de week-jaar sleutel wordt afgeleid van `beldatum_date.getFullYear()`. ISO week 1 kan eind december in het vorige kalenderjaar vallen (bijv. 2025-12-29 t/m 2026-01-04). Daardoor kan “Week 1” als (2025) én (2026) voorkomen. Dat verklaart niet “alleen 5/6”, maar het is wel een randgeval dat we meteen beter kunnen maken.
+2) De hook haalt nu weken op via het ophalen van rijen uit `call_records`
+- In `useAvailableWeeks` doen we:
+  - `select('week_number, beldatum_date')`
+  - `order('beldatum_date', desc)`
+  - `.range(0, 4999)`
+  - Daarna dedupen we client-side naar unieke week/year combinaties.
 
-Aanpak (implementatie)
-1) Maak project-switch “atomic”: reset UI-state + kill queries
-- In `src/pages/Dashboard.tsx` pas ik `setSelectedProjectKey` aan zodat die bij een projectwissel:
-  - (a) UI-state reset:
-    - `setSelectedWeek('all')` (of leeg) zodat we niet per ongeluk een week filter meenemen die niet matcht
-    - `setDashboardPage(1)` (en eventueel pageSize laten staan)
-    - `setDateFilterType('week')` en `setDateRange({start:null,end:null})` om cross-project “range” verwarring te vermijden
-  - (b) Query’s cancelt die nog bezig zijn voor project-data:
-    - `queryClient.cancelQueries({ predicate: ... })`
-  - (c) Query-cache echt weggooit (hard refresh i.p.v. “stale-while-revalidate”):
-    - `queryClient.removeQueries({ predicate: ... })`
-  - (d) Daarna expliciet opnieuw ophaalt:
-    - `queryClient.refetchQueries({ predicate: ... })` (met focus op `available_weeks` en eventueel `projects`-afhankelijk spul)
+3) De log bewijst dat de backend maar een deel teruggeeft
+Uit jouw console logs:
+- `[useAvailableWeeks] projectId=... weeks=2, range=2026-05 → 2026-06`
 
-  Predicate-filter (belangrijk)
-  - In plaats van losse `invalidateQueries({queryKey: [...]})` voor 6 keys, gebruik ik 1 predicate die matcht op `queryKey[0]`:
-    - `call_records`, `available_weeks`, `kpi_aggregates`, `logged_time`, `report_matrix_data`, `total_record_count`
-  - Dat dekt meteen alle varianten met parameters (projectId/week/page).
+Maar in de database (read-query) is de verdeling voor STC giftgevers:
+- week 1: 2
+- week 2: 58
+- week 3: 239
+- week 4: 456
+- week 5: 883
+- week 6: 964
+Totaal: 2602 records, en week_number is overal gevuld.
 
-2) Zorg dat ook de “eerste project auto-select” door dezelfde switch-logica loopt
-- In de `useEffect` die het eerste project kiest (regels rond 103-108) vervang ik `setSelectedProjectKeyState(...)` door de wrapper `setSelectedProjectKey(...)`.
-- Zo is het gedrag consistent: altijd dezelfde reset/invalidation.
+Dat betekent: de frontend vraagt wél om meer, maar krijgt slechts de “meest recente batch” terug. Dit is precies consistent met een server-side row cap (vaak 1000) op PostgREST/Supabase die je met `.range(...)` niet altijd effectief kunt omzeilen. Daardoor zie je alleen weken 5/6, omdat die in de nieuwste ~1000 records vallen.
 
-3) Fix/verbeter het week-jaar randgeval (ISO week vs kalenderjaar)
-- In `useAvailableWeeks` (in `src/hooks/useCallRecords.ts`) verbeter ik de jaarbepaling:
-  - Nu: `const year = date.getFullYear()`
-  - Beter: gebruik ISO-week-jaar (zodat week 1 bij 2026 ook echt “2026-01” wordt, ook als de maandag in 2025 valt).
-  - Implementatie: met `date-fns` (staat al in deps) `getISOWeekYear(date)` i.p.v. `getFullYear()`.
-- Dit voorkomt dubbele “Week 1 (2025)” vs “Week 1 (2026)” entries en maakt de selector betrouwbaarder aan jaargrenzen.
+4) Waarom zie je bij “Save the Children” weken uit 2025?
+Niet door hardcoding: die data staat daadwerkelijk in `call_records` voor dat project.
+- Voor “Save the Children WB 2020” is min_date = 2025-05-21 en max_date = 2026-02-04.
+Dus de dropdown doet precies wat je vraagt: weken tonen waar data is. Alleen: bij STC giftgevers wordt de set incompleet door de row cap.
 
-4) (Optioneel maar sterk) Kleine debug-hulp voor jou: toon wat er binnenkomt
-- Tijdelijk (of achter een dev-flag) log ik in de console:
-  - projectId + aantal availableWeeks + eerste/laatste week value
-- Zo kun jij meteen zien: komt de backend-lijst wel goed terug na switch?
+Fundamentele fix (architectuur)
+Stoppen met “weeks afleiden door veel rijen op te halen”.
+In plaats daarvan: laat Postgres zélf de unieke week/year combinaties teruggeven (distinct), zonder dat we duizenden call_records hoeven te fetchen.
+Dan:
+- geen 1000-row limiet probleem
+- sneller
+- altijd correct
 
-Bestanden die ik ga aanpassen
-- `src/pages/Dashboard.tsx`
-  - project switch handler: cancel/remove/refetch + state reset
-  - initial auto-select effect: wrapper gebruiken
-- `src/hooks/useCallRecords.ts`
-  - `useAvailableWeeks`: ISO week-year gebruiken voor `value`/`label` consistentie (jaargrens fix)
-  - (optioneel) debug logging
+Implementatieplan (code + database)
+A) Database: maak een veilige RPC (Postgres function) voor beschikbare weken
+1. Voeg een migration toe in `supabase/migrations/` met een functie, bijv.:
+   - `public.get_available_weeks(p_project_id uuid)`
+   - Return type: rows met `week_number int`, `iso_year int`
+2. Query in SQL:
+   - `select distinct week_number, extract(isoyear from beldatum_date)::int as iso_year`
+   - `from call_records`
+   - `where project_id = p_project_id and week_number is not null and beldatum_date is not null`
+   - `order by iso_year desc, week_number desc`
+3. (Optioneel) Voeg een tweede kolom toe `value text` = `${iso_year}-${lpad(week_number,2,'0')}` om frontend nog simpeler te maken.
 
-Acceptatiecriteria (wat jij straks moet zien)
-- Wissel naar “STC giftgevers”:
-  - week dropdown bevat week 1 t/m 6 (en eventueel 49-52 van 2025, afhankelijk van data)
-  - je blijft niet hangen op alleen week 5/6
-- Wissel daarna naar een ander project en terug:
-  - weeks verversen elke keer consistent
-  - geen “oude lijst” die blijft staan
+B) Frontend: `useAvailableWeeks` ombouwen naar `supabase.rpc(...)`
+1. In `src/hooks/useCallRecords.ts`:
+   - Vervang de `from('call_records')...range(...)` aanpak door:
+     - `const { data, error } = await supabase.rpc('get_available_weeks', { p_project_id: projectId })`
+   - Map resultaat naar `WeekYear[]`:
+     - `value = ${iso_year}-${pad2(week_number)}`
+     - `label = Week ${week_number} (${iso_year})`
+   - Houd de bestaande sortering als fallback (maar de SQL levert al gesorteerd).
+2. Laat de oude client-side dedupe code als fallback staan voor het geval RPC nog niet beschikbaar is (bijv. tijdelijk) — maar standaard gebruiken we de RPC.
 
-Testplan (e2e)
-1) Hard refresh browser (Ctrl+F5) één keer.
-2) Ga naar dashboard → selecteer STC giftgevers → open week dropdown:
-   - check dat week 1–6 aanwezig is.
-3) Switch project naar bijv. “Demo Campagne” → terug naar STC giftgevers:
-   - check opnieuw week 1–6.
-4) Selecteer week 1 → check dat call_records/kpi’s veranderen (dus niet alleen selector).
+C) UX/Copy: haal hardcoded “2025” teksten weg (dit veroorzaakt verwarring)
+In `src/pages/Dashboard.tsx` staan hardcoded strings zoals:
+- `Totaal 2025`
+- `Totaaloverzicht 2025`
+- `Retentie Overzicht 2025`
+Die vervangen we door neutrale, correcte labels, bijv.:
+- `Totaal (alle weken)`
+- `Totaaloverzicht (alle weken)`
+- of dynamisch: `Totaal ${minYear}–${maxYear}` op basis van `availableWeeks`.
 
-Risico’s / trade-offs
-- `removeQueries` zorgt dat je tijdens switch kort “lege state/loading” ziet: dat is bewust, want jij wilt liever correctheid dan “mooie” overgang.
-- Als je heel veel queries hebt, predicate moet strak blijven zodat we niet onnodig alles weggooien (ik beperk het tot de project-data keys).
+D) Testplan (end-to-end, exact op jouw issue)
+1. Ga naar /dashboard → selecteer “STC giftgevers”
+   - Verwachting: week dropdown toont Week 1 t/m Week 6 (2026).
+2. Switch naar een ander project en terug
+   - Verwachting: dropdown blijft correct (geen 5/6-only).
+3. Selecteer Week 1
+   - Verwachting: callrecords/KPI’s veranderen zichtbaar.
+4. Check “Save the Children WB 2020”
+   - Verwachting: dropdown toont ook 2025-weken (want data bestaat echt), maar zonder dat het op hardcoding lijkt.
 
-Als je dit plan goedkeurt, implementeer ik dit in één pass en kun jij meteen opnieuw testen met kas@sitejob.nl.
+Waarom dit de juiste fix is
+- We lossen niet “symptomen” (cache) op, maar de echte oorzaak: incomplete datasets door server row limits.
+- De week dropdown wordt een pure “distinct weeks” query, wat precies is wat je functioneel bedoelt.
+
+Risico’s / aandachtspunten
+- We moeten de RPC/migration publiceren naar Live als je dit daar ook wilt.
+- RLS: call_records is beschermd; RPC draait als security-invoker. We moeten zorgen dat RPC dezelfde toegangsregels respecteert (of expliciet `security definer` vermijden). In de meeste gevallen is `security invoker` gewenst zodat gebruikers alleen weken zien van projecten waar ze rechten op hebben.
+
+Wat ik nodig heb van jou (alleen als keuze, niet technisch)
+- Wil je bij “Alle weken” een neutrale tekst (“Totaal”) of juist een dynamische range (“Totaal 2025–2026”)?
+  - Ik kan dit zonder extra vragen implementeren met “Totaal (alle weken)” als default.
