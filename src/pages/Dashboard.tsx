@@ -1,21 +1,16 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye, MapPin, Phone, PieChart, Clock, GitCompare, Shield } from 'lucide-react';
-import * as XLSX from 'xlsx-js-style';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
-import { KPICard } from '@/components/Dashboard/KPICard';
 import { MappingTool } from '@/components/Dashboard/MappingTool';
-import { ReportMatrix } from '@/components/Dashboard/ReportMatrix';
-import { InboundReportMatrix } from '@/components/Dashboard/InboundReportMatrix';
-import { WeekComparison } from '@/components/Dashboard/WeekComparison';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
 import { WelcomeScreen } from '@/components/Dashboard/WelcomeScreen';
-import { GeographicAnalysis } from '@/components/Dashboard/GeographicAnalysis';
-import { CallAttemptsAnalysis } from '@/components/Dashboard/CallAttemptsAnalysis';
-import { ResultsBreakdown } from '@/components/Dashboard/ResultsBreakdown';
-import { TimeAnalysis } from '@/components/Dashboard/TimeAnalysis';
+import { KPICardsSection } from '@/components/Dashboard/KPICardsSection';
+import { ReportViewSection } from '@/components/Dashboard/ReportViewSection';
+import { AnalysisViewSection } from '@/components/Dashboard/AnalysisViewSection';
+import { AdminViewToggle } from '@/components/Dashboard/AdminViewToggle';
 import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig, ProjectType } from '@/types/database';
@@ -28,10 +23,8 @@ import { useReportMatrixData } from '@/hooks/useReportMatrixData';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { useExcelExport } from '@/hooks/useExcelExport';
 import { Navigate } from 'react-router-dom';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DateFilterType, DateRange } from '@/components/Dashboard/DateFilterSelector';
 
 const Index = () => {
@@ -119,7 +112,6 @@ const Index = () => {
     setSelectedProjectKeyState(newProjectKey);
 
     // 5. Refetch will happen automatically due to query dependencies
-    // but we explicitly refetch available_weeks for immediate dropdown population
     setTimeout(() => {
       queryClient.refetchQueries({ queryKey: ['available_weeks'] });
     }, 0);
@@ -130,19 +122,16 @@ const Index = () => {
   // Auto-select first project when projects are loaded and none selected
   useEffect(() => {
     if (projects.length > 0 && !selectedProjectKey) {
-      // Use wrapper to ensure consistent cache handling
       setSelectedProjectKey(projects[0].project_key);
     }
   }, [projects, selectedProjectKey, setSelectedProjectKey]);
 
-  // Auto-select most recent week when available weeks change (e.g., project switch)
+  // Auto-select most recent week when available weeks change
   useEffect(() => {
     if (availableWeeks.length > 0) {
-      // Check if current week is still valid for this project
       const isCurrentWeekValid = availableWeeks.some(w => w.value === selectedWeek);
       
       if (selectedWeek === 'all' || !isCurrentWeekValid) {
-        // Select most recent week for this project
         setSelectedWeek(availableWeeks[0].value);
       }
     }
@@ -170,8 +159,7 @@ const Index = () => {
     selectedWeek === 'all' ? 'all' : String(selectedWeek)
   );
 
-  // Fetch ALL records for analysis views (Geographic, Attempts, Results, Time)
-  // This fetches the complete dataset, not limited by pagination
+  // Fetch ALL records for analysis views
   const { 
     data: allRecordsForAnalysis = [], 
     isLoading: analysisLoading 
@@ -183,9 +171,7 @@ const Index = () => {
   // Convert DB records to ProcessedCallRecord format for DashboardView (paginated)
   const processedData: ProcessedCallRecord[] = useMemo(() => {
     return callRecords.map((record) => ({
-      // Spread raw_data FIRST so explicit fields override string values
       ...(record.raw_data || {}),
-      // Explicit fields with correct types
       id: parseInt(record.basicall_record_id.toString()),
       bc_result_naam: record.resultaat || '',
       bc_gesprekstijd: Number(record.gesprekstijd_sec) || 0,
@@ -200,11 +186,11 @@ const Index = () => {
     }));
   }, [callRecords]);
 
-  // Convert report matrix data to ProcessedCallRecord format (full week data, no pagination)
+  // Convert report matrix data to ProcessedCallRecord format
   const reportMatrixProcessedData: ProcessedCallRecord[] = useMemo(() => {
     return reportMatrixData.map((record) => ({
       ...(record.raw_data || {}),
-      raw_data: record.raw_data, // Keep raw_data as property for ReportMatrix frequency detection
+      raw_data: record.raw_data,
       id: parseInt(record.basicall_record_id.toString()),
       bc_result_naam: record.resultaat || '',
       bc_gesprekstijd: Number(record.gesprekstijd_sec) || 0,
@@ -219,7 +205,7 @@ const Index = () => {
     }));
   }, [reportMatrixData]);
 
-  // Convert ALL analysis records to ProcessedCallRecord format (full dataset for analysis views)
+  // Convert ALL analysis records to ProcessedCallRecord format
   const analysisProcessedData: ProcessedCallRecord[] = useMemo(() => {
     return allRecordsForAnalysis.map((record) => ({
       ...(record.raw_data || {}),
@@ -256,8 +242,7 @@ const Index = () => {
     };
   }, [currentProject]);
 
-  // KPI values from aggregated data (over ALL records)
-  // Use logged time for cost calculation if available, fallback to gesprekstijd
+  // KPI values from aggregated data
   const totalSales = kpiAggregates?.totalSales ?? 0;
   const totalAnnualValue = kpiAggregates?.totalAnnualValue ?? 0;
   const hourlyRate = currentMapping.hourly_rate;
@@ -268,6 +253,17 @@ const Index = () => {
     : (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
+
+  // Check if current project is inbound type
+  const isInboundProject = currentProject?.project_type === 'inbound';
+
+  // Excel export hook
+  const { handleExportToExcel } = useExcelExport({
+    data: reportMatrixProcessedData,
+    hourlyRate,
+    selectedWeek,
+    projectName: currentProject?.name || selectedProjectKey,
+  });
 
   const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType) => {
     try {
@@ -290,170 +286,12 @@ const Index = () => {
     }
   };
 
-  // Check if current project is inbound type
-  const isInboundProject = currentProject?.project_type === 'inbound';
-
-  // Export to Excel function
-  const handleExportToExcel = useCallback(() => {
-    const days = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
-    
-    // Aggregate data by day
-    const aggregated: Record<string, { calls: number; sales: number; recurring: number; oneoff: number; annualValue: number; annualValueRecurring: number; durationSec: number }> = {};
-    days.forEach((d) => (aggregated[d] = { calls: 0, sales: 0, recurring: 0, oneoff: 0, annualValue: 0, annualValueRecurring: 0, durationSec: 0 }));
-    aggregated.total = { calls: 0, sales: 0, recurring: 0, oneoff: 0, annualValue: 0, annualValueRecurring: 0, durationSec: 0 };
-
-    reportMatrixProcessedData.forEach((record) => {
-      const day = record.day_name.toLowerCase();
-      if (!aggregated[day]) return;
-
-      aggregated[day].calls++;
-      aggregated[day].durationSec += record.bc_gesprekstijd;
-
-      if (record.is_sale) {
-        aggregated[day].sales++;
-        aggregated[day].annualValue += record.annual_value;
-        if (record.is_recurring) {
-          aggregated[day].recurring++;
-          aggregated[day].annualValueRecurring += record.annual_value;
-        } else {
-          aggregated[day].oneoff++;
-        }
-      }
-
-      aggregated.total.calls++;
-      aggregated.total.durationSec += record.bc_gesprekstijd;
-      if (record.is_sale) {
-        aggregated.total.sales++;
-        aggregated.total.annualValue += record.annual_value;
-        if (record.is_recurring) {
-          aggregated.total.recurring++;
-          aggregated.total.annualValueRecurring += record.annual_value;
-        } else {
-          aggregated.total.oneoff++;
-        }
-      }
-    });
-
-    // Build rows for Excel
-    const calcHours = (durationSec: number) => durationSec / 3600;
-    const calcInvestment = (durationSec: number) => calcHours(durationSec) * hourlyRate;
-    
-    const excelData = [
-      ['', ...days.map(d => d.charAt(0).toUpperCase() + d.slice(1)), 'Totaal'],
-      ['RESULTATEN', '', '', '', '', '', '', '', ''],
-      ['Aantal positief', ...days.map(d => aggregated[d].sales), aggregated.total.sales],
-      ['Doorlopende machtigingen', ...days.map(d => aggregated[d].recurring), aggregated.total.recurring],
-      ['Eenmalige machtigingen', ...days.map(d => aggregated[d].oneoff), aggregated.total.oneoff],
-      ['', '', '', '', '', '', '', '', ''],
-      ['FINANCIEEL', '', '', '', '', '', '', '', ''],
-      ['Jaarwaarde Totaal', ...days.map(d => `€ ${aggregated[d].annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), `€ ${aggregated.total.annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
-      ['Jaarwaarde Doorlopend', ...days.map(d => `€ ${aggregated[d].annualValueRecurring.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), `€ ${aggregated.total.annualValueRecurring.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
-      ['', '', '', '', '', '', '', '', ''],
-      ['PRODUCTIVITEIT', '', '', '', '', '', '', '', ''],
-      ['Aantal beluren', ...days.map(d => calcHours(aggregated[d].durationSec).toFixed(1)), calcHours(aggregated.total.durationSec).toFixed(1)],
-      ['Bruto Conversie', ...days.map(d => aggregated[d].calls > 0 ? `${((aggregated[d].sales / aggregated[d].calls) * 100).toFixed(1)}%` : '0%'), aggregated.total.calls > 0 ? `${((aggregated.total.sales / aggregated.total.calls) * 100).toFixed(1)}%` : '0%'],
-      ['', '', '', '', '', '', '', '', ''],
-      ['INVESTERING', '', '', '', '', '', '', '', ''],
-      ['Investering (Excl BTW)', ...days.map(d => `€ ${calcInvestment(aggregated[d].durationSec).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`), `€ ${calcInvestment(aggregated.total.durationSec).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`],
-      ['Investering per donateur', ...days.map(d => aggregated[d].sales > 0 ? `€ ${(calcInvestment(aggregated[d].durationSec) / aggregated[d].sales).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '€ 0,00'), aggregated.total.sales > 0 ? `€ ${(calcInvestment(aggregated.total.durationSec) / aggregated.total.sales).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '€ 0,00'],
-    ];
-
-    // Create workbook and worksheet
-    const ws = XLSX.utils.aoa_to_sheet(excelData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `Week ${selectedWeek === 'all' ? 'Totaal' : selectedWeek}`);
-
-    // Border style definition
-    const thinBorder = {
-      top: { style: 'thin', color: { rgb: 'CCCCCC' } },
-      bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
-      left: { style: 'thin', color: { rgb: 'CCCCCC' } },
-      right: { style: 'thin', color: { rgb: 'CCCCCC' } },
-    };
-
-    // Style definitions
-    const headerStyle = {
-      font: { bold: true, color: { rgb: 'FFFFFF' } },
-      fill: { fgColor: { rgb: '4A7C4E' } },
-      alignment: { horizontal: 'center' as const },
-      border: thinBorder
-    };
-    
-    const categoryStyles: Record<string, object> = {
-      'RESULTATEN': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '22C55E' } }, border: thinBorder },
-      'FINANCIEEL': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '3B82F6' } }, border: thinBorder },
-      'PRODUCTIVITEIT': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '8B5CF6' } }, border: thinBorder },
-      'INVESTERING': { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '06B6D4' } }, border: thinBorder },
-    };
-
-    const dataStyle = { border: thinBorder };
-    const totalColStyle = { font: { bold: true }, border: thinBorder };
-
-    // Apply styles to all cells
-    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-    const categoryRows = [2, 7, 11, 15]; // Row numbers for category headers
-    const categoryNames = ['RESULTATEN', 'FINANCIEEL', 'PRODUCTIVITEIT', 'INVESTERING'];
-    const emptyRows = [6, 10, 14]; // Empty separator rows
-
-    for (let row = 1; row <= 17; row++) {
-      cols.forEach((col, colIdx) => {
-        const cellRef = `${col}${row}`;
-        
-        // Initialize cell if it doesn't exist
-        if (!ws[cellRef]) {
-          ws[cellRef] = { v: '', t: 's' };
-        }
-
-        // Apply appropriate style based on row type
-        if (row === 1) {
-          // Header row
-          ws[cellRef].s = headerStyle;
-        } else if (categoryRows.includes(row)) {
-          // Category header rows
-          const categoryIdx = categoryRows.indexOf(row);
-          ws[cellRef].s = categoryStyles[categoryNames[categoryIdx]];
-        } else if (emptyRows.includes(row)) {
-          // Empty separator rows - just borders
-          ws[cellRef].s = dataStyle;
-        } else if (colIdx === 8) {
-          // Totaal column (last column) - bold with border
-          ws[cellRef].s = totalColStyle;
-        } else {
-          // Regular data cells
-          ws[cellRef].s = dataStyle;
-        }
-      });
-    }
-
-    // Set column widths
-    ws['!cols'] = [
-      { wch: 28 },
-      ...days.map(() => ({ wch: 14 })),
-      { wch: 14 }
-    ];
-
-    // Generate filename
-    const projectName = currentProject?.name || selectedProjectKey;
-    const weekLabel = selectedWeek === 'all' ? 'Totaal' : `Week${selectedWeek}`;
-    const filename = `${projectName}_${weekLabel}_Rapport.xlsx`;
-
-    // Download file
-    XLSX.writeFile(wb, filename);
-
-    toast({
-      title: 'Export succesvol',
-      description: `Rapport geëxporteerd als ${filename}`,
-    });
-  }, [reportMatrixProcessedData, hourlyRate, selectedWeek, currentProject, selectedProjectKey, toast]);
-
   // Robust logout handler with timeout and error handling
   const handleLogout = useCallback(async () => {
-    // Prevent double-click race conditions
     if (isLoggingOutRef.current) return;
     isLoggingOutRef.current = true;
     
     try {
-      // Timeout: if signOut takes longer than 3 seconds, force redirect
       const timeoutPromise = new Promise<void>((_, reject) => 
         setTimeout(() => reject(new Error('Logout timeout')), 3000)
       );
@@ -463,12 +301,9 @@ const Index = () => {
         timeoutPromise
       ]);
     } catch (error) {
-      // Ignore all errors - we always want to logout
       console.warn('Logout warning (ignored):', error);
     } finally {
-      // Clear all local state and cache
       queryClient.clear();
-      // Force full page reload to auth - clears all memory state
       window.location.replace('/auth');
     }
   }, [signOut, queryClient]);
@@ -528,19 +363,10 @@ const Index = () => {
         
         {/* Admin toggle to view as client */}
         {isDbAdmin && (
-          <div className="px-4 sm:px-8 pt-4">
-            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border border-border w-fit">
-              <Eye size={16} className="text-muted-foreground" />
-              <Label htmlFor="view-as-client" className="text-sm font-medium cursor-pointer">
-                Bekijk als klant
-              </Label>
-              <Switch
-                id="view-as-client"
-                checked={viewAsClient}
-                onCheckedChange={setViewAsClient}
-              />
-            </div>
-          </div>
+          <AdminViewToggle 
+            viewAsClient={viewAsClient} 
+            onViewAsClientChange={setViewAsClient} 
+          />
         )}
 
         <div className="p-4 sm:p-8 max-w-7xl mx-auto">
@@ -576,6 +402,7 @@ const Index = () => {
           {/* Main Content - Only show when project is selected */}
           {!isLoading && !error && currentProject && (
             <>
+              {/* Admin Mapping Tool */}
               {effectiveRole === 'admin' && (
                 <div className="mb-8">
                   {!currentMapping.amount_col && (
@@ -589,13 +416,11 @@ const Index = () => {
                       </div>
                     </div>
                   )}
-                  {currentProject && (
-                    <MappingTool
-                      project={currentProject}
-                      onSave={handleSaveMapping}
-                      isSaving={updateProject.isPending}
-                    />
-                  )}
+                  <MappingTool
+                    project={currentProject}
+                    onSave={handleSaveMapping}
+                    isSaving={updateProject.isPending}
+                  />
                 </div>
               )}
 
@@ -612,129 +437,32 @@ const Index = () => {
               {/* Top KPI Cards */}
               {processedData.length > 0 && (
                 <>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-                    {isInboundProject ? (
-                      <>
-                        <KPICard
-                          title="Behouden"
-                          value={totalSales}
-                          subtext={selectedWeek === 'all' ? 'Alle weken' : `Week ${selectedWeek}`}
-                          icon={Shield}
-                          variant="green"
-                          isLoading={kpiLoading}
-                        />
-                        <KPICard
-                          title="Behouden Waarde"
-                          value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                          subtext="Jaarwaarde behouden"
-                          icon={DollarSign}
-                          variant="blue"
-                          isLoading={kpiLoading}
-                        />
-                        <KPICard
-                          title="Retentie Ratio"
-                          value={kpiAggregates?.totalRecords ? `${((totalSales / kpiAggregates.totalRecords) * 100).toFixed(1)}%` : '0%'}
-                          subtext="Behouden / Totaal"
-                          icon={TrendingUp}
-                          variant="purple"
-                          isLoading={kpiLoading}
-                        />
-                        <KPICard
-                          title="Inzet Uren"
-                          value={`${totalHours.toFixed(1)} u`}
-                          subtext="Totale beltijd"
-                          icon={Users}
-                          variant="cyan"
-                          isLoading={kpiLoading}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <KPICard
-                          title="Aantal Positief"
-                          value={totalSales}
-                          subtext={selectedWeek === 'all' ? 'Alle weken' : `Sales in Week ${selectedWeek}`}
-                          icon={CheckCircle}
-                          variant="green"
-                          isLoading={kpiLoading}
-                        />
-                        <KPICard
-                          title="Jaarwaarde"
-                          value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                          subtext="Totale opbrengst"
-                          icon={DollarSign}
-                          variant="blue"
-                          isLoading={kpiLoading}
-                        />
-                        <KPICard
-                          title="Kosten per Donateur"
-                          value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                          subtext={`O.b.v. €${hourlyRate}/u`}
-                          icon={TrendingUp}
-                          variant={costPerDonor > 50 ? 'pink' : 'orange'}
-                          isLoading={kpiLoading}
-                        />
-                        <KPICard
-                          title="Inzet Uren"
-                          value={`${totalHours.toFixed(1)} u`}
-                          subtext="Totale beltijd"
-                          icon={Users}
-                          variant="cyan"
-                          isLoading={kpiLoading}
-                        />
-                      </>
-                    )}
-                  </div>
+                  <KPICardsSection
+                    isInboundProject={isInboundProject}
+                    totalSales={totalSales}
+                    totalAnnualValue={totalAnnualValue}
+                    totalRecords={kpiAggregates?.totalRecords ?? 0}
+                    totalHours={totalHours}
+                    costPerDonor={costPerDonor}
+                    hourlyRate={hourlyRate}
+                    selectedWeek={selectedWeek}
+                    isLoading={kpiLoading}
+                  />
 
                   {/* MAIN VIEW SWITCHER */}
                   {viewMode === 'report' ? (
-                    <div>
-                      <div className="flex justify-between items-end mb-4">
-                        <h3 className="font-bold text-foreground text-lg">
-                          {isInboundProject 
-                            ? (selectedWeek === 'all' ? 'Retentie Overzicht' : `Retentie Week ${selectedWeek}`)
-                            : (selectedWeek === 'all' ? 'Totaaloverzicht' : `Weekoverzicht - Week ${selectedWeek}`)}
-                        </h3>
-                        <button 
-                          onClick={handleExportToExcel}
-                          className="text-primary text-sm font-medium hover:underline flex items-center gap-1"
-                        >
-                          <FileSpreadsheet size={16} /> Exporteer naar Excel
-                        </button>
-                      </div>
-                      {isInboundProject && currentProject ? (
-                        <InboundReportMatrix
-                          data={processedData}
-                          hourlyRate={hourlyRate}
-                          vatRate={currentProject.vat_rate}
-                          selectedWeek={selectedWeek}
-                          mappingConfig={currentProject.mapping_config}
-                          amountCol={currentProject.mapping_config.amount_col}
-                        />
-                      ) : selectedWeek === 'all' ? (
-                        <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">
-                          <p className="text-muted-foreground">
-                            Selecteer een specifieke week om het gedetailleerde weekoverzicht te zien.
-                          </p>
-                        </div>
-                      ) : reportMatrixLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                          <span className="ml-3 text-muted-foreground">Week data laden...</span>
-                        </div>
-                      ) : (
-                        <ReportMatrix
-                          data={reportMatrixProcessedData}
-                          hourlyRate={hourlyRate}
-                          vatRate={currentProject?.vat_rate || 21}
-                          selectedWeek={selectedWeek}
-                          amountCol={currentProject?.mapping_config?.amount_col}
-                          freqCol={currentProject?.mapping_config?.freq_col}
-                          loggedTimeHours={loggedTime?.hasData ? loggedTime.totalHours : undefined}
-                          dailyLoggedHours={loggedTime?.dailyHours}
-                        />
-                      )}
-                    </div>
+                    <ReportViewSection
+                      isInboundProject={isInboundProject}
+                      selectedWeek={selectedWeek}
+                      data={reportMatrixProcessedData}
+                      hourlyRate={hourlyRate}
+                      vatRate={currentProject?.vat_rate || 21}
+                      mappingConfig={currentProject?.mapping_config}
+                      loggedTimeHours={loggedTime?.hasData ? loggedTime.totalHours : undefined}
+                      dailyLoggedHours={loggedTime?.dailyHours}
+                      isLoading={reportMatrixLoading}
+                      onExportToExcel={handleExportToExcel}
+                    />
                   ) : viewMode === 'dashboard' ? (
                     <DashboardView 
                       data={processedData} 
@@ -745,66 +473,13 @@ const Index = () => {
                       onPageSizeChange={setDashboardPageSize}
                     />
                   ) : (
-                    <div className="space-y-4 sm:space-y-6">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <h3 className="font-bold text-foreground text-base sm:text-lg">Geavanceerde Analyse</h3>
-                        {analysisLoading && (
-                          <span className="text-xs sm:text-sm text-muted-foreground flex items-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Volledige dataset laden...
-                          </span>
-                        )}
-                        {!analysisLoading && analysisProcessedData.length > 0 && (
-                          <span className="text-xs sm:text-sm text-muted-foreground">
-                            {analysisProcessedData.length.toLocaleString()} records
-                          </span>
-                        )}
-                      </div>
-                      <Tabs defaultValue="comparison" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-6 h-auto gap-1">
-                          <TabsTrigger value="comparison" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-2 px-2 sm:px-3">
-                            <GitCompare className="w-4 h-4 shrink-0" />
-                            <span className="hidden xs:inline sm:inline">Weekvergelijking</span>
-                            <span className="xs:hidden">Weken</span>
-                          </TabsTrigger>
-                          <TabsTrigger value="geographic" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-2 px-2 sm:px-3">
-                            <MapPin className="w-4 h-4 shrink-0" />
-                            <span className="hidden xs:inline sm:inline">Geografisch</span>
-                            <span className="xs:hidden">Geo</span>
-                          </TabsTrigger>
-                          <TabsTrigger value="attempts" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-2 px-2 sm:px-3">
-                            <Phone className="w-4 h-4 shrink-0" />
-                            <span className="hidden xs:inline sm:inline">Belpogingen</span>
-                            <span className="xs:hidden">Calls</span>
-                          </TabsTrigger>
-                          <TabsTrigger value="results" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-2 px-2 sm:px-3">
-                            <PieChart className="w-4 h-4 shrink-0" />
-                            <span className="hidden xs:inline sm:inline">Resultaten</span>
-                            <span className="xs:hidden">Stats</span>
-                          </TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="comparison">
-                          <WeekComparison 
-                            data={analysisProcessedData} 
-                            hourlyRate={hourlyRate}
-                            availableWeeks={availableWeeks}
-                            amountCol={currentProject?.mapping_config?.amount_col}
-                          />
-                        </TabsContent>
-                        <TabsContent value="geographic">
-                          <GeographicAnalysis 
-                            data={analysisProcessedData} 
-                            locationCol={currentProject?.mapping_config?.location_col}
-                          />
-                        </TabsContent>
-                        <TabsContent value="attempts">
-                          <CallAttemptsAnalysis data={analysisProcessedData} />
-                        </TabsContent>
-                        <TabsContent value="results">
-                          <ResultsBreakdown data={analysisProcessedData} />
-                        </TabsContent>
-                      </Tabs>
-                    </div>
+                    <AnalysisViewSection
+                      data={analysisProcessedData}
+                      isLoading={analysisLoading}
+                      hourlyRate={hourlyRate}
+                      availableWeeks={availableWeeks}
+                      mappingConfig={currentProject?.mapping_config}
+                    />
                   )}
                 </>
               )}
