@@ -7,6 +7,7 @@ import {
   useLinkProjectToCustomer, 
   useUnlinkProjectFromCustomer 
 } from "@/hooks/useCustomerProjects";
+import { usePendingInvitations, useDeletePendingInvitation } from "@/hooks/usePendingInvitations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search, Link as LinkIcon, Unlink, UserPlus, Loader2 } from "lucide-react";
+import { Plus, Search, Link as LinkIcon, Unlink, UserPlus, Loader2, Mail, Clock, RefreshCw, Trash2 } from "lucide-react";
 
 interface CustomersTableProps {
   isAddDialogOpen: boolean;
@@ -27,9 +29,11 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
   const { user } = useAuth();
   const { projects } = useProjects(false, user?.id);
   const { data: customers, isLoading } = useCustomersWithProjects();
+  const { data: pendingInvitations, isLoading: isPendingLoading } = usePendingInvitations();
   const createCustomer = useCreateCustomer();
   const linkProject = useLinkProjectToCustomer();
   const unlinkProject = useUnlinkProjectFromCustomer();
+  const deletePendingInvitation = useDeletePendingInvitation();
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -37,7 +41,6 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   
   const [newEmail, setNewEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
 
   const filteredCustomers = useMemo(() => {
@@ -46,11 +49,17 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
     ) || [];
   }, [customers, search]);
 
-  const handleCreateCustomer = async () => {
-    if (!newEmail || !newPassword) {
+  const filteredPending = useMemo(() => {
+    return pendingInvitations?.filter(invitation =>
+      invitation.email.toLowerCase().includes(search.toLowerCase())
+    ) || [];
+  }, [pendingInvitations, search]);
+
+  const handleInviteCustomer = async () => {
+    if (!newEmail) {
       toast({
         title: "Validatie fout",
-        description: "Vul email en wachtwoord in.",
+        description: "Vul een e-mailadres in.",
         variant: "destructive"
       });
       return;
@@ -59,23 +68,59 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
     try {
       await createCustomer.mutateAsync({
         email: newEmail,
-        password: newPassword,
+        password: '', // Not used anymore
         projectIds: selectedProjectIds
       });
 
       toast({
-        title: "Klant aangemaakt",
-        description: `Account voor ${newEmail} is succesvol aangemaakt.`
+        title: "Uitnodiging verstuurd",
+        description: `Een activatielink is verstuurd naar ${newEmail}.`
       });
 
       setIsAddDialogOpen(false);
       setNewEmail("");
-      setNewPassword("");
       setSelectedProjectIds([]);
     } catch (error: any) {
       toast({
         title: "Fout",
-        description: error.message || "Kon klant niet aanmaken.",
+        description: error.message || "Kon uitnodiging niet versturen.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleResendInvitation = async (email: string, projectIds: string[]) => {
+    try {
+      await createCustomer.mutateAsync({
+        email,
+        password: '',
+        projectIds
+      });
+
+      toast({
+        title: "Uitnodiging opnieuw verstuurd",
+        description: `Een nieuwe activatielink is verstuurd naar ${email}.`
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fout",
+        description: error.message || "Kon uitnodiging niet opnieuw versturen.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteInvitation = async (invitationId: string) => {
+    try {
+      await deletePendingInvitation.mutateAsync(invitationId);
+      toast({
+        title: "Uitnodiging verwijderd",
+        description: "De openstaande uitnodiging is verwijderd."
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fout",
+        description: error.message || "Kon uitnodiging niet verwijderen.",
         variant: "destructive"
       });
     }
@@ -137,6 +182,12 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
     );
   };
 
+  const getProjectNames = (projectIds: string[]) => {
+    return projectIds
+      .map(id => projects.find(p => p.id === id)?.name || 'Onbekend')
+      .join(', ');
+  };
+
   return (
     <>
       <Card>
@@ -147,8 +198,8 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
               <CardDescription>Beheer klantaccounts en projectkoppelingen</CardDescription>
             </div>
             <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
-              <UserPlus className="h-4 w-4" />
-              Nieuwe klant
+              <Mail className="h-4 w-4" />
+              Uitnodigen
             </Button>
           </div>
         </CardHeader>
@@ -157,91 +208,172 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Zoek op user ID..."
+              placeholder="Zoek op email of user ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
             />
           </div>
 
-          {/* Table */}
-          {isLoading ? (
-            <div className="text-center py-8 text-muted-foreground">Laden...</div>
-          ) : filteredCustomers.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {search ? "Geen klanten gevonden." : "Nog geen klanten."}
-            </div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User ID</TableHead>
-                    <TableHead>Projecten</TableHead>
-                    <TableHead className="hidden md:table-cell">Aangemaakt</TableHead>
-                    <TableHead className="text-right">Acties</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredCustomers.map((customer) => (
-                    <TableRow key={customer.user_id}>
-                      <TableCell className="font-mono text-sm max-w-[200px] truncate">
-                        {customer.user_id}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {customer.projects.length === 0 ? (
-                            <span className="text-sm text-muted-foreground italic">Geen</span>
-                          ) : (
-                            customer.projects.map((proj) => (
-                              <Badge 
-                                key={proj.id} 
-                                variant="outline" 
-                                className="flex items-center gap-1"
+          {/* Tabs for Active and Pending */}
+          <Tabs defaultValue="active" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="active">
+                Actief ({filteredCustomers.length})
+              </TabsTrigger>
+              <TabsTrigger value="pending">
+                <Clock className="h-4 w-4 mr-1" />
+                Uitnodigingen ({filteredPending.length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="active">
+              {isLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Laden...</div>
+              ) : filteredCustomers.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {search ? "Geen klanten gevonden." : "Nog geen actieve klanten."}
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User ID</TableHead>
+                        <TableHead>Projecten</TableHead>
+                        <TableHead className="hidden md:table-cell">Aangemaakt</TableHead>
+                        <TableHead className="text-right">Acties</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCustomers.map((customer) => (
+                        <TableRow key={customer.user_id}>
+                          <TableCell className="font-mono text-sm max-w-[200px] truncate">
+                            {customer.user_id}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {customer.projects.length === 0 ? (
+                                <span className="text-sm text-muted-foreground italic">Geen</span>
+                              ) : (
+                                customer.projects.map((proj) => (
+                                  <Badge 
+                                    key={proj.id} 
+                                    variant="outline" 
+                                    className="flex items-center gap-1"
+                                  >
+                                    {proj.project_name}
+                                    <button
+                                      onClick={() => handleUnlinkProject(proj.id)}
+                                      className="ml-1 hover:text-destructive"
+                                      title="Ontkoppelen"
+                                    >
+                                      <Unlink className="h-3 w-3" />
+                                    </button>
+                                  </Badge>
+                                ))
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {new Date(customer.created_at).toLocaleDateString('nl-NL')}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openLinkDialog(customer.user_id)}
+                              className="gap-1"
+                            >
+                              <LinkIcon className="h-4 w-4" />
+                              <span className="hidden sm:inline">Koppelen</span>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="pending">
+              {isPendingLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Laden...</div>
+              ) : filteredPending.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {search ? "Geen uitnodigingen gevonden." : "Geen openstaande uitnodigingen."}
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>E-mail</TableHead>
+                        <TableHead>Projecten</TableHead>
+                        <TableHead className="hidden md:table-cell">Verstuurd</TableHead>
+                        <TableHead className="text-right">Acties</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredPending.map((invitation) => (
+                        <TableRow key={invitation.id}>
+                          <TableCell className="font-medium">
+                            {invitation.email}
+                          </TableCell>
+                          <TableCell>
+                            {invitation.project_ids.length === 0 ? (
+                              <span className="text-sm text-muted-foreground italic">Geen</span>
+                            ) : (
+                              <span className="text-sm">
+                                {getProjectNames(invitation.project_ids)}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            {new Date(invitation.created_at).toLocaleDateString('nl-NL')}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleResendInvitation(invitation.email, invitation.project_ids)}
+                                disabled={createCustomer.isPending}
+                                className="gap-1"
                               >
-                                {proj.project_name}
-                                <button
-                                  onClick={() => handleUnlinkProject(proj.id)}
-                                  className="ml-1 hover:text-destructive"
-                                  title="Ontkoppelen"
-                                >
-                                  <Unlink className="h-3 w-3" />
-                                </button>
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {new Date(customer.created_at).toLocaleDateString('nl-NL')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openLinkDialog(customer.user_id)}
-                          className="gap-1"
-                        >
-                          <LinkIcon className="h-4 w-4" />
-                          <span className="hidden sm:inline">Koppelen</span>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+                                <RefreshCw className="h-4 w-4" />
+                                <span className="hidden sm:inline">Opnieuw</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteInvitation(invitation.id)}
+                                disabled={deletePendingInvitation.isPending}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
-      {/* Create Customer Dialog */}
+      {/* Invite Customer Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nieuwe klant aanmaken</DialogTitle>
+            <DialogTitle>Klant uitnodigen</DialogTitle>
             <DialogDescription>
-              Maak een klantaccount aan. De klant kan inloggen en alleen gekoppelde projecten zien.
+              Stuur een uitnodiging per e-mail. De klant ontvangt een link om zelf een wachtwoord te kiezen.
             </DialogDescription>
           </DialogHeader>
 
@@ -254,17 +386,6 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="klant@voorbeeld.nl"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Wachtwoord *</Label>
-              <Input
-                id="password"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="••••••••"
               />
             </div>
 
@@ -298,11 +419,13 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
                 Annuleren
               </Button>
               <Button 
-                onClick={handleCreateCustomer}
+                onClick={handleInviteCustomer}
                 disabled={createCustomer.isPending}
+                className="gap-2"
               >
-                {createCustomer.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Aanmaken
+                {createCustomer.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                <Mail className="h-4 w-4" />
+                Uitnodigen
               </Button>
             </div>
           </div>

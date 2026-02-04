@@ -15,6 +15,7 @@ import Developer from "./pages/Developer";
 import ApiDocs from "./pages/ApiDocs";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
+import SetPassword from "./pages/SetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -43,6 +44,7 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/set-password" element={<SetPassword />} />
               <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
