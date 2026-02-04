@@ -1,242 +1,79 @@
 
-# Professionele Refactor: Authenticatie en Sessie Management
+Doel
+- Zorgen dat bij wisselen van project alle project-afhankelijke data (incl. `availableWeeks`) gegarandeerd “hard” ververst, zodat je niet blijft hangen op een subset (zoals alleen week 5 en 6).
 
-## Geïdentificeerde Problemen
+Wat ik nu zie in de code (relevant)
+- `useAvailableWeeks(projectId)` gebruikt queryKey: `['available_weeks', projectId]` en haalt weken uit `call_records` op.
+- In `Dashboard.tsx` heb je nu een wrapper `setSelectedProjectKey()` die `invalidateQueries` doet, maar:
+  - De initial auto-select (eerste project kiezen) gebruikt nog `setSelectedProjectKeyState(...)` en omzeilt dus je “hard refresh” pad.
+  - `invalidateQueries` alleen is soms niet agressief genoeg bij frustrerende “stale UI” situaties (zeker als er requests in-flight zijn of de UI nog oude data vasthoudt). Dan wil je meestal: cancel + remove + refetch, en ook je lokale UI-state resetten (week/page/datefilter) zodat je niet per ongeluk in een “rare combinatie” blijft hangen.
 
-### Probleem 1: Logout Button Werkt Niet
-**Huidige implementatie (Dashboard.tsx lijn 398-402):**
-```typescript
-const handleLogout = async () => {
-  await signOut();
-  window.location.href = '/auth';
-};
-```
+Hypothese voor waarom jij nog steeds alleen week 5/6 ziet
+- Niet de database: in de DB zijn er voor STC giftgevers aantoonbaar week 1 t/m 6 aanwezig.
+- Wél frontend state/cache: ergens blijft een oude `availableWeeks` set hangen of wordt niet opnieuw geladen op het moment dat de UI hem nodig heeft.
+- Daarnaast: de week-jaar sleutel wordt afgeleid van `beldatum_date.getFullYear()`. ISO week 1 kan eind december in het vorige kalenderjaar vallen (bijv. 2025-12-29 t/m 2026-01-04). Daardoor kan “Week 1” als (2025) én (2026) voorkomen. Dat verklaart niet “alleen 5/6”, maar het is wel een randgeval dat we meteen beter kunnen maken.
 
-**Root cause:** De `await signOut()` blokkeert potentieel forever als:
-- De sessie al verlopen is (Supabase gooit "session_not_found")
-- Netwerkproblemen optreden
-- De Promise nooit resolved
+Aanpak (implementatie)
+1) Maak project-switch “atomic”: reset UI-state + kill queries
+- In `src/pages/Dashboard.tsx` pas ik `setSelectedProjectKey` aan zodat die bij een projectwissel:
+  - (a) UI-state reset:
+    - `setSelectedWeek('all')` (of leeg) zodat we niet per ongeluk een week filter meenemen die niet matcht
+    - `setDashboardPage(1)` (en eventueel pageSize laten staan)
+    - `setDateFilterType('week')` en `setDateRange({start:null,end:null})` om cross-project “range” verwarring te vermijden
+  - (b) Query’s cancelt die nog bezig zijn voor project-data:
+    - `queryClient.cancelQueries({ predicate: ... })`
+  - (c) Query-cache echt weggooit (hard refresh i.p.v. “stale-while-revalidate”):
+    - `queryClient.removeQueries({ predicate: ... })`
+  - (d) Daarna expliciet opnieuw ophaalt:
+    - `queryClient.refetchQueries({ predicate: ... })` (met focus op `available_weeks` en eventueel `projects`-afhankelijk spul)
 
-De functie hangt en de redirect wordt nooit uitgevoerd.
+  Predicate-filter (belangrijk)
+  - In plaats van losse `invalidateQueries({queryKey: [...]})` voor 6 keys, gebruik ik 1 predicate die matcht op `queryKey[0]`:
+    - `call_records`, `available_weeks`, `kpi_aggregates`, `logged_time`, `report_matrix_data`, `total_record_count`
+  - Dat dekt meteen alle varianten met parameters (projectId/week/page).
 
----
+2) Zorg dat ook de “eerste project auto-select” door dezelfde switch-logica loopt
+- In de `useEffect` die het eerste project kiest (regels rond 103-108) vervang ik `setSelectedProjectKeyState(...)` door de wrapper `setSelectedProjectKey(...)`.
+- Zo is het gedrag consistent: altijd dezelfde reset/invalidation.
 
-### Probleem 2: Menu Items Verdwijnen Intermitterend
-**Root cause:** Race condition in `useAuth.ts` tussen twee bronnen van waarheid:
+3) Fix/verbeter het week-jaar randgeval (ISO week vs kalenderjaar)
+- In `useAvailableWeeks` (in `src/hooks/useCallRecords.ts`) verbeter ik de jaarbepaling:
+  - Nu: `const year = date.getFullYear()`
+  - Beter: gebruik ISO-week-jaar (zodat week 1 bij 2026 ook echt “2026-01” wordt, ook als de maandag in 2025 valt).
+  - Implementatie: met `date-fns` (staat al in deps) `getISOWeekYear(date)` i.p.v. `getFullYear()`.
+- Dit voorkomt dubbele “Week 1 (2025)” vs “Week 1 (2026)” entries en maakt de selector betrouwbaarder aan jaargrenzen.
 
-```typescript
-// Bron 1: onAuthStateChange callback (lijn 14-27)
-supabase.auth.onAuthStateChange((event, session) => {
-  setSession(session);
-  setUser(session?.user ?? null);
-  setLoading(false);  // ← Zet loading false
-});
+4) (Optioneel maar sterk) Kleine debug-hulp voor jou: toon wat er binnenkomt
+- Tijdelijk (of achter een dev-flag) log ik in de console:
+  - projectId + aantal availableWeeks + eerste/laatste week value
+- Zo kun jij meteen zien: komt de backend-lijst wel goed terug na switch?
 
-// Bron 2: getSession() promise (lijn 31-35)
-supabase.auth.getSession().then(({ data: { session } }) => {
-  setSession(session);
-  setUser(session?.user ?? null);
-  setLoading(false);  // ← Zet NOGMAALS loading false
-});
-```
+Bestanden die ik ga aanpassen
+- `src/pages/Dashboard.tsx`
+  - project switch handler: cancel/remove/refetch + state reset
+  - initial auto-select effect: wrapper gebruiken
+- `src/hooks/useCallRecords.ts`
+  - `useAvailableWeeks`: ISO week-year gebruiken voor `value`/`label` consistentie (jaargrens fix)
+  - (optioneel) debug logging
 
-**Race condition scenario:**
-1. Component mount → `loading = true`
-2. `onAuthStateChange` vuur event → `user = X`, `loading = false`
-3. React rendert Dashboard → vraagt `userRole` query
-4. `getSession()` resolved → overschrijft state (mogelijk met andere waarde)
-5. `useUserRole` query start opnieuw → `roleLoading = true`
-6. Sidebar checkt `role === 'admin'` → false (want query loopt nog)
-7. Menu items verdwijnen
+Acceptatiecriteria (wat jij straks moet zien)
+- Wissel naar “STC giftgevers”:
+  - week dropdown bevat week 1 t/m 6 (en eventueel 49-52 van 2025, afhankelijk van data)
+  - je blijft niet hangen op alleen week 5/6
+- Wissel daarna naar een ander project en terug:
+  - weeks verversen elke keer consistent
+  - geen “oude lijst” die blijft staan
 
----
+Testplan (e2e)
+1) Hard refresh browser (Ctrl+F5) één keer.
+2) Ga naar dashboard → selecteer STC giftgevers → open week dropdown:
+   - check dat week 1–6 aanwezig is.
+3) Switch project naar bijv. “Demo Campagne” → terug naar STC giftgevers:
+   - check opnieuw week 1–6.
+4) Selecteer week 1 → check dat call_records/kpi’s veranderen (dus niet alleen selector).
 
-## Oplossing
+Risico’s / trade-offs
+- `removeQueries` zorgt dat je tijdens switch kort “lege state/loading” ziet: dat is bewust, want jij wilt liever correctheid dan “mooie” overgang.
+- Als je heel veel queries hebt, predicate moet strak blijven zodat we niet onnodig alles weggooien (ik beperk het tot de project-data keys).
 
-### 1. Robuuste Logout Handler
-
-```typescript
-const handleLogout = useCallback(async () => {
-  // Voorkom dubbele kliks
-  if (isLoggingOut) return;
-  setIsLoggingOut(true);
-  
-  try {
-    // Timeout: als signOut langer dan 3 seconden duurt, forceer redirect
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Logout timeout')), 3000)
-    );
-    
-    await Promise.race([
-      signOut(),
-      timeoutPromise
-    ]);
-  } catch (error) {
-    // Negeer alle errors - we willen ALTIJD uitloggen
-    console.warn('Logout warning:', error);
-  } finally {
-    // Clear alle lokale state en cache
-    queryClient.clear();
-    // Forceer volledige page reload naar auth
-    window.location.replace('/auth');
-  }
-}, [signOut, queryClient]);
-```
-
----
-
-### 2. Correcte Auth State Management
-
-Implementeer het **"Single Source of Truth"** pattern:
-
-```typescript
-export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    let isMounted = true;
-
-    // 1. EERST: Haal initiële sessie op
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!isMounted) return;
-        
-        setSession(session);
-        setUser(session?.user ?? null);
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          setIsInitialized(true);
-        }
-      }
-    };
-
-    initializeAuth();
-
-    // 2. DAARNA: Luister naar wijzigingen (maar alleen NA initialisatie)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!isMounted) return;
-        
-        // Negeer events totdat we geïnitialiseerd zijn
-        // (voorkomt race condition)
-        if (!isInitialized && event === 'INITIAL_SESSION') return;
-
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        // Invalidate cache bij auth wijzigingen
-        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-          // Defer to avoid Supabase internal deadlock
-          setTimeout(() => {
-            queryClient.invalidateQueries();
-          }, 0);
-        }
-
-        // Bij SIGNED_OUT: extra cleanup
-        if (event === 'SIGNED_OUT') {
-          queryClient.clear();
-        }
-      }
-    );
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, [queryClient, isInitialized]);
-
-  // ... rest van de hook
-}
-```
-
----
-
-### 3. Stabiele Role Loading in ProtectedRoute
-
-```typescript
-export function ProtectedRoute({ children, requireAdmin, requireSuperAdmin }: ProtectedRouteProps) {
-  const { user, loading: authLoading } = useAuth();
-  const { isAdmin, isLoading: adminLoading } = useIsAdmin(user?.id);
-  const { isSuperAdmin, isLoading: superAdminLoading } = useIsSuperAdmin(user?.id);
-
-  // CRITICAL: Wacht tot ALLES geladen is voordat we renderen
-  const isFullyLoaded = !authLoading && 
-    (!requireAdmin || !adminLoading) && 
-    (!requireSuperAdmin || !superAdminLoading);
-
-  if (!isFullyLoaded) {
-    return <LoadingSpinner />;
-  }
-
-  // ... rest van de component
-}
-```
-
----
-
-### 4. Sidebar: Stabiele Rendering
-
-Voorkom flicker door role als dependency correct af te handelen:
-
-```typescript
-const Sidebar = ({ role, isSuperAdmin, onLogout, ...props }) => {
-  // Memoize menu items om onnodige re-renders te voorkomen
-  const adminMenuItems = useMemo(() => {
-    if (role !== 'admin') return null;
-    
-    return (
-      <>
-        <Link to="/admin">Projectbeheer</Link>
-        <Link to="/admin/users">Gebruikers</Link>
-        <Link to="/admin/customers">Klantenbeheer</Link>
-      </>
-    );
-  }, [role]);
-
-  const devMenuItem = useMemo(() => {
-    if (!isSuperAdmin) return null;
-    return <Link to="/developer">Developer</Link>;
-  }, [isSuperAdmin]);
-
-  // ...
-};
-```
-
----
-
-## Bestanden die worden aangepast
-
-| Bestand | Wijziging |
-|---------|-----------|
-| `src/hooks/useAuth.ts` | Volledige refactor met isInitialized pattern, correcte volgorde, cleanup |
-| `src/pages/Dashboard.tsx` | Robuuste logout met timeout, loading state, queryClient.clear() |
-| `src/components/ProtectedRoute.tsx` | Correcte loading check voor alle vereiste roles |
-| `src/components/Dashboard/Sidebar.tsx` | Memoized menu items voor stabiele rendering |
-
----
-
-## Verwacht Resultaat
-
-1. **Logout werkt altijd** - ongeacht sessie status of netwerkproblemen
-2. **Menu items blijven stabiel** - geen flicker bij page load of navigatie
-3. **Correcte volgorde van events** - eerst initialiseren, dan luisteren
-4. **Professionele error handling** - graceful degradation bij problemen
-
----
-
-## Test Scenario's na Implementatie
-
-1. Klik op Uitloggen → Direct redirect naar `/auth`
-2. Log in als admin → Alle menu items direct zichtbaar
-3. Refresh de pagina → Menu items blijven stabiel
-4. Open `/admin/users` direct → Geen flicker, correcte rendering
-5. Log uit terwijl sessie al verlopen is → Nog steeds correcte redirect
-
+Als je dit plan goedkeurt, implementeer ik dit in één pass en kun jij meteen opnieuw testen met kas@sitejob.nl.
