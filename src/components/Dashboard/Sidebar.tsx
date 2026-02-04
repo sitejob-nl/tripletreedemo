@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { LogOut, ChevronRight, Settings, Users, Code, Building2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Project, Role } from '@/types/dashboard';
@@ -11,6 +12,9 @@ interface SidebarProps {
   onLogout: () => void;
   isSuperAdmin?: boolean;
 }
+
+const projectColors = ['bg-kpi-orange-text', 'bg-kpi-blue-text', 'bg-kpi-green-text', 'bg-kpi-purple-text', 'bg-kpi-cyan-text'];
+
 export const Sidebar = ({
   selectedProject,
   onProjectChange,
@@ -19,7 +23,47 @@ export const Sidebar = ({
   onLogout,
   isSuperAdmin = false
 }: SidebarProps) => {
-  const projectColors = ['bg-kpi-orange-text', 'bg-kpi-blue-text', 'bg-kpi-green-text', 'bg-kpi-purple-text', 'bg-kpi-cyan-text'];
+  // Memoize admin menu items to prevent flickering during role state updates
+  const adminMenuItems = useMemo(() => {
+    if (role !== 'admin') return null;
+    
+    return (
+      <>
+        <Link 
+          to="/admin" 
+          className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          <Settings size={16} /> Projectbeheer
+        </Link>
+        <Link 
+          to="/admin/users" 
+          className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          <Users size={16} /> Gebruikers
+        </Link>
+        <Link 
+          to="/admin/customers" 
+          className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          <Building2 size={16} /> Klantenbeheer
+        </Link>
+      </>
+    );
+  }, [role]);
+
+  // Memoize developer menu item to prevent flickering
+  const devMenuItem = useMemo(() => {
+    if (!isSuperAdmin) return null;
+    
+    return (
+      <Link 
+        to="/developer" 
+        className="flex items-center gap-2 text-kpi-purple-text hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+      >
+        <Code size={16} /> Developer
+      </Link>
+    );
+  }, [isSuperAdmin]);
   return <aside className="w-full md:w-64 bg-black border-r border-border flex-shrink-0 flex flex-col h-screen sticky top-0">
       <div className="p-6 border-b border-border py-[25px] px-0 flex items-center justify-center flex-shrink-0">
         <img src={logo} alt="Triple Tree Logo" className="h-12 w-auto object-contain" />
@@ -37,36 +81,8 @@ export const Sidebar = ({
       </nav>
 
       <div className="p-4 border-t border-gray-800 space-y-1 flex-shrink-0">
-        {role === 'admin' && (
-          <>
-            <Link 
-              to="/admin" 
-              className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              <Settings size={16} /> Projectbeheer
-            </Link>
-            <Link 
-              to="/admin/users" 
-              className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              <Users size={16} /> Gebruikers
-            </Link>
-            <Link 
-              to="/admin/customers" 
-              className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              <Building2 size={16} /> Klantenbeheer
-            </Link>
-          </>
-        )}
-        {isSuperAdmin && (
-          <Link 
-            to="/developer" 
-            className="flex items-center gap-2 text-kpi-purple-text hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            <Code size={16} /> Developer
-          </Link>
-        )}
+        {adminMenuItems}
+        {devMenuItem}
         <button onClick={onLogout} className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors">
           <LogOut size={16} /> Uitloggen
         </button>
