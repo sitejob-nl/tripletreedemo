@@ -1,217 +1,272 @@
 
+# User Invitation via Supabase Auth
 
-# Security Fixes Implementatieplan
-
-Dit plan pakt alle geïdentificeerde security issues aan: het verscherpen van RLS policies, het verbergen van API tokens voor reguliere gebruikers, en het verplaatsen van de Mapbox token naar een environment variable.
-
----
-
-## Samenvatting van de Problemen
-
-### 1. RLS Policy Issues
-- **sync_logs**: `SELECT` policy met `USING (true)` - alle geauthenticeerde gebruikers kunnen logs zien
-- **error_logs INSERT**: `WITH CHECK (true)` - bewust open voor client-side error reporting (gedocumenteerd als acceptabel)
-
-### 2. API Token Blootstelling
-- De `basicall_token` kolom in `projects` tabel is zichtbaar voor alle gebruikers die toegang hebben tot een project
-- Reguliere gebruikers (customers) kunnen via `customer_projects` de projecten zien inclusief de gevoelige API token
-- De token wordt alleen server-side gebruikt (in edge functions) en hoeft nooit naar de client te gaan
-
-### 3. Mapbox Token Hardcoded
-- Token staat hardcoded in `src/components/Dashboard/GeographicAnalysis.tsx` (lijn 312)
-- Token staat hardcoded in `supabase/functions/geocode-city/index.ts` (lijn 9)
-- Hoewel dit een **publishable** Mapbox token is (geen secret), is centralisatie beter voor onderhoud
+Dit plan implementeert een uitnodigingssysteem via Supabase's ingebouwde `inviteUserByEmail` functie, inclusief aangepaste HTML email templates voor zowel uitnodigingen als wachtwoord vergeten.
 
 ---
 
-## Implementatieplan
+## Voordelen van Supabase Auth Emails
 
-### Stap 1: Verscherp sync_logs RLS Policy
+| Aspect | Supabase | Resend |
+|--------|----------|--------|
+| Geen extra API key nodig | ✅ | ❌ |
+| Ingebouwde token handling | ✅ | ❌ |
+| Email templates in dashboard | ✅ | ❌ |
+| Gratis tier | 3.000 emails/maand | 100 emails/dag |
+| Setup complexiteit | Laag | Hoog |
 
-De huidige policy `USING (true)` voor SELECT wordt vervangen door een restrictievere policy die alleen admins/superadmins toegang geeft.
+---
+
+## Overzicht van de Flow
+
+```text
+1. Admin klikt "Uitnodigen" in CustomersTable
+2. Admin vult alleen email + projecten in (geen wachtwoord!)
+3. Edge function roept supabase.auth.admin.inviteUserByEmail() aan
+4. Supabase stuurt automatisch uitnodigingsmail met magische link
+5. Gebruiker klikt link → komt op /set-password pagina
+6. Gebruiker kiest eigen wachtwoord → account is actief
+```
+
+---
+
+## Email Templates Aanpassen
+
+De templates worden aangepast in het Supabase Dashboard onder:
+**Authentication → Email Templates**
+
+### 1. Invite Email Template
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f4f5; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+    
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 32px; text-align: center;">
+      <h1 style="color: white; margin: 0; font-size: 24px;">Triple Tree Dashboard</h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 40px 32px;">
+      <h2 style="color: #18181b; font-size: 22px; margin: 0 0 16px;">Je bent uitgenodigd!</h2>
+      <p style="color: #52525b; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+        Je hebt een uitnodiging ontvangen om toegang te krijgen tot het Triple Tree Dashboard. 
+        Klik op onderstaande knop om je account te activeren.
+      </p>
+      
+      <!-- CTA Button -->
+      <a href="{{ .ConfirmationURL }}" 
+         style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+        Account activeren
+      </a>
+      
+      <p style="color: #71717a; font-size: 14px; margin: 32px 0 0;">
+        Deze link is 24 uur geldig. Als je deze uitnodiging niet hebt aangevraagd, kun je deze email negeren.
+      </p>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background: #fafafa; padding: 20px 32px; border-top: 1px solid #e4e4e7; text-align: center;">
+      <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
+        Triple Tree Dashboard | Automatisch gegenereerd
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+```
+
+### 2. Password Reset Email Template
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body style="font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f4f5; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+    
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 32px; text-align: center;">
+      <h1 style="color: white; margin: 0; font-size: 24px;">Triple Tree Dashboard</h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding: 40px 32px;">
+      <h2 style="color: #18181b; font-size: 22px; margin: 0 0 16px;">Wachtwoord resetten</h2>
+      <p style="color: #52525b; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+        Je hebt een verzoek ingediend om je wachtwoord te resetten. 
+        Klik op onderstaande knop om een nieuw wachtwoord in te stellen.
+      </p>
+      
+      <!-- CTA Button -->
+      <a href="{{ .ConfirmationURL }}" 
+         style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+        Nieuw wachtwoord instellen
+      </a>
+      
+      <p style="color: #71717a; font-size: 14px; margin: 32px 0 0;">
+        Als je dit verzoek niet hebt ingediend, kun je deze email negeren. 
+        Je wachtwoord blijft ongewijzigd.
+      </p>
+    </div>
+    
+    <!-- Footer -->
+    <div style="background: #fafafa; padding: 20px 32px; border-top: 1px solid #e4e4e7; text-align: center;">
+      <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
+        Triple Tree Dashboard | Automatisch gegenereerd
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+```
+
+---
+
+## Technische Implementatie
+
+### 1. Database Wijzigingen
+
+Een kleine hulptabel om projectkoppelingen vast te leggen vóór de gebruiker accepteert:
 
 ```sql
--- Verwijder de permissive policy
-DROP POLICY IF EXISTS "Sync logs leesbaar voor dashboard" ON sync_logs;
+CREATE TABLE public.pending_invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  project_ids UUID[] DEFAULT '{}',
+  invited_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
--- Nieuwe restrictieve policy alleen voor admins
-CREATE POLICY "Only admins can view sync_logs"
-  ON sync_logs FOR SELECT
+-- RLS: alleen admins
+ALTER TABLE pending_invitations ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage pending invitations"
+  ON pending_invitations FOR ALL
   USING (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'superadmin'::app_role));
 ```
 
-### Stap 2: Verberg basicall_token via Database View
+### 2. Edge Function: `invite-user`
 
-De oplossing is het maken van een "projects_public" view die de gevoelige token verbergt, terwijl admins nog steeds toegang hebben tot de volledige data.
+Update de bestaande `create-customer` edge function om `inviteUserByEmail` te gebruiken:
 
-**Database wijzigingen:**
+```typescript
+// Wijzigingen in create-customer/index.ts:
+
+// In plaats van createUser met password:
+const { data: newUser, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+  email,
+  {
+    redirectTo: `${siteUrl}/set-password`,
+    data: {
+      invited_by: requestingUser.id,
+      project_ids: projectIds // Metadata voor later
+    }
+  }
+);
+
+// Sla pending invitation op voor projectkoppeling
+await supabaseAdmin.from('pending_invitations').upsert({
+  email,
+  project_ids: projectIds,
+  invited_by: requestingUser.id
+});
+```
+
+### 3. Auth Hook: Koppel Projecten na Acceptatie
+
+Een database trigger die projecten koppelt zodra de gebruiker zijn account bevestigt:
 
 ```sql
--- 1. Maak een publieke view zonder gevoelige velden
-CREATE VIEW public.projects_public
-WITH (security_invoker=on) AS
-  SELECT 
-    id,
-    name,
-    project_key,
-    basicall_project_id,
-    is_active,
-    hourly_rate,
-    vat_rate,
-    project_type,
-    mapping_config,
-    created_at,
-    updated_at
-  FROM public.projects;
-  -- LET OP: basicall_token is bewust NIET opgenomen
+-- Trigger functie om projecten te koppelen na signup
+CREATE OR REPLACE FUNCTION handle_new_user_from_invite()
+RETURNS TRIGGER AS $$
+DECLARE
+  pending_record RECORD;
+BEGIN
+  -- Check of er een pending invitation is voor deze email
+  SELECT * INTO pending_record 
+  FROM pending_invitations 
+  WHERE email = NEW.email;
+  
+  IF pending_record IS NOT NULL THEN
+    -- Wijs 'user' rol toe
+    INSERT INTO user_roles (user_id, role)
+    VALUES (NEW.id, 'user')
+    ON CONFLICT DO NOTHING;
+    
+    -- Koppel projecten
+    INSERT INTO customer_projects (user_id, project_id, created_by)
+    SELECT NEW.id, unnest(pending_record.project_ids), pending_record.invited_by
+    ON CONFLICT DO NOTHING;
+    
+    -- Verwijder pending invitation
+    DELETE FROM pending_invitations WHERE email = NEW.email;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. RLS op de view toepassen
--- View erft automatisch RLS via security_invoker=on
+-- Trigger op auth.users (via Supabase hook)
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user_from_invite();
 ```
 
-**Frontend wijzigingen:**
+### 4. Frontend Wijzigingen
 
-De frontend code wordt aangepast om:
-- Voor reguliere gebruikers (customers): de `projects_public` view te gebruiken
-- Voor admins: de `projects` tabel te blijven gebruiken (voor token beheer)
+**CustomersTable.tsx:**
+- Verwijder het wachtwoord veld
+- Verander knoptekst naar "Uitnodigen"
+- Toon pending invitations met "Opnieuw versturen" optie
 
-Bestanden die worden aangepast:
-- `src/hooks/useProjects.ts` - Conditionally query view vs table based on role
-- `src/types/database.ts` - Nieuw type `DBProjectPublic` zonder token
-- `src/hooks/useCustomerProjects.ts` - Gebruik de publieke view
-
-### Stap 3: Centraliseer Mapbox Token
-
-Hoewel de Mapbox token een **publishable** (publieke) key is, is centralisatie beter:
-
-1. **Frontend**: Verplaats token naar een constante in een config bestand
-2. **Edge function**: Verplaats token naar Supabase secrets (optioneel, maar beter)
-
-**Nieuwe config file**: `src/config/mapbox.ts`
-```typescript
-// Mapbox publieke token - veilig voor frontend gebruik
-export const MAPBOX_PUBLIC_TOKEN = 'pk.eyJ1Ijoic2l0ZWpvYi1ubCIsImEiOiJjbWQzZ29pYngwNDN5MmpxbmNldTN1c3ZmIn0.unL-G3gacXta2WVCKK6Rcg';
-```
-
----
-
-## Technische Details
-
-### Database Migratie
-
-```sql
--- ========================================
--- 1. Fix sync_logs RLS
--- ========================================
-DROP POLICY IF EXISTS "Sync logs leesbaar voor dashboard" ON sync_logs;
-
-CREATE POLICY "Only admins can view sync_logs"
-  ON sync_logs FOR SELECT
-  USING (
-    has_role(auth.uid(), 'admin'::app_role) 
-    OR has_role(auth.uid(), 'superadmin'::app_role)
-  );
-
--- ========================================
--- 2. Maak publieke projects view
--- ========================================
-CREATE VIEW public.projects_public
-WITH (security_invoker=on) AS
-  SELECT 
-    id,
-    name,
-    project_key,
-    basicall_project_id,
-    is_active,
-    hourly_rate,
-    vat_rate,
-    project_type,
-    mapping_config,
-    created_at,
-    updated_at
-  FROM public.projects;
-
--- View RLS werkt via security_invoker - erft table policies
-```
-
-### Frontend Type Updates
-
-**Nieuw type** in `src/types/database.ts`:
-```typescript
-// Publieke project data (zonder gevoelige velden)
-export interface DBProjectPublic {
-  id: string;
-  name: string;
-  project_key: string;
-  basicall_project_id: number;
-  is_active: boolean;
-  hourly_rate: number;
-  vat_rate: number;
-  project_type: ProjectType;
-  mapping_config: MappingConfig;
-  created_at: string;
-  updated_at: string;
-  // GEEN basicall_token
-}
-```
-
-### Hook Wijzigingen
-
-**useProjects.ts** - Nieuwe versie met role-based query:
-```typescript
-export const useProjects = (onlyActive = true, userId?: string, isAdmin = false) => {
-  const query = useQuery({
-    queryKey: ['projects', onlyActive, userId, isAdmin],
-    queryFn: async () => {
-      // Admins krijgen volledige data, anderen de publieke view
-      const tableName = isAdmin ? 'projects' : 'projects_public';
-      
-      let queryBuilder = supabase
-        .from(tableName)
-        .select('*')
-        .order('name');
-
-      if (onlyActive) {
-        queryBuilder = queryBuilder.eq('is_active', true);
-      }
-
-      const { data, error } = await queryBuilder;
-      // ... rest van de logica
-    },
-  });
-};
-```
+**Nieuwe pagina: `/set-password`**
+- Vergelijkbaar met `/reset-password`
+- Wordt automatisch geopend via Supabase's magic link
+- Gebruiker stelt wachtwoord in
 
 ---
 
 ## Bestanden die Worden Aangepast
 
-| Bestand | Wijziging |
-|---------|-----------|
-| `supabase/migrations/[new].sql` | Nieuwe migratie met RLS fixes en view |
-| `src/types/database.ts` | Nieuw `DBProjectPublic` type |
-| `src/hooks/useProjects.ts` | Role-based table/view selectie |
-| `src/hooks/useCustomerProjects.ts` | Gebruik `projects_public` view |
-| `src/config/mapbox.ts` | **Nieuw**: Gecentraliseerde Mapbox config |
-| `src/components/Dashboard/GeographicAnalysis.tsx` | Import token van config |
-| `supabase/functions/geocode-city/index.ts` | Import token van environment of config |
-| `src/integrations/supabase/types.ts` | Auto-gegenereerd na migratie |
+| Bestand | Actie | Beschrijving |
+|---------|-------|--------------|
+| `supabase/migrations/xxx.sql` | Nieuw | pending_invitations tabel + trigger |
+| `supabase/functions/create-customer/index.ts` | Update | Gebruik `inviteUserByEmail` |
+| `src/components/Admin/CustomersTable.tsx` | Update | Verwijder wachtwoord, toon pending |
+| `src/hooks/useCustomerProjects.ts` | Update | Nieuwe hook voor pending invitations |
+| `src/pages/SetPassword.tsx` | Nieuw | Pagina voor invited users |
+| `src/App.tsx` | Update | Route `/set-password` toevoegen |
 
 ---
 
-## Impact Analyse
+## Stappen voor de Admin
 
-### Wat blijft werken:
-- Admins kunnen nog steeds projecten aanmaken/bewerken met tokens
-- Sync functionaliteit blijft werken (edge functions hebben service role)
-- Customers zien hun toegewezen projecten (zonder token)
-- Kaart functionaliteit blijft werken
+Na implementatie moet je eenmalig de email templates aanpassen in Supabase:
 
-### Beveiligingsverbeteringen:
-- Reguliere gebruikers kunnen geen API tokens meer zien
-- sync_logs alleen zichtbaar voor admins
-- Gecentraliseerde token beheer voor betere maintainability
+1. Ga naar **Supabase Dashboard → Authentication → Email Templates**
+2. Selecteer **"Invite user"** template
+3. Plak de custom HTML (hierboven)
+4. Selecteer **"Reset password"** template  
+5. Plak de custom HTML (hierboven)
+6. Klik **Save**
 
-### Breaking Changes:
-- Geen - de publieke view heeft dezelfde velden als wat customers nu gebruiken (minus de token die ze nooit nodig hadden)
+---
 
+## Voordelen van deze Aanpak
+
+1. **Geen extra kosten** - Supabase's gratis tier (3.000 emails/maand) is voldoende
+2. **Geen API keys beheren** - Alles via Supabase
+3. **Betere UX** - Gebruiker kiest eigen wachtwoord
+4. **Consistente branding** - Beide emails hebben dezelfde stijl
+5. **Eenvoudiger code** - Minder edge functions nodig
