@@ -1,174 +1,217 @@
 
-# UI Optimalisatie Plan
 
-## Huidige Situatie Analyse
-Na het doorlopen van de dashboard UI heb ik de volgende verbeterpunten geidentificeerd:
+# Security Fixes Implementatieplan
 
----
-
-## 1. Header Vereenvoudiging (Quick Win)
-
-**Probleem**: De header bevat veel elementen (breadcrumb, titel, date filter, view switcher, help) die op mobiel/tablet rommelig overkomen.
-
-**Oplossing**:
-- Breadcrumb verwijderen (redundant - projectnaam staat al groot)
-- "ADMIN MODE" badge verplaatsen naar sidebar (bij admin menu items)
-- Help icon kleiner en inline met date filter
+Dit plan pakt alle geïdentificeerde security issues aan: het verscherpen van RLS policies, het verbergen van API tokens voor reguliere gebruikers, en het verplaatsen van de Mapbox token naar een environment variable.
 
 ---
 
-## 2. Sidebar Verbeteringen
+## Samenvatting van de Problemen
 
-**Probleem**: 
-- Geen actieve route indicator voor admin links
-- Projecten hebben geen scroll-indicator bij veel projecten
-- Sidebar collapsible state ontbreekt (neemt altijd 256px in)
+### 1. RLS Policy Issues
+- **sync_logs**: `SELECT` policy met `USING (true)` - alle geauthenticeerde gebruikers kunnen logs zien
+- **error_logs INSERT**: `WITH CHECK (true)` - bewust open voor client-side error reporting (gedocumenteerd als acceptabel)
 
-**Oplossing**:
-- Active state styling toevoegen aan admin/developer links (gebruik bestaande NavLink pattern)
-- Collapsible sidebar met mini-variant (alleen icons) voor meer schermruimte
-- Project scroll area met subtle gradient fade
+### 2. API Token Blootstelling
+- De `basicall_token` kolom in `projects` tabel is zichtbaar voor alle gebruikers die toegang hebben tot een project
+- Reguliere gebruikers (customers) kunnen via `customer_projects` de projecten zien inclusief de gevoelige API token
+- De token wordt alleen server-side gebruikt (in edge functions) en hoeft nooit naar de client te gaan
 
----
-
-## 3. KPI Cards Compacter (Mobile)
-
-**Probleem**: 4 kaarten op mobiel nemen veel verticale ruimte in, user moet scrollen voordat content zichtbaar is.
-
-**Oplossing**:
-- Op mobiel: 2x2 grid in plaats van 4x1
-- Kleinere padding (p-4 i.p.v. p-6) op mobiel
-- Icon size verkleinen op mobiel (20px i.p.v. 28px)
+### 3. Mapbox Token Hardcoded
+- Token staat hardcoded in `src/components/Dashboard/GeographicAnalysis.tsx` (lijn 312)
+- Token staat hardcoded in `supabase/functions/geocode-city/index.ts` (lijn 9)
+- Hoewel dit een **publishable** Mapbox token is (geen secret), is centralisatie beter voor onderhoud
 
 ---
 
-## 4. View Switcher Optimalisatie
+## Implementatieplan
 
-**Probleem**: 3 tabs (Rapport/Visueel/Analyse) met iconen + tekst neemt veel ruimte in.
+### Stap 1: Verscherp sync_logs RLS Policy
 
-**Oplossing**:
-- Op mobiel: alleen iconen tonen met tooltip
-- Actieve tab duidelijker highlighten met animatie
-- Optie: Segmented control stijl i.p.v. pill buttons
+De huidige policy `USING (true)` voor SELECT wordt vervangen door een restrictievere policy die alleen admins/superadmins toegang geeft.
 
----
+```sql
+-- Verwijder de permissive policy
+DROP POLICY IF EXISTS "Sync logs leesbaar voor dashboard" ON sync_logs;
 
-## 5. Date Filter UX Verbetering
+-- Nieuwe restrictieve policy alleen voor admins
+CREATE POLICY "Only admins can view sync_logs"
+  ON sync_logs FOR SELECT
+  USING (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'superadmin'::app_role));
+```
 
-**Probleem**: 
-- Week dropdown is native HTML select (inconsistent met rest van UI)
-- "Alle weken" staat niet visueel apart van specifieke weken
+### Stap 2: Verberg basicall_token via Database View
 
-**Oplossing**:
-- Vervang native select door Radix Select (consistent met rest)
-- "Alle weken" als aparte toggle button voor snelle toegang
-- Week selector met jaar-groepering indien weken over meerdere jaren
+De oplossing is het maken van een "projects_public" view die de gevoelige token verbergt, terwijl admins nog steeds toegang hebben tot de volledige data.
 
----
+**Database wijzigingen:**
 
-## 6. Loading States Consistentie
+```sql
+-- 1. Maak een publieke view zonder gevoelige velden
+CREATE VIEW public.projects_public
+WITH (security_invoker=on) AS
+  SELECT 
+    id,
+    name,
+    project_key,
+    basicall_project_id,
+    is_active,
+    hourly_rate,
+    vat_rate,
+    project_type,
+    mapping_config,
+    created_at,
+    updated_at
+  FROM public.projects;
+  -- LET OP: basicall_token is bewust NIET opgenomen
 
-**Probleem**: Verschillende loading spinners en states door de app heen.
+-- 2. RLS op de view toepassen
+-- View erft automatisch RLS via security_invoker=on
+```
 
-**Oplossing**:
-- Skeleton loaders voor KPI cards (al aanwezig, maar inconsistent toegepast)
-- Shimmer effect voor tabel rows
-- Progress indicator voor analyse data laden (huidige "Volledige dataset laden..." is goed)
+**Frontend wijzigingen:**
 
----
+De frontend code wordt aangepast om:
+- Voor reguliere gebruikers (customers): de `projects_public` view te gebruiken
+- Voor admins: de `projects` tabel te blijven gebruiken (voor token beheer)
 
-## 7. Analyse Tabs Navigatie
+Bestanden die worden aangepast:
+- `src/hooks/useProjects.ts` - Conditionally query view vs table based on role
+- `src/types/database.ts` - Nieuw type `DBProjectPublic` zonder token
+- `src/hooks/useCustomerProjects.ts` - Gebruik de publieke view
 
-**Probleem**: TabsList met 4 tabs neemt veel breedte in, vooral met iconen + tekst.
+### Stap 3: Centraliseer Mapbox Token
 
-**Oplossing**:
-- Op desktop: huidige layout behouden
-- Op tablet: iconen + korte labels
-- Op mobiel: dropdown of swipeable tabs
+Hoewel de Mapbox token een **publishable** (publieke) key is, is centralisatie beter:
 
----
+1. **Frontend**: Verplaats token naar een constante in een config bestand
+2. **Edge function**: Verplaats token naar Supabase secrets (optioneel, maar beter)
 
-## 8. Empty States Verrijken
-
-**Probleem**: "Geen data beschikbaar" is kaal en geeft geen actie-opties.
-
-**Oplossing**:
-- Illustratie toevoegen (simpele SVG)
-- Context-specifieke melding ("Geen resultaten voor Week X" vs "Project nog niet gesynchroniseerd")
-- CTA button indien relevant (bijv. "Sync nu starten" voor admin)
-
----
-
-## Implementatie Prioriteit
-
-| # | Onderdeel | Impact | Effort |
-|---|-----------|--------|--------|
-| 1 | KPI Cards responsive grid | Hoog | Laag |
-| 2 | Native select → Radix Select | Medium | Laag |
-| 3 | View switcher mobile-only icons | Medium | Laag |
-| 4 | Sidebar active states | Medium | Laag |
-| 5 | Header cleanup | Medium | Medium |
-| 6 | Collapsible sidebar | Hoog | Hoog |
-| 7 | Analyse tabs mobile | Medium | Medium |
-| 8 | Empty states | Laag | Laag |
-
----
-
-## Aanbevolen Eerste Stappen
-
-Ik stel voor te beginnen met de **quick wins** (impact/effort ratio):
-
-1. **KPI Cards responsive**: `grid-cols-2` op mobiel
-2. **Week selector naar Radix Select**: consistente styling
-3. **Admin links active state**: visuele feedback
+**Nieuwe config file**: `src/config/mapbox.ts`
+```typescript
+// Mapbox publieke token - veilig voor frontend gebruik
+export const MAPBOX_PUBLIC_TOKEN = 'pk.eyJ1Ijoic2l0ZWpvYi1ubCIsImEiOiJjbWQzZ29pYngwNDN5MmpxbmNldTN1c3ZmIn0.unL-G3gacXta2WVCKK6Rcg';
+```
 
 ---
 
 ## Technische Details
 
-### KPI Cards Grid (Dashboard.tsx regel 612)
-```
-Van:  grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4
-Naar: grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4
-+ responsive padding: p-4 sm:p-6
+### Database Migratie
+
+```sql
+-- ========================================
+-- 1. Fix sync_logs RLS
+-- ========================================
+DROP POLICY IF EXISTS "Sync logs leesbaar voor dashboard" ON sync_logs;
+
+CREATE POLICY "Only admins can view sync_logs"
+  ON sync_logs FOR SELECT
+  USING (
+    has_role(auth.uid(), 'admin'::app_role) 
+    OR has_role(auth.uid(), 'superadmin'::app_role)
+  );
+
+-- ========================================
+-- 2. Maak publieke projects view
+-- ========================================
+CREATE VIEW public.projects_public
+WITH (security_invoker=on) AS
+  SELECT 
+    id,
+    name,
+    project_key,
+    basicall_project_id,
+    is_active,
+    hourly_rate,
+    vat_rate,
+    project_type,
+    mapping_config,
+    created_at,
+    updated_at
+  FROM public.projects;
+
+-- View RLS werkt via security_invoker - erft table policies
 ```
 
-### Week Selector (DateFilterSelector.tsx regel 111-126)
-Vervang native `<select>` door:
-```tsx
-<Select value={selectedWeek} onValueChange={onWeekChange}>
-  <SelectTrigger className="...">
-    <SelectValue />
-  </SelectTrigger>
-  <SelectContent>
-    <SelectItem value="all">Alle Weken</SelectItem>
-    {availableWeeks.map(...)}
-  </SelectContent>
-</Select>
+### Frontend Type Updates
+
+**Nieuw type** in `src/types/database.ts`:
+```typescript
+// Publieke project data (zonder gevoelige velden)
+export interface DBProjectPublic {
+  id: string;
+  name: string;
+  project_key: string;
+  basicall_project_id: number;
+  is_active: boolean;
+  hourly_rate: number;
+  vat_rate: number;
+  project_type: ProjectType;
+  mapping_config: MappingConfig;
+  created_at: string;
+  updated_at: string;
+  // GEEN basicall_token
+}
 ```
 
-### Sidebar Active States (Sidebar.tsx)
-Voeg active state checking toe met `useLocation()` en conditional styling:
-```tsx
-const location = useLocation();
-const isActive = (path: string) => location.pathname === path;
+### Hook Wijzigingen
 
-// In Link component:
-className={cn(
-  "flex items-center gap-2 ...",
-  isActive('/admin') && 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-)}
+**useProjects.ts** - Nieuwe versie met role-based query:
+```typescript
+export const useProjects = (onlyActive = true, userId?: string, isAdmin = false) => {
+  const query = useQuery({
+    queryKey: ['projects', onlyActive, userId, isAdmin],
+    queryFn: async () => {
+      // Admins krijgen volledige data, anderen de publieke view
+      const tableName = isAdmin ? 'projects' : 'projects_public';
+      
+      let queryBuilder = supabase
+        .from(tableName)
+        .select('*')
+        .order('name');
+
+      if (onlyActive) {
+        queryBuilder = queryBuilder.eq('is_active', true);
+      }
+
+      const { data, error } = await queryBuilder;
+      // ... rest van de logica
+    },
+  });
+};
 ```
 
 ---
 
-## Bestanden die worden aangepast
+## Bestanden die Worden Aangepast
 
-| Bestand | Wijzigingen |
-|---------|-------------|
-| `src/pages/Dashboard.tsx` | KPI grid responsive classes |
-| `src/components/Dashboard/DateFilterSelector.tsx` | Native select → Radix Select |
-| `src/components/Dashboard/Sidebar.tsx` | Active state voor admin links |
-| `src/components/Dashboard/KPICard.tsx` | Responsive padding/icon sizing |
-| `src/components/Dashboard/Header.tsx` | View switcher mobile optimalisatie |
+| Bestand | Wijziging |
+|---------|-----------|
+| `supabase/migrations/[new].sql` | Nieuwe migratie met RLS fixes en view |
+| `src/types/database.ts` | Nieuw `DBProjectPublic` type |
+| `src/hooks/useProjects.ts` | Role-based table/view selectie |
+| `src/hooks/useCustomerProjects.ts` | Gebruik `projects_public` view |
+| `src/config/mapbox.ts` | **Nieuw**: Gecentraliseerde Mapbox config |
+| `src/components/Dashboard/GeographicAnalysis.tsx` | Import token van config |
+| `supabase/functions/geocode-city/index.ts` | Import token van environment of config |
+| `src/integrations/supabase/types.ts` | Auto-gegenereerd na migratie |
+
+---
+
+## Impact Analyse
+
+### Wat blijft werken:
+- Admins kunnen nog steeds projecten aanmaken/bewerken met tokens
+- Sync functionaliteit blijft werken (edge functions hebben service role)
+- Customers zien hun toegewezen projecten (zonder token)
+- Kaart functionaliteit blijft werken
+
+### Beveiligingsverbeteringen:
+- Reguliere gebruikers kunnen geen API tokens meer zien
+- sync_logs alleen zichtbaar voor admins
+- Gecentraliseerde token beheer voor betere maintainability
+
+### Breaking Changes:
+- Geen - de publieke view heeft dezelfde velden als wat customers nu gebruiken (minus de token die ze nooit nodig hadden)
 
