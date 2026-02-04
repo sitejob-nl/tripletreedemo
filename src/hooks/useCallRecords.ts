@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { getISOWeekYear } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { DBProject, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
@@ -224,14 +225,16 @@ export const useAvailableWeeks = (projectId?: string) => {
         throw new Error(`Fout bij ophalen weeks: ${error.message}`);
       }
 
-      // Extract unique week-year combinations
+      // Extract unique week-year combinations using ISO week-year
+      // (fixes edge case where ISO week 1 falls in December of previous calendar year)
       const weekYearMap = new Map<string, WeekYear>();
       
       (data || []).forEach((d) => {
         if (!d.beldatum_date || d.week_number === null) return;
         
         const date = new Date(d.beldatum_date);
-        const year = date.getFullYear();
+        // Use ISO week-year instead of calendar year for consistency
+        const year = getISOWeekYear(date);
         const week = d.week_number as number;
         const key = `${year}-${String(week).padStart(2, '0')}`;
         
@@ -246,10 +249,15 @@ export const useAvailableWeeks = (projectId?: string) => {
       });
 
       // Sort by year desc, then week desc (most recent first)
-      return Array.from(weekYearMap.values()).sort((a, b) => {
+      const result = Array.from(weekYearMap.values()).sort((a, b) => {
         if (a.year !== b.year) return b.year - a.year;
         return b.week - a.week;
       });
+
+      // Debug logging for troubleshooting
+      console.log(`[useAvailableWeeks] projectId=${projectId}, weeks=${result.length}, range=${result.length > 0 ? `${result[result.length - 1].value} → ${result[0].value}` : 'none'}`);
+
+      return result;
     },
     enabled: !!projectId,
   });
