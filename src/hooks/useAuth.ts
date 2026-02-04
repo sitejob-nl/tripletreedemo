@@ -90,18 +90,6 @@ export function useAuth() {
     return { error };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-      },
-    });
-    return { error };
-  }, []);
 
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
@@ -129,7 +117,6 @@ export function useAuth() {
     session,
     loading,
     signIn,
-    signUp,
     signOut,
     resetPassword,
     updatePassword,
