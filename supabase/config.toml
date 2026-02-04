@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.create-customer]
 verify_jwt = true
+
+[functions.seed-demo-data]
+verify_jwt = true
