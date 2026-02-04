@@ -27,13 +27,13 @@ export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', 
   const styles = variantStyles[variant];
 
   return (
-    <div className={`${styles.bg} p-6 rounded-2xl shadow-sm border border-border/50 flex items-start justify-between hover:shadow-md transition-shadow`}>
-      <div className="flex-1">
-        <p className="text-sm font-medium text-muted-foreground mb-2">{title}</p>
+    <div className={`${styles.bg} p-4 sm:p-6 rounded-2xl shadow-sm border border-border/50 flex items-start justify-between hover:shadow-md transition-shadow`}>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2 truncate">{title}</p>
         {isLoading ? (
-          <Skeleton className="h-9 w-24 mb-2" />
+          <Skeleton className="h-7 sm:h-9 w-20 sm:w-24 mb-1 sm:mb-2" />
         ) : (
-          <h3 className={`text-3xl font-bold ${styles.text} mb-2`}>{value}</h3>
+          <h3 className={`text-2xl sm:text-3xl font-bold ${styles.text} mb-1 sm:mb-2`}>{value}</h3>
         )}
         <div className="flex items-center gap-2">
           {trend && !isLoading && (
@@ -41,11 +41,11 @@ export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', 
               {trend.isPositive ? '▲' : '▼'} {Math.abs(trend.value)}%
             </span>
           )}
-          {subtext && <p className="text-xs text-muted-foreground">{subtext}</p>}
+          {subtext && <p className="text-xs text-muted-foreground truncate">{subtext}</p>}
         </div>
       </div>
-      <div className={`p-4 rounded-xl ${styles.iconBg} ${styles.iconText}`}>
-        <Icon size={28} strokeWidth={2} />
+      <div className={`p-2.5 sm:p-4 rounded-xl ${styles.iconBg} ${styles.iconText}`}>
+        <Icon className="w-5 h-5 sm:w-7 sm:h-7" strokeWidth={2} />
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { LogOut, ChevronRight, Settings, Users, Code, Building2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Project, Role } from '@/types/dashboard';
+import { cn } from '@/lib/utils';
 import logo from '@/assets/triple-tree-logo.png';
 
 interface SidebarProps {
@@ -25,6 +26,9 @@ export const Sidebar = ({
   isSuperAdmin = false,
   isAdmin = false
 }: SidebarProps) => {
+  const location = useLocation();
+  const isActive = (path: string) => location.pathname === path;
+
   // Memoize admin menu items to prevent flickering during role state updates
   const adminMenuItems = useMemo(() => {
     // Use explicit isAdmin prop for reliable admin status (handles superadmin too)
@@ -34,25 +38,40 @@ export const Sidebar = ({
       <>
         <Link 
           to="/admin" 
-          className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+          className={cn(
+            "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
+            isActive('/admin') 
+              ? "bg-primary text-primary-foreground font-medium" 
+              : "text-gray-400 hover:text-white hover:bg-gray-800"
+          )}
         >
           <Settings size={16} /> Projectbeheer
         </Link>
         <Link 
           to="/admin/users" 
-          className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+          className={cn(
+            "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
+            isActive('/admin/users') 
+              ? "bg-primary text-primary-foreground font-medium" 
+              : "text-gray-400 hover:text-white hover:bg-gray-800"
+          )}
         >
           <Users size={16} /> Gebruikers
         </Link>
         <Link 
           to="/admin/customers" 
-          className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+          className={cn(
+            "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
+            isActive('/admin/customers') 
+              ? "bg-primary text-primary-foreground font-medium" 
+              : "text-gray-400 hover:text-white hover:bg-gray-800"
+          )}
         >
           <Building2 size={16} /> Klantenbeheer
         </Link>
       </>
     );
-  }, [isAdmin]);
+  }, [isAdmin, location.pathname]);
 
   // Memoize developer menu item to prevent flickering
   const devMenuItem = useMemo(() => {
@@ -61,12 +80,17 @@ export const Sidebar = ({
     return (
       <Link 
         to="/developer" 
-        className="flex items-center gap-2 text-kpi-purple-text hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+        className={cn(
+          "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
+          isActive('/developer') 
+            ? "bg-kpi-purple text-kpi-purple-text font-medium" 
+            : "text-kpi-purple-text hover:text-white hover:bg-gray-800"
+        )}
       >
         <Code size={16} /> Developer
       </Link>
     );
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, location.pathname]);
   return <aside className="w-full md:w-64 bg-black border-r border-border flex-shrink-0 flex flex-col h-screen sticky top-0">
       <div className="p-6 border-b border-border py-[25px] px-0 flex items-center justify-center flex-shrink-0">
         <img src={logo} alt="Triple Tree Logo" className="h-12 w-auto object-contain" />

@@ -109,20 +109,19 @@ export const DateFilterSelector = ({
 
       {/* Week Selector (when filterType is 'week') */}
       {filterType === 'week' && (
-        <div className="flex items-center bg-muted/50 rounded-xl px-4 py-2 border border-border">
-          <select
-            className="bg-transparent text-sm font-medium text-foreground outline-none cursor-pointer"
-            value={selectedWeek}
-            onChange={(e) => onWeekChange(e.target.value)}
-          >
-            <option value="all">Alle Weken</option>
+        <Select value={String(selectedWeek)} onValueChange={onWeekChange}>
+          <SelectTrigger className="bg-muted/50 rounded-xl px-4 py-2 border border-border h-auto w-auto min-w-[140px]">
+            <SelectValue placeholder="Selecteer week" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Alle Weken</SelectItem>
             {availableWeeks.map((w) => (
-              <option key={w.value} value={w.value}>
+              <SelectItem key={w.value} value={w.value}>
                 {w.label}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-        </div>
+          </SelectContent>
+        </Select>
       )}
 
       {/* Date Range Picker (when filterType is 'range') */}
