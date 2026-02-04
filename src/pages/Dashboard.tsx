@@ -20,6 +20,7 @@ import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/das
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
+import { useAllCallRecordsForAnalysis } from '@/hooks/useAllCallRecordsForAnalysis';
 import { useTotalRecordCount } from '@/hooks/useTotalRecordCount';
 import { useKPIAggregates } from '@/hooks/useKPIAggregates';
 import { useLoggedTime } from '@/hooks/useLoggedTime';
@@ -169,6 +170,16 @@ const Index = () => {
     selectedWeek === 'all' ? 'all' : String(selectedWeek)
   );
 
+  // Fetch ALL records for analysis views (Geographic, Attempts, Results, Time)
+  // This fetches the complete dataset, not limited by pagination
+  const { 
+    data: allRecordsForAnalysis = [], 
+    isLoading: analysisLoading 
+  } = useAllCallRecordsForAnalysis(
+    currentProject,
+    selectedWeek === 'all' ? 'all' : String(selectedWeek)
+  );
+
   // Convert DB records to ProcessedCallRecord format for DashboardView (paginated)
   const processedData: ProcessedCallRecord[] = useMemo(() => {
     return callRecords.map((record) => ({
@@ -207,6 +218,25 @@ const Index = () => {
       call_duration_min: Math.round((Number(record.gesprekstijd_sec) || 0) / 60),
     }));
   }, [reportMatrixData]);
+
+  // Convert ALL analysis records to ProcessedCallRecord format (full dataset for analysis views)
+  const analysisProcessedData: ProcessedCallRecord[] = useMemo(() => {
+    return allRecordsForAnalysis.map((record) => ({
+      ...(record.raw_data || {}),
+      raw_data: record.raw_data,
+      id: parseInt(record.basicall_record_id.toString()),
+      bc_result_naam: record.resultaat || '',
+      bc_gesprekstijd: Number(record.gesprekstijd_sec) || 0,
+      bc_beldatum: record.beldatum || '',
+      normalized_date: record.beldatum || '',
+      day_name: record.day_name,
+      week_number: record.week_number || 0,
+      annual_value: record.annual_value,
+      is_recurring: record.is_recurring,
+      is_sale: record.is_sale,
+      call_duration_min: Math.round((Number(record.gesprekstijd_sec) || 0) / 60),
+    }));
+  }, [allRecordsForAnalysis]);
 
   // Create mapping from project config for existing components
   const currentMapping: ProjectMapping = useMemo(() => {
@@ -713,7 +743,20 @@ const Index = () => {
                     />
                   ) : (
                     <div className="space-y-6">
-                      <h3 className="font-bold text-foreground text-lg">Geavanceerde Analyse</h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-bold text-foreground text-lg">Geavanceerde Analyse</h3>
+                        {analysisLoading && (
+                          <span className="text-sm text-muted-foreground flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Volledige dataset laden...
+                          </span>
+                        )}
+                        {!analysisLoading && analysisProcessedData.length > 0 && (
+                          <span className="text-sm text-muted-foreground">
+                            {analysisProcessedData.length.toLocaleString()} records
+                          </span>
+                        )}
+                      </div>
                       <Tabs defaultValue="comparison" className="w-full">
                         <TabsList className="grid w-full grid-cols-5 mb-6">
                           <TabsTrigger value="comparison" className="flex items-center gap-2">
@@ -734,7 +777,7 @@ const Index = () => {
                         </TabsList>
                         <TabsContent value="comparison">
                           <WeekComparison 
-                            data={processedData} 
+                            data={analysisProcessedData} 
                             hourlyRate={hourlyRate}
                             availableWeeks={availableWeeks}
                             amountCol={currentProject?.mapping_config?.amount_col}
@@ -742,18 +785,18 @@ const Index = () => {
                         </TabsContent>
                         <TabsContent value="geographic">
                           <GeographicAnalysis 
-                            data={processedData} 
+                            data={analysisProcessedData} 
                             locationCol={currentProject?.mapping_config?.location_col}
                           />
                         </TabsContent>
                         <TabsContent value="attempts">
-                          <CallAttemptsAnalysis data={processedData} />
+                          <CallAttemptsAnalysis data={analysisProcessedData} />
                         </TabsContent>
                         <TabsContent value="results">
-                          <ResultsBreakdown data={processedData} />
+                          <ResultsBreakdown data={analysisProcessedData} />
                         </TabsContent>
                         <TabsContent value="time">
-                          <TimeAnalysis data={processedData} />
+                          <TimeAnalysis data={analysisProcessedData} />
                         </TabsContent>
                       </Tabs>
                     </div>
