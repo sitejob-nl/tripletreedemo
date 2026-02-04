@@ -11,6 +11,7 @@ interface SidebarProps {
   role: Role;
   onLogout: () => void;
   isSuperAdmin?: boolean;
+  isAdmin?: boolean;
 }
 
 const projectColors = ['bg-kpi-orange-text', 'bg-kpi-blue-text', 'bg-kpi-green-text', 'bg-kpi-purple-text', 'bg-kpi-cyan-text'];
@@ -21,11 +22,13 @@ export const Sidebar = ({
   projects,
   role,
   onLogout,
-  isSuperAdmin = false
+  isSuperAdmin = false,
+  isAdmin = false
 }: SidebarProps) => {
   // Memoize admin menu items to prevent flickering during role state updates
   const adminMenuItems = useMemo(() => {
-    if (role !== 'admin') return null;
+    // Use explicit isAdmin prop for reliable admin status (handles superadmin too)
+    if (!isAdmin) return null;
     
     return (
       <>
@@ -49,7 +52,7 @@ export const Sidebar = ({
         </Link>
       </>
     );
-  }, [role]);
+  }, [isAdmin]);
 
   // Memoize developer menu item to prevent flickering
   const devMenuItem = useMemo(() => {
