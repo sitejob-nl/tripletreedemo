@@ -397,6 +397,8 @@ const Index = () => {
 
   const handleLogout = async () => {
     await signOut();
+    // Force redirect to auth page after logout
+    window.location.href = '/auth';
   };
 
   return (
