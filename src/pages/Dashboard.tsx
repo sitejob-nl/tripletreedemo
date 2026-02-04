@@ -34,7 +34,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DateFilterType, DateRange } from '@/components/Dashboard/DateFilterSelector';
 
 const Index = () => {
-  const [selectedProjectKey, setSelectedProjectKey] = useState<string>('');
+  const [selectedProjectKey, setSelectedProjectKeyState] = useState<string>('');
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   const [selectedWeek, setSelectedWeek] = useState<string | number>('all');
   const [viewAsClient, setViewAsClient] = useState(false);
@@ -86,10 +86,24 @@ const Index = () => {
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
 
+  // Wrapper function for project change with cache invalidation
+  const setSelectedProjectKey = useCallback((newProjectKey: string) => {
+    if (newProjectKey !== selectedProjectKey) {
+      // Force invalidate all project-related queries when switching projects
+      queryClient.invalidateQueries({ queryKey: ['call_records'] });
+      queryClient.invalidateQueries({ queryKey: ['available_weeks'] });
+      queryClient.invalidateQueries({ queryKey: ['kpi_aggregates'] });
+      queryClient.invalidateQueries({ queryKey: ['logged_time'] });
+      queryClient.invalidateQueries({ queryKey: ['report_matrix_data'] });
+      queryClient.invalidateQueries({ queryKey: ['total_record_count'] });
+    }
+    setSelectedProjectKeyState(newProjectKey);
+  }, [selectedProjectKey, queryClient]);
+
   // Auto-select first project when projects are loaded and none selected
   useEffect(() => {
     if (projects.length > 0 && !selectedProjectKey) {
-      setSelectedProjectKey(projects[0].project_key);
+      setSelectedProjectKeyState(projects[0].project_key);
     }
   }, [projects, selectedProjectKey]);
 
