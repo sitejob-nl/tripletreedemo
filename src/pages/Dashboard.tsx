@@ -584,7 +584,7 @@ const Index = () => {
                         <KPICard
                           title="Behouden"
                           value={totalSales}
-                          subtext={selectedWeek === 'all' ? 'Totaal 2025' : `Week ${selectedWeek}`}
+                          subtext={selectedWeek === 'all' ? 'Alle weken' : `Week ${selectedWeek}`}
                           icon={Shield}
                           variant="green"
                           isLoading={kpiLoading}
@@ -619,7 +619,7 @@ const Index = () => {
                         <KPICard
                           title="Aantal Positief"
                           value={totalSales}
-                          subtext={selectedWeek === 'all' ? 'Totaal 2025' : `Sales in Week ${selectedWeek}`}
+                          subtext={selectedWeek === 'all' ? 'Alle weken' : `Sales in Week ${selectedWeek}`}
                           icon={CheckCircle}
                           variant="green"
                           isLoading={kpiLoading}
@@ -658,8 +658,8 @@ const Index = () => {
                       <div className="flex justify-between items-end mb-4">
                         <h3 className="font-bold text-foreground text-lg">
                           {isInboundProject 
-                            ? (selectedWeek === 'all' ? 'Retentie Overzicht 2025' : `Retentie Week ${selectedWeek}`)
-                            : (selectedWeek === 'all' ? 'Totaaloverzicht 2025' : `Weekoverzicht - Week ${selectedWeek}`)}
+                            ? (selectedWeek === 'all' ? 'Retentie Overzicht' : `Retentie Week ${selectedWeek}`)
+                            : (selectedWeek === 'all' ? 'Totaaloverzicht' : `Weekoverzicht - Week ${selectedWeek}`)}
                         </h3>
                         <button 
                           onClick={handleExportToExcel}

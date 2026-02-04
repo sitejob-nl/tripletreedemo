@@ -338,6 +338,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_available_weeks: {
+        Args: { p_project_id: string }
+        Returns: {
+          iso_year: number
+          value: string
+          week_number: number
+        }[]
+      }
       get_project_kpi_totals:
         | {
             Args: { p_project_id: string; p_week_number?: number }
