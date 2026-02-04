@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { getISOWeekYear } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { DBProject, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
@@ -203,58 +202,32 @@ export interface WeekYear {
 }
 
 // Hook to get available weeks for a project (with year context)
+// Uses server-side RPC for efficiency (no row limit issues)
 export const useAvailableWeeks = (projectId?: string) => {
   return useQuery({
     queryKey: ['available_weeks', projectId],
     queryFn: async (): Promise<WeekYear[]> => {
       if (!projectId) return [];
 
+      // Use RPC function for server-side DISTINCT (no row limit issues)
       const { data, error } = await supabase
-        .from('call_records')
-        .select('week_number, beldatum_date')
-        .eq('project_id', projectId)
-        .not('week_number', 'is', null)
-        .not('beldatum_date', 'is', null)
-        // CRITICAL: Supabase/PostgREST has a default 1000 row limit.
-        // If a project has >1000 records, we must order by most recent and
-        // explicitly request a larger range so the latest weeks are included.
-        .order('beldatum_date', { ascending: false, nullsFirst: false })
-        .range(0, 4999);
+        .rpc('get_available_weeks', { p_project_id: projectId });
 
       if (error) {
+        console.error('[useAvailableWeeks] RPC error:', error.message);
         throw new Error(`Fout bij ophalen weeks: ${error.message}`);
       }
 
-      // Extract unique week-year combinations using ISO week-year
-      // (fixes edge case where ISO week 1 falls in December of previous calendar year)
-      const weekYearMap = new Map<string, WeekYear>();
-      
-      (data || []).forEach((d) => {
-        if (!d.beldatum_date || d.week_number === null) return;
-        
-        const date = new Date(d.beldatum_date);
-        // Use ISO week-year instead of calendar year for consistency
-        const year = getISOWeekYear(date);
-        const week = d.week_number as number;
-        const key = `${year}-${String(week).padStart(2, '0')}`;
-        
-        if (!weekYearMap.has(key)) {
-          weekYearMap.set(key, {
-            week,
-            year,
-            label: `Week ${week} (${year})`,
-            value: key,
-          });
-        }
-      });
+      // Map RPC result to WeekYear format
+      // RPC returns: { week_number: int, iso_year: int, value: string }
+      const result: WeekYear[] = (data || []).map((row: { week_number: number; iso_year: number; value: string }) => ({
+        week: row.week_number,
+        year: row.iso_year,
+        label: `Week ${row.week_number} (${row.iso_year})`,
+        value: row.value,
+      }));
 
-      // Sort by year desc, then week desc (most recent first)
-      const result = Array.from(weekYearMap.values()).sort((a, b) => {
-        if (a.year !== b.year) return b.year - a.year;
-        return b.week - a.week;
-      });
-
-      // Debug logging for troubleshooting
+      // Debug logging
       console.log(`[useAvailableWeeks] projectId=${projectId}, weeks=${result.length}, range=${result.length > 0 ? `${result[result.length - 1].value} → ${result[0].value}` : 'none'}`);
 
       return result;
