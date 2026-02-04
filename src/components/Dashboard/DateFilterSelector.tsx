@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
-export type DateFilterType = 'week' | 'range' | 'month' | 'quarter' | 'year';
+export type DateFilterType = 'week' | 'range';
 
 export interface DateRange {
   start: Date | null;

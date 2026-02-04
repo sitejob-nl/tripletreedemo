@@ -1,18 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { ResolvedDateFilter } from './useDateFilter';
 
-// Parse weekYearValue (e.g., "2026-01") into week and year
-const parseWeekYearValue = (value: string): { week: number; year: number } | null => {
-  const match = value.match(/^(\d{4})-(\d{1,2})$/);
-  if (match) {
-    return { year: parseInt(match[1]), week: parseInt(match[2]) };
-  }
-  return null;
-};
-
-export const useTotalRecordCount = (projectId?: string, weekYearValue?: string | 'all') => {
+export const useTotalRecordCount = (projectId?: string, dateFilter?: ResolvedDateFilter) => {
   return useQuery({
-    queryKey: ['call_records_count', projectId, weekYearValue],
+    queryKey: ['total_record_count', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber],
     queryFn: async (): Promise<number> => {
       if (!projectId) return 0;
 
@@ -21,13 +13,17 @@ export const useTotalRecordCount = (projectId?: string, weekYearValue?: string |
         .select('id', { count: 'exact', head: true })
         .eq('project_id', projectId);
 
-      if (weekYearValue !== 'all' && weekYearValue !== undefined) {
-        const parsed = parseWeekYearValue(weekYearValue);
-        if (parsed) {
+      // Apply date filter
+      if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
+        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null && dateFilter.year !== null) {
           query = query
-            .eq('week_number', parsed.week)
-            .gte('beldatum_date', `${parsed.year}-01-01`)
-            .lte('beldatum_date', `${parsed.year}-12-31`);
+            .eq('week_number', dateFilter.weekNumber)
+            .gte('beldatum_date', `${dateFilter.year}-01-01`)
+            .lte('beldatum_date', `${dateFilter.year}-12-31`);
+        } else {
+          query = query
+            .gte('beldatum_date', dateFilter.startDate)
+            .lte('beldatum_date', dateFilter.endDate);
         }
       }
 

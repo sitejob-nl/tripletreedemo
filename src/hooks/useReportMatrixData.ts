@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DBProject, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
+import { ResolvedDateFilter } from './useDateFilter';
 
 const calculateValuesFromRaw = (
   rawData: Record<string, any> | null,
@@ -12,19 +13,16 @@ const calculateValuesFromRaw = (
     return { annualValue: 0, isSale: false, isRecurring: false };
   }
 
-  // Check if it's a sale
   const isSale = mappingConfig.sale_results?.includes(resultaat || '') || false;
 
   if (!isSale) {
     return { annualValue: 0, isSale: false, isRecurring: false };
   }
 
-  // Try multiple field names for amount
   const amountRaw = rawData[mappingConfig.amount_col] 
     || rawData['termijnbedrag'] 
     || rawData['Bedrag'];
 
-  // Try multiple field names for frequency
   const freqRaw = rawData[mappingConfig.freq_col] 
     || rawData['frequentie'] 
     || rawData['Frequentie'];
@@ -35,7 +33,6 @@ const calculateValuesFromRaw = (
 
   const amount = parseDutchFloat(amountRaw);
 
-  // Determine multiplier from frequency or resultaat
   let multiplier = 1;
   let isOneOff = false;
 
@@ -47,7 +44,6 @@ const calculateValuesFromRaw = (
     } else {
       const freqKey = String(freqRaw).toLowerCase().trim();
       
-      // Substring matching voor freq_map keys
       let foundMultiplier = 1;
       for (const [mapKey, mapValue] of Object.entries(mappingConfig.freq_map)) {
         if (freqKey.includes(mapKey.toLowerCase())) {
@@ -59,7 +55,6 @@ const calculateValuesFromRaw = (
       isOneOff = freqKey.includes('eenmalig') || freqKey === '1';
     }
   } else if (resultaat) {
-    // Fallback: derive frequency from resultaat name
     const resultLower = resultaat.toLowerCase();
     if (resultLower.includes('maand')) {
       multiplier = 12;
@@ -79,7 +74,6 @@ const calculateValuesFromRaw = (
 };
 
 const getDayName = (beldatumDate: string | null, beldatum: string | null): string => {
-  // Prioritize beldatum_date (ISO format YYYY-MM-DD) 
   if (beldatumDate) {
     const date = new Date(beldatumDate);
     if (!isNaN(date.getTime())) {
@@ -87,7 +81,6 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
     }
   }
   
-  // Fallback: parse beldatum (DD-MM-YYYY format) manually
   if (beldatum) {
     const match = beldatum.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
     if (match) {
@@ -97,7 +90,6 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
         return date.toLocaleDateString('nl-NL', { weekday: 'long' });
       }
     }
-    // Last resort: try direct parsing (for ISO format in beldatum)
     const date = new Date(beldatum);
     if (!isNaN(date.getTime())) {
       return date.toLocaleDateString('nl-NL', { weekday: 'long' });
@@ -107,53 +99,48 @@ const getDayName = (beldatumDate: string | null, beldatum: string | null): strin
   return '';
 };
 
-// Parse weekYearValue (e.g., "2026-01") into week and year
-const parseWeekYearValue = (value: string): { week: number; year: number } | null => {
-  const match = value.match(/^(\d{4})-(\d{1,2})$/);
-  if (match) {
-    return { year: parseInt(match[1]), week: parseInt(match[2]) };
-  }
-  return null;
-};
-
 /**
- * Hook to fetch ALL call records for a specific week (without pagination)
+ * Hook to fetch ALL call records for a specific date range (without pagination)
  * This is specifically for the ReportMatrix component that needs complete data for aggregation.
- * 
- * For "all" weeks, this returns an empty array as fetching 60k+ records would be too slow.
- * Users should select a specific week for the detailed report view.
  */
 export const useReportMatrixData = (
   project: DBProject | undefined,
-  weekYearValue: string | 'all'
+  dateFilter?: ResolvedDateFilter
 ) => {
-  const parsed = weekYearValue !== 'all' ? parseWeekYearValue(weekYearValue) : null;
-
   return useQuery({
-    queryKey: ['report_matrix_data', project?.id, weekYearValue],
+    queryKey: ['report_matrix_data', project?.id, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber],
     queryFn: async (): Promise<ProcessedDBCallRecord[]> => {
       if (!project) return [];
       
-      // Don't fetch all records when 'all' is selected - too many records
-      if (weekYearValue === 'all' || !parsed) {
+      // Don't fetch when no filter is active
+      if (!dateFilter?.isFiltering || !dateFilter.startDate || !dateFilter.endDate) {
         return [];
       }
 
-      // Fetch ALL records for the specific week+year (no pagination)
-      const { data, error } = await supabase
+      let query = supabase
         .from('call_records')
         .select('*')
         .eq('project_id', project.id)
-        .eq('week_number', parsed.week)
-        .gte('beldatum_date', `${parsed.year}-01-01`)
-        .lte('beldatum_date', `${parsed.year}-12-31`)
         .order('beldatum_date', { ascending: false, nullsFirst: false });
+
+      // Apply date filter
+      if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null && dateFilter.year !== null) {
+        query = query
+          .eq('week_number', dateFilter.weekNumber)
+          .gte('beldatum_date', `${dateFilter.year}-01-01`)
+          .lte('beldatum_date', `${dateFilter.year}-12-31`);
+      } else {
+        query = query
+          .gte('beldatum_date', dateFilter.startDate)
+          .lte('beldatum_date', dateFilter.endDate);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         throw new Error(`Fout bij ophalen report matrix data: ${error.message}`);
       }
 
-      // Process each record with mapping config
       return (data || []).map((record): ProcessedDBCallRecord => {
         const { annualValue, isSale, isRecurring } = calculateValuesFromRaw(
           record.raw_data as Record<string, any> | null,
@@ -171,7 +158,7 @@ export const useReportMatrixData = (
         };
       });
     },
-    enabled: !!project?.id && weekYearValue !== 'all',
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    enabled: !!project?.id && !!dateFilter?.isFiltering,
+    staleTime: 1000 * 60 * 5,
   });
 };
