@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, DollarSign, TrendingUp, Users, FileSpreadsheet, AlertCircle, Loader2, Eye, MapPin, Phone, PieChart, Clock, GitCompare, Shield } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
@@ -395,11 +396,35 @@ const Index = () => {
   const isLoading = projectsLoading || recordsLoading;
   const error = projectsError || recordsError;
 
-  const handleLogout = async () => {
-    await signOut();
-    // Force redirect to auth page after logout
-    window.location.href = '/auth';
-  };
+  // Robust logout handler with timeout and error handling
+  const isLoggingOutRef = useRef(false);
+  const queryClient = useQueryClient();
+  
+  const handleLogout = useCallback(async () => {
+    // Prevent double-click race conditions
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
+    
+    try {
+      // Timeout: if signOut takes longer than 3 seconds, force redirect
+      const timeoutPromise = new Promise<void>((_, reject) => 
+        setTimeout(() => reject(new Error('Logout timeout')), 3000)
+      );
+      
+      await Promise.race([
+        signOut(),
+        timeoutPromise
+      ]);
+    } catch (error) {
+      // Ignore all errors - we always want to logout
+      console.warn('Logout warning (ignored):', error);
+    } finally {
+      // Clear all local state and cache
+      queryClient.clear();
+      // Force full page reload to auth - clears all memory state
+      window.location.replace('/auth');
+    }
+  }, [signOut, queryClient]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row font-sans">

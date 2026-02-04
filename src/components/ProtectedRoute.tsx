@@ -15,10 +15,13 @@ export function ProtectedRoute({ children, requireAdmin = false, requireSuperAdm
   const { isAdmin, isLoading: adminLoading } = useIsAdmin(user?.id);
   const { isSuperAdmin, isLoading: superAdminLoading } = useIsSuperAdmin(user?.id);
 
-  const needsRoleCheck = requireAdmin || requireSuperAdmin;
-  const roleLoading = needsRoleCheck && (adminLoading || superAdminLoading);
+  // CRITICAL: Wait until ALL required state is fully loaded before rendering
+  // This prevents flickering when role checks haven't completed yet
+  const isFullyLoaded = !authLoading && 
+    (!requireAdmin || !adminLoading) && 
+    (!requireSuperAdmin || !superAdminLoading);
 
-  if (authLoading || roleLoading) {
+  if (!isFullyLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
