@@ -4,8 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
@@ -21,8 +20,7 @@ export default function Auth() {
   }>({});
   const {
     user,
-    signIn,
-    signUp
+    signIn
   } = useAuth();
   const navigate = useNavigate();
   const {
@@ -65,100 +63,44 @@ export default function Auth() {
       });
     }
   };
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-    setIsLoading(true);
-    const {
-      error
-    } = await signUp(email, password);
-    setIsLoading(false);
-    if (error) {
-      if (error.message.includes('already registered')) {
-        toast({
-          title: 'Account bestaat al',
-          description: 'Dit email adres is al geregistreerd. Probeer in te loggen.',
-          variant: 'destructive'
-        });
-      } else {
-        toast({
-          title: 'Registratie mislukt',
-          description: error.message,
-          variant: 'destructive'
-        });
-      }
-    } else {
-      toast({
-        title: 'Account aangemaakt',
-        description: 'Controleer je email om je account te bevestigen.'
-      });
-    }
-  };
-  return <div className="min-h-screen flex items-center justify-center bg-background p-4">
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center text-primary-foreground bg-popover-foreground">
           <img alt="Triple Tree Logo" className="h-16 mx-auto mb-4" src="/lovable-uploads/88aa155b-88a2-45d0-a554-eaafefd22704.png" />
-          
-          <CardDescription>Log in of maak een account aan</CardDescription>
+          <CardDescription>Log in om verder te gaan</CardDescription>
         </CardHeader>
         <CardContent className="pt-[20px]">
-          <Tabs defaultValue="login">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Inloggen</TabsTrigger>
-              <TabsTrigger value="register">Registreren</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="login">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
-                  <div className="relative">
-                    
-                    <Input id="login-email" type="email" placeholder="naam@voorbeeld.nl" value={email} onChange={e => setEmail(e.target.value)} className="pl-[10px]" />
-                  </div>
-                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Wachtwoord</Label>
-                  <div className="relative">
-                    
-                    <Input id="login-password" type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} className="pl-[10px]" />
-                  </div>
-                  {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-                </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Inloggen
-                </Button>
-              </form>
-            </TabsContent>
-            
-            <TabsContent value="register">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="register-email">Email</Label>
-                  <div className="relative">
-                    
-                    <Input id="register-email" type="email" placeholder="naam@voorbeeld.nl" value={email} onChange={e => setEmail(e.target.value)} className="pl-[10px]" />
-                  </div>
-                  {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="register-password">Wachtwoord</Label>
-                  <div className="relative">
-                    
-                    <Input id="register-password" type="password" placeholder="Minimaal 6 tekens" value={password} onChange={e => setPassword(e.target.value)} className="pl-[10px]" />
-                  </div>
-                  {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
-                </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Account aanmaken
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <form onSubmit={handleSignIn} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="login-email">Email</Label>
+              <Input 
+                id="login-email" 
+                type="email" 
+                placeholder="naam@voorbeeld.nl" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+              />
+              {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Wachtwoord</Label>
+              <Input 
+                id="login-password" 
+                type="password" 
+                placeholder="••••••••" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+              />
+              {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+            </div>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Inloggen
+            </Button>
+          </form>
         </CardContent>
       </Card>
-    </div>;
+    </div>
+  );
 }
