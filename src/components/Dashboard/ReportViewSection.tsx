@@ -1,12 +1,13 @@
 import { FileSpreadsheet, Loader2 } from 'lucide-react';
 import { ReportMatrix } from './ReportMatrix';
 import { InboundReportMatrix } from './InboundReportMatrix';
+import { ServiceReportMatrix } from './ServiceReportMatrix';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ProjectType } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 
 interface ReportViewSectionProps {
-  isInboundProject: boolean;
+  projectType: ProjectType;
   selectedWeek: string | number;
   data: ProcessedCallRecord[];
   hourlyRate: number;
@@ -19,7 +20,7 @@ interface ReportViewSectionProps {
 }
 
 export function ReportViewSection({
-  isInboundProject,
+  projectType,
   selectedWeek,
   data,
   hourlyRate,
@@ -30,13 +31,20 @@ export function ReportViewSection({
   isLoading,
   onExportToExcel,
 }: ReportViewSectionProps) {
+  const isInboundProject = projectType === 'inbound';
+  const isServiceProject = projectType === 'inbound_service';
+  
+  const getTitle = () => {
+    if (isServiceProject) return selectedWeek === 'all' ? 'Klantenservice Overzicht' : `Klantenservice Week ${selectedWeek}`;
+    if (isInboundProject) return selectedWeek === 'all' ? 'Retentie Overzicht' : `Retentie Week ${selectedWeek}`;
+    return selectedWeek === 'all' ? 'Totaaloverzicht' : `Weekoverzicht - Week ${selectedWeek}`;
+  };
+
   return (
     <div>
       <div className="flex justify-between items-end mb-4">
         <h3 className="font-bold text-foreground text-lg">
-          {isInboundProject 
-            ? (selectedWeek === 'all' ? 'Retentie Overzicht' : `Retentie Week ${selectedWeek}`)
-            : (selectedWeek === 'all' ? 'Totaaloverzicht' : `Weekoverzicht - Week ${selectedWeek}`)}
+          {getTitle()}
         </h3>
         <button 
           onClick={onExportToExcel}
@@ -46,7 +54,17 @@ export function ReportViewSection({
         </button>
       </div>
       
-      {isInboundProject && mappingConfig ? (
+      {isServiceProject && mappingConfig ? (
+        <ServiceReportMatrix
+          data={data}
+          hourlyRate={hourlyRate}
+          vatRate={vatRate}
+          selectedWeek={selectedWeek}
+          mappingConfig={mappingConfig}
+          loggedTimeHours={loggedTimeHours}
+          dailyLoggedHours={dailyLoggedHours}
+        />
+      ) : isInboundProject && mappingConfig ? (
         <InboundReportMatrix
           data={data}
           hourlyRate={hourlyRate}
