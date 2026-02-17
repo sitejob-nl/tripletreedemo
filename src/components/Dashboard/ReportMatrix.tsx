@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { ProcessedCallRecord, DayStats } from '@/types/dashboard';
+import { MappingConfig } from '@/types/database';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { 
   createEmptyStats, 
-  detectFrequency, 
+  detectFrequencyFromConfig, 
   categorizeNegativeResult, 
   isUnreachable,
   getFrequencyLabel,
@@ -18,6 +19,7 @@ interface ReportMatrixProps {
   selectedWeek: string | number;
   amountCol?: string;
   freqCol?: string;
+  mappingConfig?: MappingConfig;
   /** If provided, use logged time (agent hours) instead of gesprekstijd for investment calculations */
   loggedTimeHours?: number;
   /** Daily breakdown of logged hours per weekday */
@@ -38,6 +40,7 @@ export const ReportMatrix = ({
   selectedWeek, 
   amountCol = 'termijnbedrag',
   freqCol = 'frequentie',
+  mappingConfig,
   loggedTimeHours,
   dailyLoggedHours
 }: ReportMatrixProps) => {
@@ -81,7 +84,7 @@ export const ReportMatrix = ({
         result.total.totalAmount += amount;
 
         // Frequency breakdown
-        const freqType = detectFrequency(frequency);
+        const freqType = detectFrequencyFromConfig(frequency, mappingConfig?.freq_map || {}, record.bc_result_naam || resultName).type;
         result[day].freqBreakdown[freqType].count++;
         result[day].freqBreakdown[freqType].annualValue += record.annual_value;
         result.total.freqBreakdown[freqType].count++;
@@ -106,13 +109,13 @@ export const ReportMatrix = ({
         result.total.negativeResults[resultName] = (result.total.negativeResults[resultName] || 0) + 1;
 
         // Check if unreachable
-        if (isUnreachable(resultName)) {
+        if (isUnreachable(resultName, mappingConfig)) {
           result[day].unreachableCount++;
           result.total.unreachableCount++;
         }
 
         // Categorize negative
-        const category = categorizeNegativeResult(resultName);
+        const category = categorizeNegativeResult(resultName, mappingConfig);
         if (category === 'argumentated') {
           result[day].negativeArgumented[resultName] = (result[day].negativeArgumented[resultName] || 0) + 1;
           result[day].negativeArgumentedCount++;

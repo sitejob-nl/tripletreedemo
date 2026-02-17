@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Eye, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff } from 'lucide-react';
 import { DBProjectBase, MappingConfig, ProjectType } from '@/types/database';
+import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED } from '@/lib/statsHelpers';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -56,6 +57,11 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [lostResults, setLostResults] = useState<string[]>(project.mapping_config.lost_results || []);
   const [partialSuccessResults, setPartialSuccessResults] = useState<string[]>(project.mapping_config.partial_success_results || []);
 
+  // Negative categorization state (outbound)
+  const [unreachableResults, setUnreachableResults] = useState<string[]>(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
+  const [negativeArgumentated, setNegativeArgumentated] = useState<string[]>(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
+  const [negativeNotArgumentated, setNegativeNotArgumentated] = useState<string[]>(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
+
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
 
   // Build current mapping config for preview
@@ -69,6 +75,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     retention_results: retentionResults,
     lost_results: lostResults,
     partial_success_results: partialSuccessResults,
+    unreachable_results: unreachableResults,
+    negative_argumentated: negativeArgumentated,
+    negative_not_argumentated: negativeNotArgumentated,
   };
 
   const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
@@ -89,6 +98,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setRetentionResults(project.mapping_config.retention_results || []);
     setLostResults(project.mapping_config.lost_results || []);
     setPartialSuccessResults(project.mapping_config.partial_success_results || []);
+    setUnreachableResults(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
+    setNegativeArgumentated(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
+    setNegativeNotArgumentated(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
   }, [project.id]);
 
   const handleSave = async () => {
@@ -102,6 +114,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       retention_results: retentionResults,
       lost_results: lostResults,
       partial_success_results: partialSuccessResults,
+      unreachable_results: unreachableResults,
+      negative_argumentated: negativeArgumentated,
+      negative_not_argumentated: negativeNotArgumentated,
     };
     await onSave(project.id, hourlyRate, mappingConfig, projectType);
   };
@@ -187,17 +202,82 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         </p>
       </div>
 
-      <Accordion type="single" collapsible defaultValue="results" className="space-y-4">
+      <Accordion type="multiple" defaultValue={["results"]} className="space-y-4">
         {/* Results Configuration - Different for inbound/outbound */}
         {projectType === 'outbound' ? (
-          <AccordionItem value="results" className="border border-border rounded-lg px-4">
-            <AccordionTrigger className="text-sm font-semibold">✅ Positieve Resultaten ({saleResults.length})</AccordionTrigger>
-            <AccordionContent className="space-y-4 pt-4">
-              <p className="text-xs text-muted-foreground">Resultaten die als verkoop/donatie worden geteld.</p>
-              {renderResultBadges(saleResults, (r) => setSaleResults(saleResults.filter(x => x !== r)))}
-              {renderResultSelect((r) => setSaleResults([...saleResults, r]))}
-            </AccordionContent>
-          </AccordionItem>
+          <>
+            <AccordionItem value="results" className="border border-border rounded-lg px-4">
+              <AccordionTrigger className="text-sm font-semibold">✅ Positieve Resultaten ({saleResults.length})</AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-4">
+                <p className="text-xs text-muted-foreground">Resultaten die als verkoop/donatie worden geteld.</p>
+                {renderResultBadges(saleResults, (r) => setSaleResults(saleResults.filter(x => x !== r)))}
+                {renderResultSelect((r) => setSaleResults([...saleResults, r]))}
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="unreachable" className="border border-border rounded-lg px-4">
+              <AccordionTrigger className="text-sm font-semibold">
+                <span className="flex items-center gap-2"><PhoneOff size={16} /> Niet Bereikbaar ({unreachableResults.length})</span>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-4">
+                <p className="text-xs text-muted-foreground">Resultaten die niet meetellen voor netto conversie (niet bereikbare contacten).</p>
+                {renderResultBadges(unreachableResults, (r) => setUnreachableResults(unreachableResults.filter(x => x !== r)))}
+                {renderResultSelect((r) => setUnreachableResults([...unreachableResults, r]))}
+                <Input 
+                  placeholder="Handmatig resultaat toevoegen..." 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                      setUnreachableResults([...unreachableResults, e.currentTarget.value.trim()]);
+                      e.currentTarget.value = '';
+                    }
+                  }}
+                  className="w-full md:w-80"
+                />
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="neg_argumentated" className="border border-border rounded-lg px-4">
+              <AccordionTrigger className="text-sm font-semibold">
+                <span className="flex items-center gap-2"><MessageSquareOff size={16} /> Negatief Beargumenteerd ({negativeArgumentated.length})</span>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-4">
+                <p className="text-xs text-muted-foreground">Bewuste weigeringen door de prospect (bijv. geen interesse, geen geld).</p>
+                {renderResultBadges(negativeArgumentated, (r) => setNegativeArgumentated(negativeArgumentated.filter(x => x !== r)))}
+                {renderResultSelect((r) => setNegativeArgumentated([...negativeArgumentated, r]))}
+                <Input 
+                  placeholder="Handmatig resultaat toevoegen..." 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                      setNegativeArgumentated([...negativeArgumentated, e.currentTarget.value.trim()]);
+                      e.currentTarget.value = '';
+                    }
+                  }}
+                  className="w-full md:w-80"
+                />
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="neg_not_argumentated" className="border border-border rounded-lg px-4">
+              <AccordionTrigger className="text-sm font-semibold">
+                <span className="flex items-center gap-2"><ShieldOff size={16} /> Negatief Niet Beargumenteerd ({negativeNotArgumentated.length})</span>
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-4">
+                <p className="text-xs text-muted-foreground">Externe factoren (bijv. overleden, onjuiste gegevens, fax).</p>
+                {renderResultBadges(negativeNotArgumentated, (r) => setNegativeNotArgumentated(negativeNotArgumentated.filter(x => x !== r)))}
+                {renderResultSelect((r) => setNegativeNotArgumentated([...negativeNotArgumentated, r]))}
+                <Input 
+                  placeholder="Handmatig resultaat toevoegen..." 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                      setNegativeNotArgumentated([...negativeNotArgumentated, e.currentTarget.value.trim()]);
+                      e.currentTarget.value = '';
+                    }
+                  }}
+                  className="w-full md:w-80"
+                />
+              </AccordionContent>
+            </AccordionItem>
+          </>
         ) : (
           <>
             <AccordionItem value="results" className="border border-border rounded-lg px-4">

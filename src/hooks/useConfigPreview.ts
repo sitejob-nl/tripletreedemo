@@ -78,7 +78,8 @@ export const useConfigPreview = ({
         // Detect frequency using centralized function
         const freqResult: FrequencyDetectionResult = detectFrequencyFromConfig(
           freqRaw,
-          mappingConfig.freq_map
+          mappingConfig.freq_map,
+          record.resultaat
         );
 
         // Calculate annual value

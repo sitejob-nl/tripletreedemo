@@ -74,6 +74,7 @@ export function ReportViewSection({
           selectedWeek={selectedWeek}
           amountCol={mappingConfig?.amount_col}
           freqCol={mappingConfig?.freq_col}
+          mappingConfig={mappingConfig}
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
         />

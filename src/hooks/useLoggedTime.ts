@@ -47,7 +47,7 @@ export const useLoggedTime = ({ projectId, dateFilter }: UseLoggedTimeOptions) =
       
       let query = supabase
         .from('daily_logged_time')
-        .select('total_seconds, date')
+        .select('total_seconds, corrected_seconds, date')
         .eq('project_id', projectId);
       
       // Filter on date range if filtering is active
@@ -61,7 +61,8 @@ export const useLoggedTime = ({ projectId, dateFilter }: UseLoggedTimeOptions) =
       
       if (error) throw error;
       
-      const totalSeconds = data?.reduce((sum, r) => sum + (r.total_seconds || 0), 0) || 0;
+      // Use corrected_seconds if available, otherwise total_seconds
+      const totalSeconds = data?.reduce((sum, r) => sum + (r.corrected_seconds ?? r.total_seconds ?? 0), 0) || 0;
       const totalHours = totalSeconds / 3600;
       
       // Build daily breakdown when filtering is active
@@ -83,7 +84,7 @@ export const useLoggedTime = ({ projectId, dateFilter }: UseLoggedTimeOptions) =
             const dayIndex = getDay(date);
             const dayName = dayIndexToDutch[dayIndex];
             if (dayName) {
-              dailyHours![dayName] += (record.total_seconds || 0) / 3600;
+              dailyHours![dayName] += (record.corrected_seconds ?? record.total_seconds ?? 0) / 3600;
             }
           }
         });

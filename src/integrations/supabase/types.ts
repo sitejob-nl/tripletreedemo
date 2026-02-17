@@ -112,6 +112,10 @@ export type Database = {
       }
       daily_logged_time: {
         Row: {
+          corrected_at: string | null
+          corrected_by: string | null
+          corrected_seconds: number | null
+          correction_note: string | null
           date: string
           id: string
           project_id: string
@@ -119,6 +123,10 @@ export type Database = {
           total_seconds: number
         }
         Insert: {
+          corrected_at?: string | null
+          corrected_by?: string | null
+          corrected_seconds?: number | null
+          correction_note?: string | null
           date: string
           id?: string
           project_id: string
@@ -126,6 +134,10 @@ export type Database = {
           total_seconds?: number
         }
         Update: {
+          corrected_at?: string | null
+          corrected_by?: string | null
+          corrected_seconds?: number | null
+          correction_note?: string | null
           date?: string
           id?: string
           project_id?: string
