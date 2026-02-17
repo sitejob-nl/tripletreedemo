@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff } from 'lucide-react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff } from 'lucide-react';
 import { DBProjectBase, MappingConfig, ProjectType } from '@/types/database';
 import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED } from '@/lib/statsHelpers';
 import { Input } from '@/components/ui/input';
@@ -56,6 +56,10 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [retentionResults, setRetentionResults] = useState<string[]>(project.mapping_config.retention_results || []);
   const [lostResults, setLostResults] = useState<string[]>(project.mapping_config.lost_results || []);
   const [partialSuccessResults, setPartialSuccessResults] = useState<string[]>(project.mapping_config.partial_success_results || []);
+  
+  // Inbound service state
+  const [handledResults, setHandledResults] = useState<string[]>(project.mapping_config.handled_results || []);
+  const [notHandledResults, setNotHandledResults] = useState<string[]>(project.mapping_config.not_handled_results || []);
 
   // Negative categorization state (outbound)
   const [unreachableResults, setUnreachableResults] = useState<string[]>(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
@@ -93,6 +97,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     negative_argumentated: negativeArgumentated,
     negative_not_argumentated: negativeNotArgumentated,
     weekday_rates: cleanWeekdayRates(),
+    handled_results: handledResults,
+    not_handled_results: notHandledResults,
   };
 
   const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
@@ -113,6 +119,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setRetentionResults(project.mapping_config.retention_results || []);
     setLostResults(project.mapping_config.lost_results || []);
     setPartialSuccessResults(project.mapping_config.partial_success_results || []);
+    setHandledResults(project.mapping_config.handled_results || []);
+    setNotHandledResults(project.mapping_config.not_handled_results || []);
     setUnreachableResults(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
     setNegativeArgumentated(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
     setNegativeNotArgumentated(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
@@ -134,6 +142,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       negative_argumentated: negativeArgumentated,
       negative_not_argumentated: negativeNotArgumentated,
       weekday_rates: cleanWeekdayRates(),
+      handled_results: handledResults,
+      not_handled_results: notHandledResults,
     };
     await onSave(project.id, hourlyRate, mappingConfig, projectType);
   };
@@ -155,7 +165,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setFreqMap(updated);
   };
 
-  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults];
+  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults];
   const availableResultsFiltered = availableResults.filter((r) => !allSelected.includes(r));
 
   const renderResultBadges = (results: string[], onRemove: (r: string) => void) => (
@@ -203,25 +213,49 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       <div className="mb-6 p-4 bg-muted/30 rounded-lg border border-border">
         <Label className="text-sm font-semibold mb-3 block">Project Type</Label>
         <Tabs value={projectType} onValueChange={(v) => setProjectType(v as ProjectType)} className="w-full">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
-            <TabsTrigger value="outbound" className="flex items-center gap-2">
-              <PhoneOutgoing size={16} /> Outbound (Acquisitie)
+          <TabsList className="grid w-full max-w-lg grid-cols-3">
+            <TabsTrigger value="outbound" className="flex items-center gap-1 text-xs sm:text-sm">
+              <PhoneOutgoing size={14} /> Outbound
             </TabsTrigger>
-            <TabsTrigger value="inbound" className="flex items-center gap-2">
-              <PhoneIncoming size={16} /> Inbound (Retentie)
+            <TabsTrigger value="inbound" className="flex items-center gap-1 text-xs sm:text-sm">
+              <PhoneIncoming size={14} /> Inbound (Retentie)
+            </TabsTrigger>
+            <TabsTrigger value="inbound_service" className="flex items-center gap-1 text-xs sm:text-sm">
+              <Headphones size={14} /> Klantenservice
             </TabsTrigger>
           </TabsList>
         </Tabs>
         <p className="text-xs text-muted-foreground mt-2">
           {projectType === 'outbound' 
             ? 'Werving van nieuwe donateurs - meet conversie en nieuwe jaarwaarde.'
-            : 'Behoud van bestaande donateurs - meet retentie ratio en behouden waarde.'}
+            : projectType === 'inbound'
+            ? 'Behoud van bestaande donateurs - meet retentie ratio en behouden waarde.'
+            : 'Klantenservice - meet afgehandeld/niet-afgehandeld ratio zonder financiële waarde.'}
         </p>
       </div>
 
       <Accordion type="multiple" defaultValue={["results"]} className="space-y-4">
-        {/* Results Configuration - Different for inbound/outbound */}
-        {projectType === 'outbound' ? (
+        {/* Results Configuration - Different per project type */}
+        {projectType === 'inbound_service' ? (
+          <>
+            <AccordionItem value="results" className="border border-border rounded-lg px-4">
+              <AccordionTrigger className="text-sm font-semibold">✅ Afgehandeld ({handledResults.length})</AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-4">
+                <p className="text-xs text-muted-foreground">Resultaten die als succesvol afgehandeld worden geteld.</p>
+                {renderResultBadges(handledResults, (r) => setHandledResults(handledResults.filter(x => x !== r)))}
+                {renderResultSelect((r) => setHandledResults([...handledResults, r]))}
+              </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="not_handled" className="border border-border rounded-lg px-4">
+              <AccordionTrigger className="text-sm font-semibold">❌ Niet Afgehandeld ({notHandledResults.length})</AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-4">
+                <p className="text-xs text-muted-foreground">Resultaten die als niet-afgehandeld worden geteld (terugbellen, doorverbinden, etc.).</p>
+                {renderResultBadges(notHandledResults, (r) => setNotHandledResults(notHandledResults.filter(x => x !== r)))}
+                {renderResultSelect((r) => setNotHandledResults([...notHandledResults, r]))}
+              </AccordionContent>
+            </AccordionItem>
+          </>
+        ) : projectType === 'outbound' ? (
           <>
             <AccordionItem value="results" className="border border-border rounded-lg px-4">
               <AccordionTrigger className="text-sm font-semibold">✅ Positieve Resultaten ({saleResults.length})</AccordionTrigger>

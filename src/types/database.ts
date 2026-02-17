@@ -1,6 +1,6 @@
 // Database types for Supabase tables
 
-export type ProjectType = 'outbound' | 'inbound';
+export type ProjectType = 'outbound' | 'inbound' | 'inbound_service';
 
 export interface MappingConfig {
   amount_col: string;
@@ -14,6 +14,10 @@ export interface MappingConfig {
   retention_results?: string[];      // Resultaten waarbij donateur behouden blijft
   lost_results?: string[];           // Resultaten waarbij donateur verloren is
   partial_success_results?: string[]; // Gedeeltelijk succes (bijv. eenmalig i.p.v. doorlopend)
+  
+  // Inbound klantenservice configuratie
+  handled_results?: string[];        // Succesvol afgehandelde gesprekken
+  not_handled_results?: string[];    // Niet-afgehandelde gesprekken (terugbellen, doorverbinden, etc.)
   
   // Configureerbare negatieve resultaat categorisering (outbound)
   unreachable_results?: string[];          // Resultaten die niet meetellen voor netto conversie

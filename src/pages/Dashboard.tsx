@@ -253,8 +253,9 @@ const Index = () => {
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
 
-  // Check if current project is inbound type
-  const isInboundProject = currentProject?.project_type === 'inbound';
+  // Determine project type
+  const projectType = (currentProject?.project_type || 'outbound') as ProjectType;
+  const isInboundProject = projectType === 'inbound' || projectType === 'inbound_service';
 
   // Get display label for current filter
   const filterLabel = useMemo(() => {
@@ -476,7 +477,7 @@ const Index = () => {
                   {/* MAIN VIEW SWITCHER */}
                   {viewMode === 'report' ? (
                     <ReportViewSection
-                      isInboundProject={isInboundProject}
+                      projectType={projectType}
                       selectedWeek={filterLabel}
                       data={reportMatrixProcessedData}
                       hourlyRate={hourlyRate}
