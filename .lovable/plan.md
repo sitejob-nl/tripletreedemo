@@ -1,254 +1,178 @@
 
 
-# Actieplan: Meeting Follow-up - Prioriteiten en Gaps
+# Fase 2 Implementatie: Volgende Stappen
 
-Dit plan analyseert de besproken punten uit de meeting en vergelijkt ze met de huidige implementatie. Per onderwerp wordt aangegeven wat er al werkt, wat er mist, en wat de prioriteit is.
-
----
-
-## Status Overzicht
-
-| Functionaliteit | Status | Prioriteit |
-|---|---|---|
-| Jaarwaarde/frequentie berekening | ~80% af, fixen nodig | HOOG |
-| Configureerbare negatieve redenen (netto KPI) | Hardcoded, moet configureerbaar | HOOG |
-| Handmatige urencorrectie per dag | Niet gebouwd | HOOG |
-| Badges / te bellen restant | Niet gebouwd (API nodig) | HOOG |
-| Afwijkend uurtarief per weekdag | Niet gebouwd | MIDDEL |
-| Nachtelijke automatische sync | Infra staat, moet geactiveerd | MIDDEL |
-| Inbound klantenservice (niet-financieel) | Niet gebouwd | MIDDEL |
-| Globale correctiefactor uren | Niet gebouwd | LAAG |
-| Steam connector | Toekomst | LAAG |
-| Custom domein (app.triple3.nl) | DNS-instructies geven | LAAG |
+Nu Fase 1 is afgerond (frequentie fix, configureerbare redenen, urencorrectie), zijn dit de resterende items.
 
 ---
 
-## 1. Jaarwaarde / Frequentie Berekening Fixen (HOOG)
+## Overzicht: Wat is AF vs Wat moet nog
 
-### Wat er al is
-- Gecentraliseerde `detectFrequencyFromConfig()` in `statsHelpers.ts`
-- Flexibele field parsing: checkt `frequency`, `frequentie`, `Frequentie` en `mappingConfig.freq_col`
-- Numerieke multipliers (1, 4, 12) en tekstuele matching via `freq_map`
-- Preview tool in MappingTool toont hoe records worden berekend
+### Afgerond (Fase 1)
+- Jaarwaarde/frequentie berekening: detectie uit freq_map, numerieke waarden, EN resultaatnaam ("per maand")
+- Configureerbare negatieve redenen: per project instelbaar via MappingTool (unreachable, beargumenteerd, niet-beargumenteerd)
+- Handmatige urencorrectie per dag: tabel met origineel/gecorrigeerd/verschil/notitie, audit trail (wie, wanneer)
+- useLoggedTime en ReportMatrix gebruiken gecorrigeerde uren waar beschikbaar
 
-### Wat er mist
-- **Frequentie uit resultaatnaam**: Als het resultaat "Machtiging per Maand" heet, moet dit als maandelijks (x12) worden herkend. Dit is een fallback die nog niet in `detectFrequencyFromConfig()` zit.
-- **Inconsistentie**: ReportMatrix gebruikt `detectFrequency()` (legacy wrapper met lege freq_map) in plaats van `detectFrequencyFromConfig()` met de daadwerkelijke project freq_map. Dit veroorzaakt verkeerde frequentie-toewijzingen.
+### Nog te bouwen
+
+---
+
+## 1. Afwijkend Uurtarief per Weekdag (MIDDEL)
+
+Sommige campagnes draaien op zaterdag/zondag met een hoger uurtarief.
 
 ### Aanpak
-1. ReportMatrix updaten om `detectFrequencyFromConfig()` te gebruiken met de project freq_map (wordt als prop doorgegeven)
-2. Fallback toevoegen in `detectFrequencyFromConfig()` die ook de `resultaat`-naam parsed voor frequentie-keywords
-3. Preview tool uitbreiden zodat admin direct ziet of de match correct is
+1. MappingConfig uitbreiden met optioneel `weekday_rates` object
+2. Als niet gezet: terugvallen op standaard `hourly_rate`
+3. ReportMatrix `calcInvestment()` aanpassen: per dag het juiste tarief gebruiken
+4. MappingTool UI: optionele sectie "Afwijkende tarieven per weekdag" met 7 invoervelden
+
+### Bestanden
+- `src/types/database.ts` - MappingConfig type uitbreiden
+- `src/components/Dashboard/ReportMatrix.tsx` - calcInvestment per dag
+- `src/components/Dashboard/InboundReportMatrix.tsx` - idem
+- `src/components/Dashboard/MappingTool.tsx` - UI voor weekday rates
+- `src/hooks/useExcelExport.ts` - export moet juiste tarieven gebruiken
 
 ---
 
-## 2. Configureerbare Negatieve Redenen voor Netto KPI (HOOG)
+## 2. Badges / Te Bellen Restant (HOOG - wacht op API)
 
-### Wat er al is
-- Hardcoded arrays `NEGATIVE_ARGUMENTATED`, `NEGATIVE_NOT_ARGUMENTATED`, en `UNREACHABLE_RESULTS` in `statsHelpers.ts`
-- `categorizeNegativeResult()` en `isUnreachable()` functies
+Dit is een must voor klantenrapportage maar de BasiCall API endpoint is nog niet beschikbaar.
 
-### Wat er mist
-- Deze categorisatie is **niet per project configureerbaar**. De meeting benadrukt dat per klant/campagne moet kunnen worden ingesteld welke redenen meetellen in netto conversie.
-- Er is geen plek in `MappingConfig` voor unreachable/negative configuratie.
+### Tijdelijke aanpak (handmatig)
+1. Nieuw veld `total_to_call` toevoegen aan `projects` tabel (integer, nullable)
+2. Admin kan dit handmatig invullen in ProjectDialog
+3. KPI card "Voortgang" tonen: `aantal gebeld / total_to_call` als percentage
 
-### Aanpak
-1. `MappingConfig` uitbreiden met:
-   - `unreachable_results: string[]` - resultaten die niet meetellen (voor netto conversie)
-   - `negative_argumentated: string[]` - beargumenteerde weigeringen
-   - `negative_not_argumentated: string[]` - niet-beargumenteerde weigeringen
-2. `isUnreachable()` en `categorizeNegativeResult()` aanpassen om per project te werken (config als parameter)
-3. MappingTool UI uitbreiden met secties voor deze categorisering (zoals de bestaande resultaat-selectors)
-4. Hardcoded arrays behouden als **defaults** voor nieuwe projecten
-5. Database migratie: default waardes toevoegen aan bestaande mapping_configs
+### Definitieve aanpak (zodra API beschikbaar)
+1. Sync engine uitbreiden met badges-endpoint
+2. Automatisch bijwerken bij elke sync
 
----
-
-## 3. Handmatige Urencorrectie per Dag + Audit Trail (HOOG)
-
-### Wat er al is
-- `daily_logged_time` tabel met `project_id`, `date`, `total_seconds`
-- `useLoggedTime` hook met dagelijkse breakdown per weekdag
-- ReportMatrix gebruikt logged time voor investerings-berekeningen
-
-### Wat er mist
-- Geen UI om uren handmatig aan te passen
-- Geen `corrected_seconds` of `correction_note` velden
-- Geen audit trail (wie, wanneer, waarom)
-
-### Aanpak
-1. Database migratie - kolommen toevoegen aan `daily_logged_time`:
-
-```text
-corrected_seconds  INTEGER  (nullable, als NULL dan gebruik total_seconds)
-corrected_by       UUID     (wie de correctie deed)
-corrected_at       TIMESTAMPTZ
-correction_note    TEXT     (reden van correctie)
+### Database migratie
+```sql
+ALTER TABLE projects ADD COLUMN total_to_call INTEGER;
 ```
 
-2. RLS policy toevoegen voor UPDATE door admins
-3. Nieuwe UI-component "Urencorrectie" in admin dashboard:
-   - Tabel met per dag: originele uren, gecorrigeerde uren, verschil, notitie
-   - Inline editing per dag
-   - Visuele indicator als er een correctie actief is
-4. `useLoggedTime` hook aanpassen: gebruik `corrected_seconds` als die gevuld is, anders `total_seconds`
-5. Audit log tabel (optioneel): `hours_corrections_log` met alle wijzigingen
+### Bestanden
+- `supabase/migrations/xxx.sql` - kolom toevoegen
+- `src/components/Admin/ProjectDialog.tsx` - invoerveld
+- `src/components/Dashboard/KPICardsSection.tsx` - voortgangskaart
 
 ---
 
-## 4. Badges / Te Bellen Restant (HOOG - afhankelijk van API)
+## 3. Inbound Klantenservice Type (MIDDEL)
 
-### Wat er al is
-- Niets - dit is een nieuw feature
-
-### Wat er mist
-- BasiCall API endpoint voor badges/restant is nog niet beschikbaar/gedocumenteerd
-- UI component voor restant weergave
+Momenteel ondersteunt inbound alleen het retentie/financiele type. Klantenservice (niet-financieel) mist.
 
 ### Aanpak
-1. **Eerst**: Afwachten tot BasiCall API endpoint beschikbaar is
-2. Nieuw veld in `projects` tabel: `total_to_call` (optioneel, handmatig invulbaar als backup)
-3. Sync engine uitbreiden met badges-endpoint zodra beschikbaar
-4. KPI card toevoegen: "Restant te bellen" met voortgangsbalk
-5. Als API niet beschikbaar: handmatig invoerveld in admin voor "totaal te bellen"
-
----
-
-## 5. Afwijkend Uurtarief per Weekdag (MIDDEL)
-
-### Wat er al is
-- Enkelvoudig `hourly_rate` per project (in `projects` tabel)
-- ReportMatrix berekent investering als `uren x uurtarief`
-
-### Wat er mist
-- Geen weekdag-specifiek tarief (bijv. zaterdag hoger tarief)
-
-### Aanpak
-1. `MappingConfig` uitbreiden met optioneel `weekday_rates`:
-
-```text
-weekday_rates: {
-  maandag: 35,
-  dinsdag: 35,
-  woensdag: 35,
-  donderdag: 35,
-  vrijdag: 35,
-  zaterdag: 45,
-  zondag: 50
-}
-```
-
-2. Als `weekday_rates` niet gezet is, valt het systeem terug op de standaard `hourly_rate`
-3. ReportMatrix `calcInvestment()` aanpassen per dag
-4. MappingTool UI: optionele sectie "Afwijkende tarieven per weekdag"
-
----
-
-## 6. Nachtelijke Automatische Sync Activeren (MIDDEL)
-
-### Wat er al is
-- VPS sync script (Node.js) met incrementele sync
-- `sync_jobs` tabel met status tracking
-- Handmatige sync via admin UI (incl. bulk)
-- `daily_logged_time` sync bij elke sync
-
-### Wat er mist
-- Cronjob op de VPS is nog niet geactiveerd
-- Geen pg_cron of andere scheduler actief
-
-### Aanpak
-Dit is een **VPS configuratie taak**, niet een code-wijziging:
-1. Cronjob instellen op VPS: `0 2 * * * node /path/to/sync-script.js`
-2. Script moet alle actieve projecten doorlopen
-3. Sync status zichtbaar in dashboard (al gebouwd via SyncStatus component)
-
----
-
-## 7. Inbound Klantenservice Type (MIDDEL)
-
-### Wat er al is
-- `project_type: 'outbound' | 'inbound'` in database
-- `InboundReportMatrix` component met retentie-specifieke KPI's
-- Configureerbare retention/lost/partial results in MappingTool
-
-### Wat er mist
-- Inbound heeft nu alleen het "retentie/financieel" type
-- **Klantenservice type** (niet-financieel): KPI = "afgehandeld" vs "niet afgehandeld" ratio, zonder geldwaarde
-
-### Aanpak
-1. `ProjectType` uitbreiden: `'outbound' | 'inbound_retention' | 'inbound_service'`
-2. Nieuw component `ServiceReportMatrix` met:
+1. ProjectType uitbreiden: `'outbound' | 'inbound_retention' | 'inbound_service'`
+2. Nieuw component `ServiceReportMatrix`:
    - Afgehandeld / niet-afgehandeld ratio
    - Geen jaarwaarde kolommen
-   - Productiviteitsmetrieken (gesprekken per uur, etc.)
-3. MappingTool: derde tab "Inbound (Service)" met aangepaste configuratie
-4. Dashboard automatisch juiste matrix tonen op basis van project_type
+   - Gesprekken per uur, gemiddelde gespreksduur
+3. MappingTool: derde optie in project type selector
+4. Dashboard: automatisch juiste matrix tonen
+
+### Bestanden
+- `src/types/database.ts` - ProjectType uitbreiden
+- `src/components/Dashboard/ServiceReportMatrix.tsx` - nieuw component
+- `src/components/Dashboard/MappingTool.tsx` - derde type optie
+- `src/components/Dashboard/ReportViewSection.tsx` - routing naar juiste matrix
+- `src/hooks/useExcelExport.ts` - service export formaat
 
 ---
 
-## 8. Globale Correctiefactor voor Uren (LAAG)
+## 4. Globale Correctiefactor voor Uren (LAAG)
+
+Als alternatief voor per-dag correctie: een simpele vermenigvuldigingsfactor.
 
 ### Aanpak
-1. Optioneel veld `hours_factor` in `projects` tabel (default 1.0)
-2. `useLoggedTime` hook: vermenigvuldig alle uren met factor
-3. UI: simpele slider of input in MappingTool financieel sectie
+1. Optioneel veld `hours_factor` in projects tabel (default 1.0)
+2. useLoggedTime: vermenigvuldig alle uren met factor
+3. MappingTool: slider of input in financiele sectie
+
+### Database migratie
+```sql
+ALTER TABLE projects ADD COLUMN hours_factor NUMERIC DEFAULT 1.0;
+```
+
+---
+
+## 5. Nachtelijke Sync Activeren (MIDDEL - VPS taak)
+
+Dit is geen code-wijziging maar een VPS configuratie:
+
+1. Cronjob instellen: `0 2 * * * node /path/to/sync-script.js`
+2. Script loopt alle actieve projecten door
+3. Sync status is al zichtbaar in dashboard (SyncStatus component)
+
+---
+
+## 6. Custom Domein (app.triple3.nl) - DNS Instructies
+
+Stappen voor de klant/beheerder:
+1. In Lovable: Settings > Custom Domains > `app.triple3.nl`
+2. Bij domeinregistrar: CNAME record toevoegen dat wijst naar het Lovable domein
+3. SSL wordt automatisch geregeld door Lovable
 
 ---
 
 ## Aanbevolen Implementatievolgorde
 
 ```text
-Fase 1 (deze sprint - kritisch voor correcte rapportage):
-  1. Jaarwaarde/frequentie fix (ReportMatrix + resultaatnaam fallback)
-  2. Configureerbare negatieve redenen
-  3. Handmatige urencorrectie
+Sprint 1 (direct):
+  1. Afwijkend uurtarief per weekdag
+  2. Badges/restant (handmatige versie)
 
-Fase 2 (volgende sprint - uitbreiding):
-  4. Afwijkend uurtarief per weekdag
-  5. Badges/restant (zodra API beschikbaar)
-  6. Nachtelijke sync activeren (VPS config)
+Sprint 2 (daarna):
+  3. Inbound klantenservice type
+  4. Globale correctiefactor
 
-Fase 3 (later - nice-to-have):
-  7. Inbound klantenservice type
-  8. Globale correctiefactor
-  9. Steam connector (als API beschikbaar)
+Parallel / extern:
+  5. Nachtelijke sync (VPS config)
+  6. Custom domein (DNS)
+  7. Badges via API (zodra beschikbaar)
+  8. Steam connector (toekomst)
 ```
 
 ---
 
-## Technische Details per Fase
+## Technische Details
 
-### Database Migraties Fase 1
+### Database Migraties
 
 ```sql
--- Urencorrectie kolommen
-ALTER TABLE daily_logged_time 
-  ADD COLUMN corrected_seconds INTEGER,
-  ADD COLUMN corrected_by UUID,
-  ADD COLUMN corrected_at TIMESTAMPTZ,
-  ADD COLUMN correction_note TEXT;
+-- Badges: total_to_call veld
+ALTER TABLE projects ADD COLUMN total_to_call INTEGER;
 
--- RLS voor UPDATE op daily_logged_time
-CREATE POLICY "Admins can update logged time"
-  ON daily_logged_time FOR UPDATE
-  USING (has_role(auth.uid(), 'admin'::app_role) 
-      OR has_role(auth.uid(), 'superadmin'::app_role));
-
--- INSERT policy voor sync engine (service role)
-CREATE POLICY "Service role can insert logged time"
-  ON daily_logged_time FOR INSERT
-  WITH CHECK (true);
+-- Globale correctiefactor
+ALTER TABLE projects ADD COLUMN hours_factor NUMERIC DEFAULT 1.0;
 ```
 
-### Bestanden die Wijzigen in Fase 1
+### MappingConfig Uitbreiding (weekday_rates)
 
-| Bestand | Wijziging |
-|---|---|
-| `src/types/database.ts` | MappingConfig uitbreiden met unreachable/negative arrays |
-| `src/lib/statsHelpers.ts` | `isUnreachable()` en `categorizeNegativeResult()` config-aware maken |
-| `src/components/Dashboard/ReportMatrix.tsx` | `detectFrequencyFromConfig()` met freq_map gebruiken |
-| `src/components/Dashboard/MappingTool.tsx` | Nieuwe secties voor negatieve categorisering |
-| `src/hooks/useLoggedTime.ts` | `corrected_seconds` ondersteuning |
-| `src/components/Dashboard/HoursCorrection.tsx` | Nieuw component voor urencorrectie |
-| `supabase/migrations/xxx.sql` | Kolommen + policies |
+```text
+weekday_rates?: {
+  maandag?: number;
+  dinsdag?: number;
+  woensdag?: number;
+  donderdag?: number;
+  vrijdag?: number;
+  zaterdag?: number;
+  zondag?: number;
+}
+```
+
+Als een dag niet is ingesteld of weekday_rates ontbreekt, valt het systeem terug op de standaard hourly_rate van het project.
+
+### ProjectType Uitbreiding
+
+```text
+Huidig:  'outbound' | 'inbound'
+Nieuw:   'outbound' | 'inbound_retention' | 'inbound_service'
+```
+
+Backward compatible: bestaande 'inbound' projecten worden behandeld als 'inbound_retention'.
 
