@@ -14,6 +14,7 @@ export interface ProjectFormData {
   vat_rate: string;
   is_active: boolean;
   mapping_config: MappingConfig;
+  total_to_call: string;
 }
 
 interface ProjectDialogProps {
@@ -154,6 +155,24 @@ export function ProjectDialog({
                   onChange={(e) => setFormData(prev => ({ ...prev, vat_rate: e.target.value }))}
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Badges / Te Bellen Restant */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-foreground">Te bellen restant</h3>
+            <div className="space-y-2">
+              <Label htmlFor="total_to_call">Totaal te bellen (badges)</Label>
+              <Input
+                id="total_to_call"
+                type="number"
+                value={formData.total_to_call}
+                onChange={(e) => setFormData(prev => ({ ...prev, total_to_call: e.target.value }))}
+                placeholder="Bijv. 5000 (laat leeg als onbekend)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Het totale aantal te bellen adressen. Wordt gebruikt voor de voortgangs-KPI.
+              </p>
             </div>
           </div>
 

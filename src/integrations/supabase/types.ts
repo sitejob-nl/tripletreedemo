@@ -239,6 +239,7 @@ export type Database = {
           name: string
           project_key: string
           project_type: string | null
+          total_to_call: number | null
           updated_at: string | null
           vat_rate: number | null
         }
@@ -253,6 +254,7 @@ export type Database = {
           name: string
           project_key: string
           project_type?: string | null
+          total_to_call?: number | null
           updated_at?: string | null
           vat_rate?: number | null
         }
@@ -267,6 +269,7 @@ export type Database = {
           name?: string
           project_key?: string
           project_type?: string | null
+          total_to_call?: number | null
           updated_at?: string | null
           vat_rate?: number | null
         }
