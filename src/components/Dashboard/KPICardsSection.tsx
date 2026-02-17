@@ -1,5 +1,6 @@
-import { CheckCircle, DollarSign, TrendingUp, Users, Shield } from 'lucide-react';
+import { CheckCircle, DollarSign, TrendingUp, Users, Shield, Target } from 'lucide-react';
 import { KPICard } from './KPICard';
+import { Progress } from '@/components/ui/progress';
 
 interface KPICardsSectionProps {
   isInboundProject: boolean;
@@ -11,6 +12,7 @@ interface KPICardsSectionProps {
   hourlyRate: number;
   selectedWeek: string | number;
   isLoading: boolean;
+  totalToCall?: number | null;
 }
 
 export function KPICardsSection({
@@ -23,7 +25,11 @@ export function KPICardsSection({
   hourlyRate,
   selectedWeek,
   isLoading,
+  totalToCall,
 }: KPICardsSectionProps) {
+  const showProgress = totalToCall && totalToCall > 0;
+  const progressPercent = showProgress ? Math.min((totalRecords / totalToCall) * 100, 100) : 0;
+
   if (isInboundProject) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
@@ -64,39 +70,59 @@ export function KPICardsSection({
   }
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-      <KPICard
-        title="Aantal Positief"
-        value={totalSales}
-        subtext={selectedWeek === 'all' ? 'Alle weken' : `Sales in Week ${selectedWeek}`}
-        icon={CheckCircle}
-        variant="green"
-        isLoading={isLoading}
-      />
-      <KPICard
-        title="Jaarwaarde"
-        value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        subtext="Totale opbrengst"
-        icon={DollarSign}
-        variant="blue"
-        isLoading={isLoading}
-      />
-      <KPICard
-        title="Kosten per Donateur"
-        value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        subtext={`O.b.v. €${hourlyRate}/u`}
-        icon={TrendingUp}
-        variant={costPerDonor > 50 ? 'pink' : 'orange'}
-        isLoading={isLoading}
-      />
-      <KPICard
-        title="Inzet Uren"
-        value={`${totalHours.toFixed(1)} u`}
-        subtext="Totale beltijd"
-        icon={Users}
-        variant="cyan"
-        isLoading={isLoading}
-      />
+    <div className="space-y-4 mb-6 sm:mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        <KPICard
+          title="Aantal Positief"
+          value={totalSales}
+          subtext={selectedWeek === 'all' ? 'Alle weken' : `Sales in Week ${selectedWeek}`}
+          icon={CheckCircle}
+          variant="green"
+          isLoading={isLoading}
+        />
+        <KPICard
+          title="Jaarwaarde"
+          value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          subtext="Totale opbrengst"
+          icon={DollarSign}
+          variant="blue"
+          isLoading={isLoading}
+        />
+        <KPICard
+          title="Kosten per Donateur"
+          value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          subtext={`O.b.v. €${hourlyRate}/u`}
+          icon={TrendingUp}
+          variant={costPerDonor > 50 ? 'pink' : 'orange'}
+          isLoading={isLoading}
+        />
+        <KPICard
+          title="Inzet Uren"
+          value={`${totalHours.toFixed(1)} u`}
+          subtext="Totale beltijd"
+          icon={Users}
+          variant="cyan"
+          isLoading={isLoading}
+        />
+      </div>
+      
+      {showProgress && (
+        <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Target size={16} className="text-primary" />
+              <span className="text-sm font-semibold text-foreground">Voortgang</span>
+            </div>
+            <span className="text-sm font-bold text-foreground">
+              {totalRecords.toLocaleString('nl-NL')} / {totalToCall.toLocaleString('nl-NL')} ({progressPercent.toFixed(1)}%)
+            </span>
+          </div>
+          <Progress value={progressPercent} className="h-2" />
+          <p className="text-xs text-muted-foreground mt-1">
+            Nog {Math.max(totalToCall - totalRecords, 0).toLocaleString('nl-NL')} te bellen
+          </p>
+        </div>
+      )}
     </div>
   );
 }

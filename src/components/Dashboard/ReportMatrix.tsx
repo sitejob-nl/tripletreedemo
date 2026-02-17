@@ -181,7 +181,25 @@ export const ReportMatrix = ({
     const hours = calcHours(stats, isTotal, dayName);
     return hours > 0 ? stats.calls / hours : 0;
   };
-  const calcInvestment = (stats: DayStats, isTotal = false, dayName?: string) => calcHours(stats, isTotal, dayName) * hourlyRate;
+  const getHourlyRateForDay = (dayName?: string): number => {
+    if (dayName && mappingConfig?.weekday_rates) {
+      const dayRate = mappingConfig.weekday_rates[dayName as keyof typeof mappingConfig.weekday_rates];
+      if (dayRate !== undefined && dayRate > 0) return dayRate;
+    }
+    return hourlyRate;
+  };
+  
+  const calcInvestment = (stats: DayStats, isTotal = false, dayName?: string) => {
+    if (isTotal && mappingConfig?.weekday_rates) {
+      // Sum investment per day using day-specific rates
+      return days.reduce((sum, day) => {
+        const dayHours = calcHours(aggregated[day], false, day);
+        const dayRate = getHourlyRateForDay(day);
+        return sum + dayHours * dayRate;
+      }, 0);
+    }
+    return calcHours(stats, isTotal, dayName) * getHourlyRateForDay(dayName);
+  };
   const calcInvestmentInclVat = (stats: DayStats, isTotal = false, dayName?: string) => calcInvestment(stats, isTotal, dayName) * (1 + vatRate / 100);
   const calcBtwAmount = (stats: DayStats, isTotal = false, dayName?: string) => calcInvestment(stats, isTotal, dayName) * (vatRate / 100);
   const calcCostPerDonor = (stats: DayStats, isTotal = false, dayName?: string) =>

@@ -61,8 +61,22 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [unreachableResults, setUnreachableResults] = useState<string[]>(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
   const [negativeArgumentated, setNegativeArgumentated] = useState<string[]>(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
   const [negativeNotArgumentated, setNegativeNotArgumentated] = useState<string[]>(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
+  
+  // Weekday rates state
+  const [weekdayRates, setWeekdayRates] = useState<Record<string, number | undefined>>(
+    project.mapping_config.weekday_rates || {}
+  );
 
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
+
+  // Build clean weekday_rates (filter out undefined)
+  const cleanWeekdayRates = () => {
+    const clean: Record<string, number> = {};
+    Object.entries(weekdayRates).forEach(([k, v]) => {
+      if (v !== undefined && v > 0) clean[k] = v;
+    });
+    return Object.keys(clean).length > 0 ? clean : undefined;
+  };
 
   // Build current mapping config for preview
   const currentMappingConfig: MappingConfig = {
@@ -78,6 +92,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     unreachable_results: unreachableResults,
     negative_argumentated: negativeArgumentated,
     negative_not_argumentated: negativeNotArgumentated,
+    weekday_rates: cleanWeekdayRates(),
   };
 
   const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
@@ -101,6 +116,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setUnreachableResults(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
     setNegativeArgumentated(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
     setNegativeNotArgumentated(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
+    setWeekdayRates(project.mapping_config.weekday_rates || {});
   }, [project.id]);
 
   const handleSave = async () => {
@@ -117,6 +133,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       unreachable_results: unreachableResults,
       negative_argumentated: negativeArgumentated,
       negative_not_argumentated: negativeNotArgumentated,
+      weekday_rates: cleanWeekdayRates(),
     };
     await onSave(project.id, hourlyRate, mappingConfig, projectType);
   };
@@ -340,12 +357,39 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
           <AccordionContent className="space-y-4 pt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label className="text-xs text-muted-foreground">Uurtarief (€)</Label>
+                <Label className="text-xs text-muted-foreground">Standaard Uurtarief (€)</Label>
                 <Input type="number" value={hourlyRate} onChange={(e) => setHourlyRate(parseFloat(e.target.value) || 0)} className="mt-1" />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">BTW Tarief (%)</Label>
                 <Input type="number" value={project.vat_rate} disabled className="mt-1 opacity-50" />
+              </div>
+            </div>
+            
+            {/* Weekday rates */}
+            <div className="mt-4">
+              <Label className="text-xs text-muted-foreground mb-2 block">Afwijkende tarieven per weekdag (optioneel)</Label>
+              <p className="text-xs text-muted-foreground mb-3">Laat leeg om het standaard uurtarief te gebruiken.</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                {(['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'] as const).map((day) => (
+                  <div key={day} className="space-y-1">
+                    <Label className="text-[10px] text-muted-foreground capitalize">{day.slice(0, 2)}</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder={`€${hourlyRate}`}
+                      value={weekdayRates[day] ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWeekdayRates(prev => ({
+                          ...prev,
+                          [day]: val === '' ? undefined : parseFloat(val)
+                        }));
+                      }}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           </AccordionContent>

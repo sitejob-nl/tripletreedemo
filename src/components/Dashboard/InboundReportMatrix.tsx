@@ -118,13 +118,31 @@ export const InboundReportMatrix = ({
   }, [aggregated]);
 
   // Calculation helpers
+  
+  const getHourlyRateForDay = (dayName?: string): number => {
+    if (dayName && mappingConfig?.weekday_rates) {
+      const dayRate = mappingConfig.weekday_rates[dayName as keyof typeof mappingConfig.weekday_rates];
+      if (dayRate !== undefined && dayRate > 0) return dayRate;
+    }
+    return hourlyRate;
+  };
+  
   const calcHours = (stats: InboundStats) => stats.durationSec / 3600;
   const calcCallsPerHour = (stats: InboundStats) => {
     const hours = calcHours(stats);
     return hours > 0 ? stats.calls / hours : 0;
   };
-  const calcInvestment = (stats: InboundStats) => calcHours(stats) * hourlyRate;
-  const calcInvestmentInclVat = (stats: InboundStats) => calcInvestment(stats) * (1 + vatRate / 100);
+  const calcInvestment = (stats: InboundStats, dayName?: string) => {
+    if (!dayName && mappingConfig?.weekday_rates) {
+      // Total: sum per day
+      return days.reduce((sum, day) => {
+        const dayHours = aggregated[day] ? aggregated[day].durationSec / 3600 : 0;
+        return sum + dayHours * getHourlyRateForDay(day);
+      }, 0);
+    }
+    return calcHours(stats) * getHourlyRateForDay(dayName);
+  };
+  const calcInvestmentInclVat = (stats: InboundStats, dayName?: string) => calcInvestment(stats, dayName) * (1 + vatRate / 100);
   const calcCostPerRetained = (stats: InboundStats) =>
     stats.retained > 0 ? calcInvestment(stats) / stats.retained : 0;
   const calcNetReachable = (stats: InboundStats) => stats.calls - stats.unreachableCount;
@@ -143,7 +161,7 @@ export const InboundReportMatrix = ({
 
   const renderRow = (
     label: string,
-    getValue: (stats: InboundStats) => number,
+    getValue: (stats: InboundStats, dayName?: string) => number,
     format: 'number' | 'currency' | 'percent' | 'decimal' = 'number',
     bgClass = ''
   ) => {
@@ -161,7 +179,7 @@ export const InboundReportMatrix = ({
         <td className="px-4 py-3 font-medium text-foreground bg-muted/30 sticky left-0 text-sm">{label}</td>
         {days.map((day) => (
           <td key={day} className="px-4 py-3 text-right text-foreground text-sm">
-            {formatValue(getValue(aggregated[day]))}
+            {formatValue(getValue(aggregated[day], day))}
           </td>
         ))}
         <td className="px-4 py-3 text-right font-bold text-foreground bg-muted/50 text-sm">
@@ -303,9 +321,9 @@ export const InboundReportMatrix = ({
 
           {/* INVESTERING */}
           {renderSectionHeader('Investering', 'bg-muted/80', 'text-foreground')}
-          {renderRow('Investering (Excl BTW)', calcInvestment, 'currency')}
-          {renderRow('Investering (Incl BTW)', calcInvestmentInclVat, 'currency')}
-          {renderRow('Kosten per behouden donateur', calcCostPerRetained, 'currency')}
+          {renderRow('Investering (Excl BTW)', (s, dayName) => calcInvestment(s, dayName), 'currency')}
+          {renderRow('Investering (Incl BTW)', (s, dayName) => calcInvestmentInclVat(s, dayName), 'currency')}
+          {renderRow('Kosten per behouden donateur', (s) => s.retained > 0 ? calcInvestment(s) / s.retained : 0, 'currency')}
         </tbody>
       </table>
     </div>

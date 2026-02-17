@@ -470,6 +470,7 @@ const Index = () => {
                     hourlyRate={hourlyRate}
                     selectedWeek={filterLabel}
                     isLoading={kpiLoading}
+                    totalToCall={currentProject?.total_to_call}
                   />
 
                   {/* MAIN VIEW SWITCHER */}

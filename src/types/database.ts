@@ -19,6 +19,17 @@ export interface MappingConfig {
   unreachable_results?: string[];          // Resultaten die niet meetellen voor netto conversie
   negative_argumentated?: string[];        // Beargumenteerde weigeringen
   negative_not_argumentated?: string[];    // Niet-beargumenteerde weigeringen (externe factoren)
+  
+  // Afwijkend uurtarief per weekdag
+  weekday_rates?: {
+    maandag?: number;
+    dinsdag?: number;
+    woensdag?: number;
+    donderdag?: number;
+    vrijdag?: number;
+    zaterdag?: number;
+    zondag?: number;
+  };
 }
 
 export interface DBProject {
@@ -32,6 +43,7 @@ export interface DBProject {
   vat_rate: number;
   project_type: ProjectType;
   mapping_config: MappingConfig;
+  total_to_call: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -97,6 +109,7 @@ export interface DBProjectPublic {
   vat_rate: number;
   project_type: ProjectType;
   mapping_config: MappingConfig;
+  total_to_call: number | null;
   created_at: string;
   updated_at: string;
   // GEEN basicall_token - dit is het verschil met DBProject
