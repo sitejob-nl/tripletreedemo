@@ -1,272 +1,254 @@
 
-# User Invitation via Supabase Auth
 
-Dit plan implementeert een uitnodigingssysteem via Supabase's ingebouwde `inviteUserByEmail` functie, inclusief aangepaste HTML email templates voor zowel uitnodigingen als wachtwoord vergeten.
+# Actieplan: Meeting Follow-up - Prioriteiten en Gaps
 
----
-
-## Voordelen van Supabase Auth Emails
-
-| Aspect | Supabase | Resend |
-|--------|----------|--------|
-| Geen extra API key nodig | ✅ | ❌ |
-| Ingebouwde token handling | ✅ | ❌ |
-| Email templates in dashboard | ✅ | ❌ |
-| Gratis tier | 3.000 emails/maand | 100 emails/dag |
-| Setup complexiteit | Laag | Hoog |
+Dit plan analyseert de besproken punten uit de meeting en vergelijkt ze met de huidige implementatie. Per onderwerp wordt aangegeven wat er al werkt, wat er mist, en wat de prioriteit is.
 
 ---
 
-## Overzicht van de Flow
+## Status Overzicht
+
+| Functionaliteit | Status | Prioriteit |
+|---|---|---|
+| Jaarwaarde/frequentie berekening | ~80% af, fixen nodig | HOOG |
+| Configureerbare negatieve redenen (netto KPI) | Hardcoded, moet configureerbaar | HOOG |
+| Handmatige urencorrectie per dag | Niet gebouwd | HOOG |
+| Badges / te bellen restant | Niet gebouwd (API nodig) | HOOG |
+| Afwijkend uurtarief per weekdag | Niet gebouwd | MIDDEL |
+| Nachtelijke automatische sync | Infra staat, moet geactiveerd | MIDDEL |
+| Inbound klantenservice (niet-financieel) | Niet gebouwd | MIDDEL |
+| Globale correctiefactor uren | Niet gebouwd | LAAG |
+| Steam connector | Toekomst | LAAG |
+| Custom domein (app.triple3.nl) | DNS-instructies geven | LAAG |
+
+---
+
+## 1. Jaarwaarde / Frequentie Berekening Fixen (HOOG)
+
+### Wat er al is
+- Gecentraliseerde `detectFrequencyFromConfig()` in `statsHelpers.ts`
+- Flexibele field parsing: checkt `frequency`, `frequentie`, `Frequentie` en `mappingConfig.freq_col`
+- Numerieke multipliers (1, 4, 12) en tekstuele matching via `freq_map`
+- Preview tool in MappingTool toont hoe records worden berekend
+
+### Wat er mist
+- **Frequentie uit resultaatnaam**: Als het resultaat "Machtiging per Maand" heet, moet dit als maandelijks (x12) worden herkend. Dit is een fallback die nog niet in `detectFrequencyFromConfig()` zit.
+- **Inconsistentie**: ReportMatrix gebruikt `detectFrequency()` (legacy wrapper met lege freq_map) in plaats van `detectFrequencyFromConfig()` met de daadwerkelijke project freq_map. Dit veroorzaakt verkeerde frequentie-toewijzingen.
+
+### Aanpak
+1. ReportMatrix updaten om `detectFrequencyFromConfig()` te gebruiken met de project freq_map (wordt als prop doorgegeven)
+2. Fallback toevoegen in `detectFrequencyFromConfig()` die ook de `resultaat`-naam parsed voor frequentie-keywords
+3. Preview tool uitbreiden zodat admin direct ziet of de match correct is
+
+---
+
+## 2. Configureerbare Negatieve Redenen voor Netto KPI (HOOG)
+
+### Wat er al is
+- Hardcoded arrays `NEGATIVE_ARGUMENTATED`, `NEGATIVE_NOT_ARGUMENTATED`, en `UNREACHABLE_RESULTS` in `statsHelpers.ts`
+- `categorizeNegativeResult()` en `isUnreachable()` functies
+
+### Wat er mist
+- Deze categorisatie is **niet per project configureerbaar**. De meeting benadrukt dat per klant/campagne moet kunnen worden ingesteld welke redenen meetellen in netto conversie.
+- Er is geen plek in `MappingConfig` voor unreachable/negative configuratie.
+
+### Aanpak
+1. `MappingConfig` uitbreiden met:
+   - `unreachable_results: string[]` - resultaten die niet meetellen (voor netto conversie)
+   - `negative_argumentated: string[]` - beargumenteerde weigeringen
+   - `negative_not_argumentated: string[]` - niet-beargumenteerde weigeringen
+2. `isUnreachable()` en `categorizeNegativeResult()` aanpassen om per project te werken (config als parameter)
+3. MappingTool UI uitbreiden met secties voor deze categorisering (zoals de bestaande resultaat-selectors)
+4. Hardcoded arrays behouden als **defaults** voor nieuwe projecten
+5. Database migratie: default waardes toevoegen aan bestaande mapping_configs
+
+---
+
+## 3. Handmatige Urencorrectie per Dag + Audit Trail (HOOG)
+
+### Wat er al is
+- `daily_logged_time` tabel met `project_id`, `date`, `total_seconds`
+- `useLoggedTime` hook met dagelijkse breakdown per weekdag
+- ReportMatrix gebruikt logged time voor investerings-berekeningen
+
+### Wat er mist
+- Geen UI om uren handmatig aan te passen
+- Geen `corrected_seconds` of `correction_note` velden
+- Geen audit trail (wie, wanneer, waarom)
+
+### Aanpak
+1. Database migratie - kolommen toevoegen aan `daily_logged_time`:
 
 ```text
-1. Admin klikt "Uitnodigen" in CustomersTable
-2. Admin vult alleen email + projecten in (geen wachtwoord!)
-3. Edge function roept supabase.auth.admin.inviteUserByEmail() aan
-4. Supabase stuurt automatisch uitnodigingsmail met magische link
-5. Gebruiker klikt link → komt op /set-password pagina
-6. Gebruiker kiest eigen wachtwoord → account is actief
+corrected_seconds  INTEGER  (nullable, als NULL dan gebruik total_seconds)
+corrected_by       UUID     (wie de correctie deed)
+corrected_at       TIMESTAMPTZ
+correction_note    TEXT     (reden van correctie)
+```
+
+2. RLS policy toevoegen voor UPDATE door admins
+3. Nieuwe UI-component "Urencorrectie" in admin dashboard:
+   - Tabel met per dag: originele uren, gecorrigeerde uren, verschil, notitie
+   - Inline editing per dag
+   - Visuele indicator als er een correctie actief is
+4. `useLoggedTime` hook aanpassen: gebruik `corrected_seconds` als die gevuld is, anders `total_seconds`
+5. Audit log tabel (optioneel): `hours_corrections_log` met alle wijzigingen
+
+---
+
+## 4. Badges / Te Bellen Restant (HOOG - afhankelijk van API)
+
+### Wat er al is
+- Niets - dit is een nieuw feature
+
+### Wat er mist
+- BasiCall API endpoint voor badges/restant is nog niet beschikbaar/gedocumenteerd
+- UI component voor restant weergave
+
+### Aanpak
+1. **Eerst**: Afwachten tot BasiCall API endpoint beschikbaar is
+2. Nieuw veld in `projects` tabel: `total_to_call` (optioneel, handmatig invulbaar als backup)
+3. Sync engine uitbreiden met badges-endpoint zodra beschikbaar
+4. KPI card toevoegen: "Restant te bellen" met voortgangsbalk
+5. Als API niet beschikbaar: handmatig invoerveld in admin voor "totaal te bellen"
+
+---
+
+## 5. Afwijkend Uurtarief per Weekdag (MIDDEL)
+
+### Wat er al is
+- Enkelvoudig `hourly_rate` per project (in `projects` tabel)
+- ReportMatrix berekent investering als `uren x uurtarief`
+
+### Wat er mist
+- Geen weekdag-specifiek tarief (bijv. zaterdag hoger tarief)
+
+### Aanpak
+1. `MappingConfig` uitbreiden met optioneel `weekday_rates`:
+
+```text
+weekday_rates: {
+  maandag: 35,
+  dinsdag: 35,
+  woensdag: 35,
+  donderdag: 35,
+  vrijdag: 35,
+  zaterdag: 45,
+  zondag: 50
+}
+```
+
+2. Als `weekday_rates` niet gezet is, valt het systeem terug op de standaard `hourly_rate`
+3. ReportMatrix `calcInvestment()` aanpassen per dag
+4. MappingTool UI: optionele sectie "Afwijkende tarieven per weekdag"
+
+---
+
+## 6. Nachtelijke Automatische Sync Activeren (MIDDEL)
+
+### Wat er al is
+- VPS sync script (Node.js) met incrementele sync
+- `sync_jobs` tabel met status tracking
+- Handmatige sync via admin UI (incl. bulk)
+- `daily_logged_time` sync bij elke sync
+
+### Wat er mist
+- Cronjob op de VPS is nog niet geactiveerd
+- Geen pg_cron of andere scheduler actief
+
+### Aanpak
+Dit is een **VPS configuratie taak**, niet een code-wijziging:
+1. Cronjob instellen op VPS: `0 2 * * * node /path/to/sync-script.js`
+2. Script moet alle actieve projecten doorlopen
+3. Sync status zichtbaar in dashboard (al gebouwd via SyncStatus component)
+
+---
+
+## 7. Inbound Klantenservice Type (MIDDEL)
+
+### Wat er al is
+- `project_type: 'outbound' | 'inbound'` in database
+- `InboundReportMatrix` component met retentie-specifieke KPI's
+- Configureerbare retention/lost/partial results in MappingTool
+
+### Wat er mist
+- Inbound heeft nu alleen het "retentie/financieel" type
+- **Klantenservice type** (niet-financieel): KPI = "afgehandeld" vs "niet afgehandeld" ratio, zonder geldwaarde
+
+### Aanpak
+1. `ProjectType` uitbreiden: `'outbound' | 'inbound_retention' | 'inbound_service'`
+2. Nieuw component `ServiceReportMatrix` met:
+   - Afgehandeld / niet-afgehandeld ratio
+   - Geen jaarwaarde kolommen
+   - Productiviteitsmetrieken (gesprekken per uur, etc.)
+3. MappingTool: derde tab "Inbound (Service)" met aangepaste configuratie
+4. Dashboard automatisch juiste matrix tonen op basis van project_type
+
+---
+
+## 8. Globale Correctiefactor voor Uren (LAAG)
+
+### Aanpak
+1. Optioneel veld `hours_factor` in `projects` tabel (default 1.0)
+2. `useLoggedTime` hook: vermenigvuldig alle uren met factor
+3. UI: simpele slider of input in MappingTool financieel sectie
+
+---
+
+## Aanbevolen Implementatievolgorde
+
+```text
+Fase 1 (deze sprint - kritisch voor correcte rapportage):
+  1. Jaarwaarde/frequentie fix (ReportMatrix + resultaatnaam fallback)
+  2. Configureerbare negatieve redenen
+  3. Handmatige urencorrectie
+
+Fase 2 (volgende sprint - uitbreiding):
+  4. Afwijkend uurtarief per weekdag
+  5. Badges/restant (zodra API beschikbaar)
+  6. Nachtelijke sync activeren (VPS config)
+
+Fase 3 (later - nice-to-have):
+  7. Inbound klantenservice type
+  8. Globale correctiefactor
+  9. Steam connector (als API beschikbaar)
 ```
 
 ---
 
-## Email Templates Aanpassen
+## Technische Details per Fase
 
-De templates worden aangepast in het Supabase Dashboard onder:
-**Authentication → Email Templates**
-
-### 1. Invite Email Template
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
-<body style="font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f4f5; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-    
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 32px; text-align: center;">
-      <h1 style="color: white; margin: 0; font-size: 24px;">Triple Tree Dashboard</h1>
-    </div>
-    
-    <!-- Content -->
-    <div style="padding: 40px 32px;">
-      <h2 style="color: #18181b; font-size: 22px; margin: 0 0 16px;">Je bent uitgenodigd!</h2>
-      <p style="color: #52525b; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-        Je hebt een uitnodiging ontvangen om toegang te krijgen tot het Triple Tree Dashboard. 
-        Klik op onderstaande knop om je account te activeren.
-      </p>
-      
-      <!-- CTA Button -->
-      <a href="{{ .ConfirmationURL }}" 
-         style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-        Account activeren
-      </a>
-      
-      <p style="color: #71717a; font-size: 14px; margin: 32px 0 0;">
-        Deze link is 24 uur geldig. Als je deze uitnodiging niet hebt aangevraagd, kun je deze email negeren.
-      </p>
-    </div>
-    
-    <!-- Footer -->
-    <div style="background: #fafafa; padding: 20px 32px; border-top: 1px solid #e4e4e7; text-align: center;">
-      <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
-        Triple Tree Dashboard | Automatisch gegenereerd
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-```
-
-### 2. Password Reset Email Template
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
-<body style="font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f4f5; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-    
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 32px; text-align: center;">
-      <h1 style="color: white; margin: 0; font-size: 24px;">Triple Tree Dashboard</h1>
-    </div>
-    
-    <!-- Content -->
-    <div style="padding: 40px 32px;">
-      <h2 style="color: #18181b; font-size: 22px; margin: 0 0 16px;">Wachtwoord resetten</h2>
-      <p style="color: #52525b; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-        Je hebt een verzoek ingediend om je wachtwoord te resetten. 
-        Klik op onderstaande knop om een nieuw wachtwoord in te stellen.
-      </p>
-      
-      <!-- CTA Button -->
-      <a href="{{ .ConfirmationURL }}" 
-         style="display: inline-block; background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-        Nieuw wachtwoord instellen
-      </a>
-      
-      <p style="color: #71717a; font-size: 14px; margin: 32px 0 0;">
-        Als je dit verzoek niet hebt ingediend, kun je deze email negeren. 
-        Je wachtwoord blijft ongewijzigd.
-      </p>
-    </div>
-    
-    <!-- Footer -->
-    <div style="background: #fafafa; padding: 20px 32px; border-top: 1px solid #e4e4e7; text-align: center;">
-      <p style="color: #a1a1aa; font-size: 12px; margin: 0;">
-        Triple Tree Dashboard | Automatisch gegenereerd
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-```
-
----
-
-## Technische Implementatie
-
-### 1. Database Wijzigingen
-
-Een kleine hulptabel om projectkoppelingen vast te leggen vóór de gebruiker accepteert:
+### Database Migraties Fase 1
 
 ```sql
-CREATE TABLE public.pending_invitations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT NOT NULL UNIQUE,
-  project_ids UUID[] DEFAULT '{}',
-  invited_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- Urencorrectie kolommen
+ALTER TABLE daily_logged_time 
+  ADD COLUMN corrected_seconds INTEGER,
+  ADD COLUMN corrected_by UUID,
+  ADD COLUMN corrected_at TIMESTAMPTZ,
+  ADD COLUMN correction_note TEXT;
 
--- RLS: alleen admins
-ALTER TABLE pending_invitations ENABLE ROW LEVEL SECURITY;
+-- RLS voor UPDATE op daily_logged_time
+CREATE POLICY "Admins can update logged time"
+  ON daily_logged_time FOR UPDATE
+  USING (has_role(auth.uid(), 'admin'::app_role) 
+      OR has_role(auth.uid(), 'superadmin'::app_role));
 
-CREATE POLICY "Admins can manage pending invitations"
-  ON pending_invitations FOR ALL
-  USING (has_role(auth.uid(), 'admin'::app_role) OR has_role(auth.uid(), 'superadmin'::app_role));
+-- INSERT policy voor sync engine (service role)
+CREATE POLICY "Service role can insert logged time"
+  ON daily_logged_time FOR INSERT
+  WITH CHECK (true);
 ```
 
-### 2. Edge Function: `invite-user`
+### Bestanden die Wijzigen in Fase 1
 
-Update de bestaande `create-customer` edge function om `inviteUserByEmail` te gebruiken:
+| Bestand | Wijziging |
+|---|---|
+| `src/types/database.ts` | MappingConfig uitbreiden met unreachable/negative arrays |
+| `src/lib/statsHelpers.ts` | `isUnreachable()` en `categorizeNegativeResult()` config-aware maken |
+| `src/components/Dashboard/ReportMatrix.tsx` | `detectFrequencyFromConfig()` met freq_map gebruiken |
+| `src/components/Dashboard/MappingTool.tsx` | Nieuwe secties voor negatieve categorisering |
+| `src/hooks/useLoggedTime.ts` | `corrected_seconds` ondersteuning |
+| `src/components/Dashboard/HoursCorrection.tsx` | Nieuw component voor urencorrectie |
+| `supabase/migrations/xxx.sql` | Kolommen + policies |
 
-```typescript
-// Wijzigingen in create-customer/index.ts:
-
-// In plaats van createUser met password:
-const { data: newUser, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-  email,
-  {
-    redirectTo: `${siteUrl}/set-password`,
-    data: {
-      invited_by: requestingUser.id,
-      project_ids: projectIds // Metadata voor later
-    }
-  }
-);
-
-// Sla pending invitation op voor projectkoppeling
-await supabaseAdmin.from('pending_invitations').upsert({
-  email,
-  project_ids: projectIds,
-  invited_by: requestingUser.id
-});
-```
-
-### 3. Auth Hook: Koppel Projecten na Acceptatie
-
-Een database trigger die projecten koppelt zodra de gebruiker zijn account bevestigt:
-
-```sql
--- Trigger functie om projecten te koppelen na signup
-CREATE OR REPLACE FUNCTION handle_new_user_from_invite()
-RETURNS TRIGGER AS $$
-DECLARE
-  pending_record RECORD;
-BEGIN
-  -- Check of er een pending invitation is voor deze email
-  SELECT * INTO pending_record 
-  FROM pending_invitations 
-  WHERE email = NEW.email;
-  
-  IF pending_record IS NOT NULL THEN
-    -- Wijs 'user' rol toe
-    INSERT INTO user_roles (user_id, role)
-    VALUES (NEW.id, 'user')
-    ON CONFLICT DO NOTHING;
-    
-    -- Koppel projecten
-    INSERT INTO customer_projects (user_id, project_id, created_by)
-    SELECT NEW.id, unnest(pending_record.project_ids), pending_record.invited_by
-    ON CONFLICT DO NOTHING;
-    
-    -- Verwijder pending invitation
-    DELETE FROM pending_invitations WHERE email = NEW.email;
-  END IF;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger op auth.users (via Supabase hook)
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user_from_invite();
-```
-
-### 4. Frontend Wijzigingen
-
-**CustomersTable.tsx:**
-- Verwijder het wachtwoord veld
-- Verander knoptekst naar "Uitnodigen"
-- Toon pending invitations met "Opnieuw versturen" optie
-
-**Nieuwe pagina: `/set-password`**
-- Vergelijkbaar met `/reset-password`
-- Wordt automatisch geopend via Supabase's magic link
-- Gebruiker stelt wachtwoord in
-
----
-
-## Bestanden die Worden Aangepast
-
-| Bestand | Actie | Beschrijving |
-|---------|-------|--------------|
-| `supabase/migrations/xxx.sql` | Nieuw | pending_invitations tabel + trigger |
-| `supabase/functions/create-customer/index.ts` | Update | Gebruik `inviteUserByEmail` |
-| `src/components/Admin/CustomersTable.tsx` | Update | Verwijder wachtwoord, toon pending |
-| `src/hooks/useCustomerProjects.ts` | Update | Nieuwe hook voor pending invitations |
-| `src/pages/SetPassword.tsx` | Nieuw | Pagina voor invited users |
-| `src/App.tsx` | Update | Route `/set-password` toevoegen |
-
----
-
-## Stappen voor de Admin
-
-Na implementatie moet je eenmalig de email templates aanpassen in Supabase:
-
-1. Ga naar **Supabase Dashboard → Authentication → Email Templates**
-2. Selecteer **"Invite user"** template
-3. Plak de custom HTML (hierboven)
-4. Selecteer **"Reset password"** template  
-5. Plak de custom HTML (hierboven)
-6. Klik **Save**
-
----
-
-## Voordelen van deze Aanpak
-
-1. **Geen extra kosten** - Supabase's gratis tier (3.000 emails/maand) is voldoende
-2. **Geen API keys beheren** - Alles via Supabase
-3. **Betere UX** - Gebruiker kiest eigen wachtwoord
-4. **Consistente branding** - Beide emails hebben dezelfde stijl
-5. **Eenvoudiger code** - Minder edge functions nodig
