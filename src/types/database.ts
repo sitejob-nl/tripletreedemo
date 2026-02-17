@@ -14,6 +14,11 @@ export interface MappingConfig {
   retention_results?: string[];      // Resultaten waarbij donateur behouden blijft
   lost_results?: string[];           // Resultaten waarbij donateur verloren is
   partial_success_results?: string[]; // Gedeeltelijk succes (bijv. eenmalig i.p.v. doorlopend)
+  
+  // Configureerbare negatieve resultaat categorisering (outbound)
+  unreachable_results?: string[];          // Resultaten die niet meetellen voor netto conversie
+  negative_argumentated?: string[];        // Beargumenteerde weigeringen
+  negative_not_argumentated?: string[];    // Niet-beargumenteerde weigeringen (externe factoren)
 }
 
 export interface DBProject {

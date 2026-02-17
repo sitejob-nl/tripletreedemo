@@ -4,6 +4,7 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
 import { MappingTool } from '@/components/Dashboard/MappingTool';
+import { HoursCorrection } from '@/components/Dashboard/HoursCorrection';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
 import { WelcomeScreen } from '@/components/Dashboard/WelcomeScreen';
@@ -430,6 +431,17 @@ const Index = () => {
                     onSave={handleSaveMapping}
                     isSaving={updateProject.isPending}
                   />
+                  
+                  {/* Hours Correction - only show when date filter is active */}
+                  {dateFilter.isFiltering && dateFilter.startDate && dateFilter.endDate && currentProject && (
+                    <div className="mt-6">
+                      <HoursCorrection
+                        projectId={currentProject.id}
+                        startDate={dateFilter.startDate}
+                        endDate={dateFilter.endDate}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

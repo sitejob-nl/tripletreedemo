@@ -22,7 +22,8 @@ export interface FrequencyDetectionResult {
  */
 export const detectFrequencyFromConfig = (
   freqRaw: unknown,
-  freqMap: Record<string, number>
+  freqMap: Record<string, number>,
+  resultaat?: string | null
 ): FrequencyDetectionResult => {
   const defaultResult: FrequencyDetectionResult = {
     type: 'oneoff',
@@ -82,6 +83,26 @@ export const detectFrequencyFromConfig = (
   }
   if (freqStr.includes('jaar') || freqStr === 'j') {
     return { type: 'yearly', multiplier: 1, matchedKey: '(patroon: jaar)', isOneOff: false };
+  }
+
+  // Fallback: try to detect frequency from resultaat name
+  if (resultaat) {
+    const resultLower = resultaat.toLowerCase();
+    if (resultLower.includes('per maand') || resultLower.includes('maandelijks')) {
+      return { type: 'monthly', multiplier: 12, matchedKey: '(resultaat: maand)', isOneOff: false };
+    }
+    if (resultLower.includes('per kwartaal') || resultLower.includes('kwartaal')) {
+      return { type: 'quarterly', multiplier: 4, matchedKey: '(resultaat: kwartaal)', isOneOff: false };
+    }
+    if (resultLower.includes('per half jaar') || resultLower.includes('halfjaar')) {
+      return { type: 'halfYearly', multiplier: 2, matchedKey: '(resultaat: halfjaar)', isOneOff: false };
+    }
+    if (resultLower.includes('per jaar') || resultLower.includes('jaarlijks')) {
+      return { type: 'yearly', multiplier: 1, matchedKey: '(resultaat: jaar)', isOneOff: false };
+    }
+    if (resultLower.includes('eenmalig')) {
+      return { type: 'oneoff', multiplier: 1, matchedKey: '(resultaat: eenmalig)', isOneOff: true };
+    }
   }
 
   return defaultResult;
@@ -210,23 +231,37 @@ export const UNREACHABLE_RESULTS = [
   'fax',
 ];
 
-export const categorizeNegativeResult = (resultName: string): 'argumentated' | 'not_argumentated' | 'unknown' => {
+export const categorizeNegativeResult = (
+  resultName: string,
+  config?: MappingConfig
+): 'argumentated' | 'not_argumentated' | 'unknown' => {
   const lower = resultName.toLowerCase().trim();
   
-  if (NEGATIVE_ARGUMENTATED.some(r => lower.includes(r))) {
+  // Use project-specific config if available, otherwise fall back to hardcoded defaults
+  const argumentated = config?.negative_argumentated?.length 
+    ? config.negative_argumentated 
+    : NEGATIVE_ARGUMENTATED;
+  const notArgumentated = config?.negative_not_argumentated?.length 
+    ? config.negative_not_argumentated 
+    : NEGATIVE_NOT_ARGUMENTATED;
+  
+  if (argumentated.some(r => lower.includes(r.toLowerCase()))) {
     return 'argumentated';
   }
   
-  if (NEGATIVE_NOT_ARGUMENTATED.some(r => lower.includes(r))) {
+  if (notArgumentated.some(r => lower.includes(r.toLowerCase()))) {
     return 'not_argumentated';
   }
   
   return 'unknown';
 };
 
-export const isUnreachable = (resultName: string): boolean => {
+export const isUnreachable = (resultName: string, config?: MappingConfig): boolean => {
   const lower = resultName.toLowerCase().trim();
-  return UNREACHABLE_RESULTS.some(r => lower.includes(r));
+  const unreachable = config?.unreachable_results?.length 
+    ? config.unreachable_results 
+    : UNREACHABLE_RESULTS;
+  return unreachable.some(r => lower.includes(r.toLowerCase()));
 };
 
 // Legacy wrapper - uses the new centralized function with empty freq_map for backwards compatibility
@@ -256,8 +291,8 @@ export const categorizeInboundResult = (
 ): 'retained' | 'lost' | 'partial' | 'pending' | 'unreachable' => {
   const lower = resultName.toLowerCase().trim();
   
-  // Check if unreachable first
-  if (isUnreachable(resultName)) {
+  // Check if unreachable first (use config's unreachable_results if available)
+  if (isUnreachable(resultName, config)) {
     return 'unreachable';
   }
   
