@@ -1,112 +1,63 @@
 
-# Excel Export + InboundReportMatrix: Logged Time en Weekday Rates
 
-## Samenvatting
-Drie concrete fixes om de rapportage consistent te maken met wat de dashboard UI toont:
+# Jaarwaarde Breakdown: Bedragen en Rekensom Tonen
 
-1. Excel export upgraden met weekday_rates, logged time, BTW, en meer metrics
-2. InboundReportMatrix logged time ondersteuning toevoegen
-3. Excel export geschikt maken voor inbound projecten
+## Wat verandert er
+De popover bij "Jaarwaarde" toont nu alleen het aantal donateurs en de totale jaarwaarde per frequentie. Na deze wijziging zie je per frequentie ook het totale termijnbedrag en de vermenigvuldiging, zodat de rekensom transparant is.
 
----
+**Voorbeeld van hoe het eruit komt te zien:**
 
-## 1. Excel Export Upgraden
+```text
+Opbouw Jaarwaarde
 
-### Probleem
-De huidige `useExcelExport` hook:
-- Gebruikt altijd gesprekstijd (praat-uren) in plaats van logged time (ingelogde uren)
-- Gebruikt een flat `hourlyRate` zonder weekday-specifieke tarieven
-- Mist metrics die wel in de ReportMatrix staan: BTW, netto conversie, ROI, gemiddeld bedrag
-- Werkt alleen voor outbound projecten
+Maandelijks (x12)
+  3 donateurs | Bedrag: € 30,00 x 12 = € 360,00
 
-### Wijzigingen in `src/hooks/useExcelExport.ts`
+Per kwartaal (x4)
+  2 donateurs | Bedrag: € 50,00 x 4 = € 200,00
 
-**Nieuwe parameters toevoegen:**
-- `mappingConfig?: MappingConfig` (voor weekday_rates)
-- `vatRate?: number` (voor BTW berekening)
-- `loggedTimeHours?: number` (totaal ingelogde uren)
-- `dailyLoggedHours?: DailyLoggedTimeBreakdown` (per dag)
-- `projectType?: ProjectType`
+Eenmalig
+  1 donateur | Bedrag: € 100,00
 
-**Berekening aanpassen:**
-- `calcHours` per dag: als `dailyLoggedHours[dag]` beschikbaar, gebruik die; anders gesprekstijd
-- `calcHours` totaal: als `loggedTimeHours` beschikbaar, gebruik die
-- `calcInvestment` per dag: uren x `weekday_rates[dag]` (fallback naar default `hourlyRate`)
-- `calcInvestment` totaal: som van alle dag-investeringen
-
-**Extra Excel-rijen toevoegen:**
-- Netto conversie
-- Gemiddeld donatiebedrag
-- ROI (jaarwaarde / investering)
-- Investering incl. BTW
-- BTW bedrag
-
----
-
-## 2. InboundReportMatrix: Logged Time Support
-
-### Probleem
-`InboundReportMatrix` berekent uren altijd uit `durationSec` (gesprekstijd), terwijl `ReportMatrix` en `ServiceReportMatrix` al logged time ondersteunen.
-
-### Wijzigingen in `src/components/Dashboard/InboundReportMatrix.tsx`
-
-**Nieuwe props toevoegen:**
-- `loggedTimeHours?: number`
-- `dailyLoggedHours?: DailyLoggedTimeBreakdown`
-
-**`calcHours` aanpassen:**
-- Per dag: gebruik `dailyLoggedHours[dag]` als beschikbaar
-- Totaal: gebruik `loggedTimeHours` als beschikbaar
-- Fallback: `durationSec / 3600`
-
-**Impact op afgeleide metrics:**
-- `calcCallsPerHour` gebruikt automatisch de nieuwe uren
-- `calcInvestment` gebruikt automatisch de nieuwe uren
-- `calcCostPerRetained` idem
-
-### Wijzigingen in `src/components/Dashboard/ReportViewSection.tsx`
-
-Props `loggedTimeHours` en `dailyLoggedHours` doorgeven aan `InboundReportMatrix` (nu worden ze al ontvangen maar niet doorgestuurd).
-
----
-
-## 3. Excel Export voor Inbound
-
-### Wijzigingen in `src/hooks/useExcelExport.ts`
-
-Conditionele Excel-structuur op basis van `projectType`:
-- **Outbound**: huidige layout + extra metrics
-- **Inbound**: behouden/verloren/retentie ratio/behouden waarde
-- **Inbound Service**: afgehandeld/niet afgehandeld/ratio/calls per uur
-
----
-
-## 4. Dashboard.tsx: Extra Props Doorgeven
-
-### Wijzigingen in `src/pages/Dashboard.tsx`
-
-`useExcelExport` aanroepen met de extra parameters:
-```
-useExcelExport({
-  data: reportMatrixProcessedData,
-  hourlyRate,
-  selectedWeek: filterLabel,
-  projectName: currentProject?.name || selectedProjectKey,
-  mappingConfig: currentProject?.mapping_config,
-  vatRate: currentProject?.vat_rate || 21,
-  loggedTimeHours: loggedTime?.hasData ? loggedTime.totalHours : undefined,
-  dailyLoggedHours: loggedTime?.dailyHours,
-  projectType,
-})
+----------------------------------------------
+Totaal                              € 660,00
 ```
 
 ---
 
-## Bestanden die wijzigen
+## Technische details
+
+### 1. `KPICardsSection.tsx` - Interface uitbreiden
+
+De `AnnualValueBreakdown` interface krijgt een extra veld `totalAmount` per frequentie (het totale termijnbedrag voor die categorie):
+
+```ts
+export interface AnnualValueBreakdown {
+  monthly: { count: number; value: number; totalAmount: number };
+  quarterly: { count: number; value: number; totalAmount: number };
+  halfYearly: { count: number; value: number; totalAmount: number };
+  yearly: { count: number; value: number; totalAmount: number };
+  oneoff: { count: number; value: number; totalAmount: number };
+}
+```
+
+### 2. `KPICardsSection.tsx` - Popover layout aanpassen
+
+Per frequentie toon:
+- Aantal donateurs
+- Totaal termijnbedrag x multiplier = jaarwaarde
+- Voor eenmalig: alleen het bedrag (geen vermenigvuldiging)
+
+Multipliers worden afgeleid uit de frequentie-key (monthly=12, quarterly=4, halfYearly=2, yearly=1).
+
+### 3. `Dashboard.tsx` - `totalAmount` berekenen
+
+In de `useMemo` voor `annualValueBreakdown` het originele bedrag uit `raw_data` parsen (via `parseDutchFloat` en `amount_col` uit de mapping config) en optellen bij `breakdown[key].totalAmount`.
+
+### Bestanden die wijzigen
 
 | Bestand | Wijziging |
 |---|---|
-| `src/hooks/useExcelExport.ts` | Weekday rates, logged time, BTW, inbound/service support |
-| `src/components/Dashboard/InboundReportMatrix.tsx` | Logged time props + berekeningen |
-| `src/components/Dashboard/ReportViewSection.tsx` | loggedTime props doorgeven aan InboundReportMatrix |
-| `src/pages/Dashboard.tsx` | Extra params aan useExcelExport |
+| `src/components/Dashboard/KPICardsSection.tsx` | Interface + popover layout |
+| `src/pages/Dashboard.tsx` | `totalAmount` berekenen in useMemo |
+
