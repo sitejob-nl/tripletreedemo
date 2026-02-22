@@ -42,15 +42,15 @@ export function ReportViewSection({
 
   return (
     <div>
-      <div className="flex justify-between items-end mb-4">
-        <h3 className="font-bold text-foreground text-lg">
+      <div className="flex justify-between items-end mb-3 sm:mb-4 gap-2">
+        <h3 className="font-bold text-foreground text-sm sm:text-lg truncate">
           {getTitle()}
         </h3>
         <button 
           onClick={onExportToExcel}
-          className="text-primary text-sm font-medium hover:underline flex items-center gap-1"
+          className="text-primary text-xs sm:text-sm font-medium hover:underline flex items-center gap-1 shrink-0"
         >
-          <FileSpreadsheet size={16} /> Exporteer naar Excel
+          <FileSpreadsheet size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Exporteer naar</span> Excel
         </button>
       </div>
       
