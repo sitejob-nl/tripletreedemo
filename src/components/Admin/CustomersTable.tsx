@@ -190,7 +190,7 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
 
   return (
     <>
-      <Card>
+      <Card data-tour="admin-customers-table">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>

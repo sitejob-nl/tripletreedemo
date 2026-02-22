@@ -44,7 +44,7 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
   return (
     <div className="space-y-6">
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-4" data-tour="admin-stats">
         <Card 
           className="cursor-pointer hover:border-primary/50 transition-colors"
           onClick={() => onNavigate("projecten")}
@@ -116,7 +116,7 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
       </div>
 
       {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3" data-tour="admin-quick-actions">
         <Button onClick={onOpenAddProject} className="gap-2">
           <Plus className="h-4 w-4" />
           Nieuw project
@@ -132,7 +132,7 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
       </div>
 
       {/* Recent Sync Jobs */}
-      <Card>
+      <Card data-tour="admin-recent-jobs">
         <CardContent className="pt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">Recente Sync Jobs</h3>

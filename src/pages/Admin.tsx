@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useProjects } from "@/hooks/useProjects";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,6 +6,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
+import { OnboardingButton } from "@/components/Dashboard/OnboardingButton";
+import { OnboardingTour } from "@/components/Dashboard/OnboardingTour";
+import { useAdminOnboardingTour } from "@/hooks/useAdminOnboardingTour";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { DBProject, MappingConfig } from "@/types/database";
 
@@ -54,6 +57,12 @@ export default function Admin() {
   const [isSaving, setIsSaving] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const handleSwitchTab = useCallback((tab: string) => {
+    setActiveTab(tab);
+  }, []);
+
+  const tour = useAdminOnboardingTour(handleSwitchTab);
 
   const handleOpenAddProject = () => {
     setFormData(emptyFormData);
@@ -171,25 +180,26 @@ export default function Admin() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <Link to="/">
+          <Link to="/" data-tour="admin-back-button">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </Link>
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-bold text-foreground">Beheer</h1>
             <p className="text-muted-foreground">Projecten, klanten, gebruikers en synchronisatie</p>
           </div>
+          <OnboardingButton onClick={tour.startTour} />
         </div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-5" data-tour="admin-tabs">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="projecten">Projecten</TabsTrigger>
-            <TabsTrigger value="klanten">Klanten</TabsTrigger>
-            <TabsTrigger value="gebruikers">Gebruikers</TabsTrigger>
-            <TabsTrigger value="sync">Synchronisatie</TabsTrigger>
+            <TabsTrigger value="projecten" data-tour="admin-projects-tab">Projecten</TabsTrigger>
+            <TabsTrigger value="klanten" data-tour="admin-customers-tab">Klanten</TabsTrigger>
+            <TabsTrigger value="gebruikers" data-tour="admin-users-tab">Gebruikers</TabsTrigger>
+            <TabsTrigger value="sync" data-tour="admin-sync-tab">Synchronisatie</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard">
@@ -234,6 +244,16 @@ export default function Admin() {
           isEditing={!!editingProject}
         />
       </div>
+
+      <OnboardingTour
+        isActive={tour.isActive}
+        currentStep={tour.currentStep}
+        currentStepIndex={tour.currentStepIndex}
+        totalSteps={tour.totalSteps}
+        onNext={tour.nextStep}
+        onPrev={tour.prevStep}
+        onSkip={tour.skipTour}
+      />
     </div>
   );
 }
