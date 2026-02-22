@@ -59,14 +59,14 @@ export const DashboardView = ({
   ].filter(item => item.value > 0);
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-card p-6 rounded-2xl shadow-sm border border-border lg:col-span-2">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-card-foreground text-lg">Jaarwaarde Ontwikkeling</h3>
-            <TrendingUp className="text-primary" size={20} />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="bg-card p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm border border-border lg:col-span-2">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <h3 className="font-bold text-card-foreground text-sm sm:text-lg">Jaarwaarde Ontwikkeling</h3>
+            <TrendingUp className="text-primary" size={18} />
           </div>
-          <div className="h-72">
+          <div className="h-48 sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesData}>
                 <defs>
@@ -79,16 +79,18 @@ export const DashboardView = ({
                 <XAxis
                   dataKey="day_name"
                   stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
+                  fontSize={10}
                   tickLine={false}
                   axisLine={false}
+                  interval="preserveStartEnd"
                 />
                 <YAxis
                   stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
+                  fontSize={10}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(val) => `€${val}`}
+                  width={45}
                 />
                 <RechartsTooltip
                   contentStyle={{
@@ -96,6 +98,7 @@ export const DashboardView = ({
                     border: 'none',
                     boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                     backgroundColor: 'hsl(var(--card))',
+                    fontSize: '12px',
                   }}
                 />
                 <Area
@@ -111,17 +114,17 @@ export const DashboardView = ({
           </div>
         </div>
 
-        <div className="bg-card p-6 rounded-2xl shadow-sm border border-border">
-          <h3 className="font-bold text-card-foreground mb-6 text-lg">Donatie Types</h3>
-          <div className="h-48 flex items-center justify-center">
+        <div className="bg-card p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm border border-border">
+          <h3 className="font-bold text-card-foreground mb-4 sm:mb-6 text-sm sm:text-lg">Donatie Types</h3>
+          <div className="h-40 sm:h-48 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={donationTypeData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
+                  innerRadius={40}
+                  outerRadius={65}
                   paddingAngle={5}
                   dataKey="value"
                 >
@@ -135,41 +138,42 @@ export const DashboardView = ({
                     border: 'none',
                     boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
                     backgroundColor: 'hsl(var(--card))',
+                    fontSize: '12px',
                   }}
                 />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: '12px' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="bg-card p-6 rounded-2xl shadow-sm border border-border">
-        <h3 className="font-bold text-card-foreground mb-6 text-lg">Resultaat Verdeling</h3>
-        <div className="space-y-4">
+      <div className="bg-card p-4 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm border border-border">
+        <h3 className="font-bold text-card-foreground mb-4 sm:mb-6 text-sm sm:text-lg">Resultaat Verdeling</h3>
+        <div className="space-y-3 sm:space-y-4">
           {statusCounts.map(({ status, count, pct }, idx) => (
             <div key={status}>
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-foreground font-medium">{status}</span>
-                <span className="font-bold text-foreground">
+              <div className="flex justify-between text-xs sm:text-sm mb-1.5 sm:mb-2">
+                <span className="text-foreground font-medium truncate mr-2">{status}</span>
+                <span className="font-bold text-foreground shrink-0">
                   {count} <span className="text-muted-foreground">({pct.toFixed(1)}%)</span>
                 </span>
               </div>
-              <Progress value={pct} className="h-2" />
+              <Progress value={pct} className="h-1.5 sm:h-2" />
             </div>
           ))}
         </div>
       </div>
 
       {/* Detail Table with Pagination */}
-      <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-bold text-card-foreground text-lg">Recent Detail Data</h3>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Per pagina:</span>
+      <div className="bg-card rounded-xl sm:rounded-2xl shadow-sm border border-border overflow-hidden -mx-3 sm:mx-0">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h3 className="font-bold text-card-foreground text-sm sm:text-lg">Recent Detail Data</h3>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-xs sm:text-sm text-muted-foreground">Per pagina:</span>
               <Select value={String(pageSize)} onValueChange={(val) => { onPageSizeChange(Number(val)); onPageChange(1); }}>
-                <SelectTrigger className="w-20 h-8">
+                <SelectTrigger className="w-16 sm:w-20 h-7 sm:h-8 text-xs sm:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -179,31 +183,31 @@ export const DashboardView = ({
                 </SelectContent>
               </Select>
             </div>
-            <span className="text-sm text-muted-foreground">
-              {totalRecords.toLocaleString('nl-NL')} records totaal
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              {totalRecords.toLocaleString('nl-NL')} records
             </span>
           </div>
         </div>
-        <div className="overflow-x-auto max-h-[500px]">
-          <table className="w-full text-sm text-left">
+        <div className="overflow-x-auto max-h-[400px] sm:max-h-[500px]">
+          <table className="w-full text-xs sm:text-sm text-left">
             <thead className="bg-muted/50 text-foreground font-semibold sticky top-0">
               <tr>
-                <th className="px-6 py-3">Datum (Week)</th>
-                <th className="px-6 py-3">Resultaat</th>
-                <th className="px-6 py-3">Type</th>
-                <th className="px-6 py-3 text-right">Jaarwaarde</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 whitespace-nowrap">Datum</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3">Resultaat</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 hidden sm:table-cell">Type</th>
+                <th className="px-3 sm:px-6 py-2 sm:py-3 text-right">Jaarwaarde</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {data.map((row, idx) => (
                 <tr key={row.id} className={`hover:bg-muted/30 transition-colors ${idx % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
-                  <td className="px-6 py-4 text-foreground font-medium">
-                    {row.normalized_date || row.bc_beldatum}{' '}
-                    <span className="text-xs text-muted-foreground ml-2 font-normal">(W{row.week_number})</span>
+                  <td className="px-3 sm:px-6 py-2.5 sm:py-4 text-foreground font-medium whitespace-nowrap">
+                    {row.normalized_date || row.bc_beldatum}
+                    <span className="text-[10px] sm:text-xs text-muted-foreground ml-1 sm:ml-2 font-normal">(W{row.week_number})</span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 sm:px-6 py-2.5 sm:py-4">
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold ${
                         row.is_sale
                           ? 'bg-kpi-green text-kpi-green-text'
                           : 'bg-muted text-muted-foreground'
@@ -212,14 +216,14 @@ export const DashboardView = ({
                       {row.bc_result_naam}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-muted-foreground">
+                  <td className="px-3 sm:px-6 py-2.5 sm:py-4 text-muted-foreground hidden sm:table-cell">
                     {row.is_recurring ? (
                       <span className="px-2 py-1 bg-kpi-blue text-kpi-blue-text rounded-full text-xs font-medium">Doorlopend</span>
                     ) : row.is_sale ? (
                       <span className="px-2 py-1 bg-kpi-purple text-kpi-purple-text rounded-full text-xs font-medium">Eenmalig</span>
                     ) : '-'}
                   </td>
-                  <td className="px-6 py-4 text-right font-bold text-foreground">
+                  <td className="px-3 sm:px-6 py-2.5 sm:py-4 text-right font-bold text-foreground whitespace-nowrap">
                     {row.is_sale ? `€ ${row.annual_value.toFixed(2)}` : '-'}
                   </td>
                 </tr>
@@ -230,28 +234,30 @@ export const DashboardView = ({
         
         {/* Pagination Controls */}
         {totalRecords > pageSize && (
-          <div className="px-6 py-4 border-t border-border flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              Pagina {currentPage} van {Math.ceil(totalRecords / pageSize)}
+          <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-border flex items-center justify-between">
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              {currentPage}/{Math.ceil(totalRecords / pageSize)}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Button
                 variant="outline"
                 size="sm"
+                className="h-7 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
                 onClick={() => onPageChange(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
               >
-                <ChevronLeft size={16} />
-                Vorige
+                <ChevronLeft size={14} />
+                <span className="hidden sm:inline ml-1">Vorige</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
+                className="h-7 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm"
                 onClick={() => onPageChange(Math.min(Math.ceil(totalRecords / pageSize), currentPage + 1))}
                 disabled={currentPage >= Math.ceil(totalRecords / pageSize)}
               >
-                Volgende
-                <ChevronRight size={16} />
+                <span className="hidden sm:inline mr-1">Volgende</span>
+                <ChevronRight size={14} />
               </Button>
             </div>
           </div>

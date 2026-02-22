@@ -89,15 +89,15 @@ export const DateFilterSelector = ({
   };
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
       {/* Filter Type Selector */}
-      <div className="flex items-center bg-muted/50 rounded-xl px-3 py-1.5 border border-border">
-        <Filter size={14} className="text-muted-foreground mr-2" />
+      <div className="flex items-center bg-muted/50 rounded-lg sm:rounded-xl px-2 sm:px-3 py-1 sm:py-1.5 border border-border">
+        <Filter size={14} className="text-muted-foreground mr-1.5 sm:mr-2 shrink-0" />
         <Select
           value={filterType}
           onValueChange={(value) => onFilterTypeChange(value as DateFilterType)}
         >
-          <SelectTrigger className="border-0 bg-transparent h-8 w-28 p-0 focus:ring-0">
+          <SelectTrigger className="border-0 bg-transparent h-7 sm:h-8 w-24 sm:w-28 p-0 focus:ring-0 text-xs sm:text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -110,7 +110,7 @@ export const DateFilterSelector = ({
       {/* Week Selector (when filterType is 'week') */}
       {filterType === 'week' && (
         <Select value={String(selectedWeek)} onValueChange={onWeekChange}>
-          <SelectTrigger className="bg-muted/50 rounded-xl px-4 py-2 border border-border h-auto w-auto min-w-[140px]">
+          <SelectTrigger className="bg-muted/50 rounded-lg sm:rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 border border-border h-auto w-auto min-w-[100px] sm:min-w-[140px] text-xs sm:text-sm">
             <SelectValue placeholder="Selecteer week" />
           </SelectTrigger>
           <SelectContent>
