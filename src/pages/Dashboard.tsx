@@ -12,6 +12,8 @@ import { KPICardsSection, AnnualValueBreakdown } from '@/components/Dashboard/KP
 import { ReportViewSection } from '@/components/Dashboard/ReportViewSection';
 import { AnalysisViewSection } from '@/components/Dashboard/AnalysisViewSection';
 import { AdminViewToggle } from '@/components/Dashboard/AdminViewToggle';
+import { OnboardingTour } from '@/components/Dashboard/OnboardingTour';
+import { useOnboardingTour } from '@/hooks/useOnboardingTour';
 import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
@@ -48,6 +50,10 @@ const Index = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isLoggingOutRef = useRef(false);
+
+  // Onboarding tour (must be before any conditional returns)
+  const isDbAdminForTour = userRole?.role === 'admin' || userRole?.role === 'superadmin';
+  const tour = useOnboardingTour(!!isDbAdminForTour);
 
   // Resolve date filter for queries
   const dateFilter = useDateFilter({
@@ -428,6 +434,7 @@ const Index = () => {
           onDateFilterTypeChange={setDateFilterType}
           dateRange={dateRange}
           onDateRangeChange={setDateRange}
+          onStartTour={tour.startTour}
         />
         
         {/* Admin toggle to view as client */}
@@ -485,15 +492,17 @@ const Index = () => {
                       </div>
                     </div>
                   )}
-                  <MappingTool
-                    project={currentProject}
-                    onSave={handleSaveMapping}
-                    isSaving={updateProject.isPending}
-                  />
+                  <div data-tour="mapping-tool">
+                    <MappingTool
+                      project={currentProject}
+                      onSave={handleSaveMapping}
+                      isSaving={updateProject.isPending}
+                    />
+                  </div>
                   
                   {/* Hours Correction - only show when date filter is active */}
                   {dateFilter.isFiltering && dateFilter.startDate && dateFilter.endDate && currentProject && (
-                    <div className="mt-6">
+                    <div className="mt-6" data-tour="hours-correction">
                       <HoursCorrection
                         projectId={currentProject.id}
                         startDate={dateFilter.startDate}
@@ -573,6 +582,16 @@ const Index = () => {
           )}
         </div>
       </main>
+
+      <OnboardingTour
+        isActive={tour.isActive}
+        currentStep={tour.currentStep}
+        currentStepIndex={tour.currentStepIndex}
+        totalSteps={tour.totalSteps}
+        onNext={tour.nextStep}
+        onPrev={tour.prevStep}
+        onSkip={tour.skipTour}
+      />
     </div>
   );
 };

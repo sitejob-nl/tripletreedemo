@@ -114,7 +114,7 @@ export const Sidebar = ({
         <img src={logo} alt="Triple Tree Logo" className="h-10 sm:h-12 w-auto object-contain" />
       </div>
 
-      <nav className="p-3 sm:p-4 space-y-1 flex-1 overflow-y-auto min-h-0">
+      <nav className="p-3 sm:p-4 space-y-1 flex-1 overflow-y-auto min-h-0" data-tour="sidebar-projects">
         <div className="text-xs uppercase text-gray-400 font-bold px-3 mb-3 mt-2">
           Campagnes
         </div>
@@ -136,7 +136,7 @@ export const Sidebar = ({
         ))}
       </nav>
 
-      <div className="p-3 sm:p-4 border-t border-gray-800 space-y-1 flex-shrink-0">
+      <div className="p-3 sm:p-4 border-t border-gray-800 space-y-1 flex-shrink-0" data-tour="sidebar-admin-links">
         {adminMenuItems}
         {devMenuItem}
         <button 

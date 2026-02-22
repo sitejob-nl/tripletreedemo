@@ -41,7 +41,7 @@ export function ReportViewSection({
   };
 
   return (
-    <div>
+    <div data-tour="report-section">
       <div className="flex justify-between items-end mb-3 sm:mb-4 gap-2">
         <h3 className="font-bold text-foreground text-sm sm:text-lg truncate">
           {getTitle()}
