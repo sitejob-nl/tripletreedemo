@@ -1,45 +1,22 @@
 
 
-# Globale Correctiefactor (hours_factor) Toevoegen
+# Fix: CHECK constraint uitbreiden met `inbound_service`
 
-De per-dag urencorrectie is al gebouwd en werkt. Dit voegt een **extra** globale factor toe die bovenop de dagelijkse waarden wordt toegepast.
+## Probleem
+De database heeft een CHECK constraint `projects_project_type_check` die alleen `'outbound'` en `'inbound'` toestaat. Het nieuwe type `'inbound_service'` is wel in de TypeScript code toegevoegd, maar de database constraint is niet bijgewerkt.
 
----
+## Oplossing
+Een nieuwe migratie die de bestaande constraint verwijdert en opnieuw aanmaakt met alle drie de types.
 
-## Wat verandert er
+## Technische details
 
-### Database
-- Nieuw veld `hours_factor` (NUMERIC, default 1.0) op de `projects` tabel
-- Voorbeeld: factor 0.8 betekent dat alle uren met 80% worden vermenigvuldigd
+### Nieuw bestand: `supabase/migrations/xxx_add_inbound_service_type.sql`
 
-### useLoggedTime Hook
-- Na het ophalen van de dagdata (met eventuele per-dag correcties) wordt alles vermenigvuldigd met `hours_factor`
-- Prioriteit: `corrected_seconds` -> `total_seconds`, daarna x `hours_factor`
-
-### Admin UI (MappingTool)
-- Nieuw invoerveld in de financiele sectie: "Globale urenfactor"
-- Uitleg: "Factor waarmee alle gelogde uren worden vermenigvuldigd (1.0 = geen aanpassing, 0.8 = 20% minder)"
-
-### ProjectDialog (Admin)
-- Optioneel: hours_factor invoerveld bij project aanmaken/bewerken
-
----
-
-## Technische Details
-
-### Bestanden die wijzigen
-
-| Bestand | Wijziging |
-|---|---|
-| `supabase/migrations/xxx.sql` | `ALTER TABLE projects ADD COLUMN hours_factor NUMERIC DEFAULT 1.0` |
-| `src/types/database.ts` | `hours_factor` toevoegen aan `DBProject` en `DBProjectPublic` |
-| `src/hooks/useLoggedTime.ts` | Nieuwe parameter `hoursFactor`, vermenigvuldigen na aggregatie |
-| `src/components/Dashboard/MappingTool.tsx` | Invoerveld voor hours_factor in financiele sectie |
-| `src/pages/Dashboard.tsx` | `hoursFactor` doorgeven aan useLoggedTime |
-
-### Berekening
-```text
-effectieve_uren_per_dag = (corrected_seconds ?? total_seconds) * hours_factor / 3600
+```sql
+ALTER TABLE projects DROP CONSTRAINT projects_project_type_check;
+ALTER TABLE projects ADD CONSTRAINT projects_project_type_check
+  CHECK (project_type = ANY (ARRAY['outbound', 'inbound', 'inbound_service']));
 ```
 
-De globale factor werkt als aanvulling op de per-dag correcties - niet als vervanging.
+Dat is alles -- na deze migratie kun je projecten opslaan met type `inbound_service`.
+
