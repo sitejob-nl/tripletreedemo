@@ -34,7 +34,7 @@ export const Header = ({
   onDateRangeChange,
 }: HeaderProps) => {
   return (
-    <header className="bg-card shadow-sm border-b border-border px-3 sm:px-8 py-3 sm:py-5 flex flex-col gap-2 sm:gap-4 sticky top-0 z-20">
+    <header className="bg-card shadow-sm border-b border-border px-3 sm:px-8 py-3 sm:py-5 flex flex-col gap-2 sm:gap-4 sticky top-14 md:top-0 z-20">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <h2 className="text-lg sm:text-2xl font-bold text-card-foreground capitalize truncate">{project}</h2>
