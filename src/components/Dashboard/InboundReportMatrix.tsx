@@ -189,7 +189,7 @@ export const InboundReportMatrix = ({
 
     return (
       <tr className={`hover:bg-muted/30 transition-colors border-b border-border/50 ${bgClass}`}>
-        <td className="px-2 sm:px-4 py-2 sm:py-3 font-medium text-foreground bg-muted/30 sticky left-0 text-xs sm:text-sm whitespace-nowrap">{label}</td>
+        <td className="px-2 sm:px-4 py-2 sm:py-3 font-medium text-foreground bg-card sticky left-0 z-10 text-xs sm:text-sm whitespace-nowrap border-r border-border/30">{label}</td>
         {days.map((day) => (
           <td key={day} className="px-2 sm:px-4 py-2 sm:py-3 text-right text-foreground text-xs sm:text-sm whitespace-nowrap">
             {formatValue(getValue(aggregated[day], day))}
@@ -209,7 +209,7 @@ export const InboundReportMatrix = ({
     };
     return (
       <tr key={reason} className="hover:bg-muted/30 transition-colors border-b border-border/50 bg-muted/10">
-        <td className="px-2 sm:px-4 py-1.5 sm:py-2 pl-4 sm:pl-8 text-muted-foreground bg-muted/20 sticky left-0 text-[10px] sm:text-xs truncate max-w-[120px] sm:max-w-none">{reason}</td>
+        <td className="px-2 sm:px-4 py-1.5 sm:py-2 pl-4 sm:pl-8 text-muted-foreground bg-card sticky left-0 z-10 text-[10px] sm:text-xs truncate max-w-[120px] sm:max-w-none border-r border-border/30">{reason}</td>
         {days.map((day) => (
           <td key={day} className="px-2 sm:px-4 py-1.5 sm:py-2 text-right text-muted-foreground text-[10px] sm:text-xs">
             {getValue(aggregated[day]) || '-'}
