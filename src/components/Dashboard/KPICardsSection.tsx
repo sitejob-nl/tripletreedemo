@@ -3,6 +3,14 @@ import { KPICard } from './KPICard';
 import { Progress } from '@/components/ui/progress';
 import { ProjectType } from '@/types/database';
 
+export interface AnnualValueBreakdown {
+  monthly: { count: number; value: number };
+  quarterly: { count: number; value: number };
+  halfYearly: { count: number; value: number };
+  yearly: { count: number; value: number };
+  oneoff: { count: number; value: number };
+}
+
 interface KPICardsSectionProps {
   projectType: ProjectType;
   totalSales: number;
@@ -16,6 +24,7 @@ interface KPICardsSectionProps {
   totalToCall?: number | null;
   totalHandled?: number;
   totalNotHandled?: number;
+  annualValueBreakdown?: AnnualValueBreakdown;
 }
 
 export function KPICardsSection({
@@ -31,12 +40,47 @@ export function KPICardsSection({
   totalToCall,
   totalHandled = 0,
   totalNotHandled = 0,
+  annualValueBreakdown,
 }: KPICardsSectionProps) {
   const showProgress = totalToCall && totalToCall > 0;
   const progressPercent = showProgress ? Math.min((totalRecords / totalToCall) * 100, 100) : 0;
 
   const isInboundProject = projectType === 'inbound';
   const isServiceProject = projectType === 'inbound_service';
+
+  const fmt = (v: number) => `€ ${v.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const freqLabels: Record<string, string> = {
+    monthly: 'Maandelijks (×12)',
+    quarterly: 'Per kwartaal (×4)',
+    halfYearly: 'Halfjaarlijks (×2)',
+    yearly: 'Jaarlijks (×1)',
+    oneoff: 'Eenmalig',
+  };
+
+  const breakdownPopover = annualValueBreakdown ? (
+    <div className="space-y-3">
+      <h4 className="font-semibold text-sm text-foreground">Opbouw Jaarwaarde</h4>
+      <div className="space-y-1.5">
+        {(['monthly', 'quarterly', 'halfYearly', 'yearly', 'oneoff'] as const).map((key) => {
+          const item = annualValueBreakdown[key];
+          if (item.count === 0) return null;
+          return (
+            <div key={key} className="flex justify-between text-sm">
+              <span className="text-muted-foreground">
+                {freqLabels[key]} <span className="text-xs">({item.count}×)</span>
+              </span>
+              <span className="font-medium text-foreground">{fmt(item.value)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="border-t border-border pt-2 flex justify-between text-sm font-bold">
+        <span>Totaal</span>
+        <span>{fmt(totalAnnualValue)}</span>
+      </div>
+    </div>
+  ) : undefined;
 
   // Klantenservice KPIs
   if (isServiceProject) {
@@ -137,10 +181,11 @@ export function KPICardsSection({
         <KPICard
           title="Jaarwaarde"
           value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          subtext="Totale opbrengst"
+          subtext={annualValueBreakdown ? 'Klik voor details' : 'Totale opbrengst'}
           icon={DollarSign}
           variant="blue"
           isLoading={isLoading}
+          popoverContent={breakdownPopover}
         />
         <KPICard
           title="Kosten per Donateur"

@@ -8,7 +8,7 @@ import { HoursCorrection } from '@/components/Dashboard/HoursCorrection';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
 import { WelcomeScreen } from '@/components/Dashboard/WelcomeScreen';
-import { KPICardsSection } from '@/components/Dashboard/KPICardsSection';
+import { KPICardsSection, AnnualValueBreakdown } from '@/components/Dashboard/KPICardsSection';
 import { ReportViewSection } from '@/components/Dashboard/ReportViewSection';
 import { AnalysisViewSection } from '@/components/Dashboard/AnalysisViewSection';
 import { AdminViewToggle } from '@/components/Dashboard/AdminViewToggle';
@@ -27,6 +27,7 @@ import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 import { useExcelExport } from '@/hooks/useExcelExport';
 import { Navigate } from 'react-router-dom';
+import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
 
 const Index = () => {
   const [selectedProjectKey, setSelectedProjectKeyState] = useState<string>('');
@@ -275,6 +276,32 @@ const Index = () => {
     return { totalHandled: handled, totalNotHandled: notHandled };
   }, [projectType, currentProject?.mapping_config, reportMatrixProcessedData]);
 
+  // Compute annual value breakdown by frequency type
+  const annualValueBreakdown = useMemo((): AnnualValueBreakdown | undefined => {
+    if (projectType !== 'outbound' || !currentProject?.mapping_config) return undefined;
+    const freqMap = currentProject.mapping_config.freq_map || {};
+    const freqCol = currentProject.mapping_config.freq_col;
+    const breakdown: AnnualValueBreakdown = {
+      monthly: { count: 0, value: 0 },
+      quarterly: { count: 0, value: 0 },
+      halfYearly: { count: 0, value: 0 },
+      yearly: { count: 0, value: 0 },
+      oneoff: { count: 0, value: 0 },
+    };
+
+    reportMatrixProcessedData.forEach((record) => {
+      if (!record.is_sale) return;
+      const rawData = (record as any).raw_data as Record<string, unknown> | undefined;
+      const freqRaw = rawData?.[freqCol];
+      const result = detectFrequencyFromConfig(freqRaw, freqMap, record.bc_result_naam);
+      const key = result.type as keyof AnnualValueBreakdown;
+      breakdown[key].count++;
+      breakdown[key].value += record.annual_value || 0;
+    });
+
+    return breakdown;
+  }, [reportMatrixProcessedData, projectType, currentProject?.mapping_config]);
+
   // Get display label for current filter
   const filterLabel = useMemo(() => {
     if (dateFilterType === 'week') {
@@ -498,6 +525,7 @@ const Index = () => {
                     totalToCall={currentProject?.total_to_call}
                     totalHandled={totalHandled}
                     totalNotHandled={totalNotHandled}
+                    annualValueBreakdown={annualValueBreakdown}
                   />
 
                   {/* MAIN VIEW SWITCHER */}

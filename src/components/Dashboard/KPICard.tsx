@@ -1,5 +1,7 @@
 import { LucideIcon } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { ReactNode } from 'react';
 
 interface KPICardProps {
   title: string;
@@ -12,9 +14,10 @@ interface KPICardProps {
     isPositive: boolean;
   };
   isLoading?: boolean;
+  popoverContent?: ReactNode;
 }
 
-export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', trend, isLoading = false }: KPICardProps) => {
+export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', trend, isLoading = false, popoverContent }: KPICardProps) => {
   const variantStyles = {
     green: { bg: 'bg-kpi-green', text: 'text-kpi-green-text', iconBg: 'bg-kpi-green', iconText: 'text-kpi-green-text' },
     pink: { bg: 'bg-kpi-pink', text: 'text-kpi-pink-text', iconBg: 'bg-kpi-pink', iconText: 'text-kpi-pink-text' },
@@ -26,8 +29,8 @@ export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', 
 
   const styles = variantStyles[variant];
 
-  return (
-    <div className={`${styles.bg} p-4 sm:p-6 rounded-2xl shadow-sm border border-border/50 flex items-start justify-between hover:shadow-md transition-shadow`}>
+  const cardContent = (
+    <div className={`${styles.bg} p-4 sm:p-6 rounded-2xl shadow-sm border border-border/50 flex items-start justify-between hover:shadow-md transition-shadow ${popoverContent ? 'cursor-pointer' : ''}`}>
       <div className="flex-1 min-w-0">
         <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1 sm:mb-2 truncate">{title}</p>
         {isLoading ? (
@@ -49,4 +52,17 @@ export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', 
       </div>
     </div>
   );
+
+  if (popoverContent) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>{cardContent}</PopoverTrigger>
+        <PopoverContent className="w-72 p-4" align="start">
+          {popoverContent}
+        </PopoverContent>
+      </Popover>
+    );
+  }
+
+  return cardContent;
 };
