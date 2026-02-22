@@ -72,6 +72,8 @@ export function ReportViewSection({
           selectedWeek={selectedWeek}
           mappingConfig={mappingConfig}
           amountCol={mappingConfig.amount_col}
+          loggedTimeHours={loggedTimeHours}
+          dailyLoggedHours={dailyLoggedHours}
         />
       ) : selectedWeek === 'all' ? (
         <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">

@@ -292,6 +292,11 @@ const Index = () => {
     hourlyRate,
     selectedWeek: filterLabel,
     projectName: currentProject?.name || selectedProjectKey,
+    mappingConfig: currentProject?.mapping_config,
+    vatRate: currentProject?.vat_rate || 21,
+    loggedTimeHours: loggedTime?.hasData ? loggedTime.totalHours : undefined,
+    dailyLoggedHours: loggedTime?.dailyHours,
+    projectType,
   });
 
   const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType, hoursFactor?: number) => {
