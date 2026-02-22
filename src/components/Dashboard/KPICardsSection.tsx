@@ -149,10 +149,11 @@ export function KPICardsSection({
         <KPICard
           title="Behouden Waarde"
           value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          subtext="Jaarwaarde behouden"
+          subtext={annualValueBreakdown ? 'Klik voor details' : 'Jaarwaarde behouden'}
           icon={DollarSign}
           variant="blue"
           isLoading={isLoading}
+          popoverContent={breakdownPopover}
         />
         <KPICard
           title="Retentie Ratio"
