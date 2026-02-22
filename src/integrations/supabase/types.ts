@@ -233,6 +233,7 @@ export type Database = {
           basicall_token: string
           created_at: string | null
           hourly_rate: number | null
+          hours_factor: number | null
           id: string
           is_active: boolean | null
           mapping_config: Json | null
@@ -248,6 +249,7 @@ export type Database = {
           basicall_token: string
           created_at?: string | null
           hourly_rate?: number | null
+          hours_factor?: number | null
           id?: string
           is_active?: boolean | null
           mapping_config?: Json | null
@@ -263,6 +265,7 @@ export type Database = {
           basicall_token?: string
           created_at?: string | null
           hourly_rate?: number | null
+          hours_factor?: number | null
           id?: string
           is_active?: boolean | null
           mapping_config?: Json | null

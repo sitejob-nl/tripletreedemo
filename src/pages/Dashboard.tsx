@@ -152,7 +152,8 @@ const Index = () => {
   // Fetch logged time for accurate cost calculation
   const { data: loggedTime, isLoading: loggedTimeLoading } = useLoggedTime({
     projectId: currentProject?.id,
-    dateFilter
+    dateFilter,
+    hoursFactor: currentProject?.hours_factor ?? 1.0
   });
 
   // Fetch ALL records for selected period for ReportMatrix (no pagination)
@@ -276,13 +277,14 @@ const Index = () => {
     projectName: currentProject?.name || selectedProjectKey,
   });
 
-  const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType) => {
+  const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType, hoursFactor?: number) => {
     try {
       await updateProject.mutateAsync({
         projectId,
         hourlyRate,
         mappingConfig,
         projectType,
+        hoursFactor,
       });
       toast({
         title: 'Configuratie opgeslagen',
