@@ -28,7 +28,7 @@ export const SyncStatus = ({ projectId }: SyncStatusProps) => {
   };
 
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex items-center gap-2 text-sm" data-tour="sync-status">
       <div className={cn('h-2 w-2 rounded-full', colorClasses[statusColor])} />
       <span className="text-muted-foreground">
         Sync: {syncTime}

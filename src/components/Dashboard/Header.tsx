@@ -2,6 +2,7 @@ import { LayoutDashboard, FileSpreadsheet, BarChart3 } from 'lucide-react';
 import { Role, ViewMode, Project } from '@/types/dashboard';
 import { DateFilterSelector, DateFilterType, DateRange } from './DateFilterSelector';
 import { HelpDialog } from './HelpDialog';
+import { OnboardingButton } from './OnboardingButton';
 import { WeekYear } from '@/hooks/useCallRecords';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -18,6 +19,7 @@ interface HeaderProps {
   onDateFilterTypeChange: (type: DateFilterType) => void;
   dateRange: DateRange;
   onDateRangeChange: (range: DateRange) => void;
+  onStartTour?: () => void;
 }
 
 export const Header = ({
@@ -32,6 +34,7 @@ export const Header = ({
   onDateFilterTypeChange,
   dateRange,
   onDateRangeChange,
+  onStartTour,
 }: HeaderProps) => {
   return (
     <header className="bg-card shadow-sm border-b border-border px-3 sm:px-8 py-3 sm:py-5 flex flex-col gap-2 sm:gap-4 sticky top-14 md:top-0 z-20">
@@ -50,7 +53,10 @@ export const Header = ({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
-          <HelpDialog />
+          {onStartTour && <OnboardingButton onClick={onStartTour} />}
+          <div data-tour="help-button">
+            <HelpDialog />
+          </div>
           
           {role === 'admin' && (
             <span className="bg-warning/10 text-warning px-2 sm:px-4 py-1 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold border border-warning/20">
@@ -61,7 +67,8 @@ export const Header = ({
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-4 flex-wrap">
-        <DateFilterSelector
+        <div data-tour="date-filter">
+          <DateFilterSelector
           filterType={dateFilterType}
           onFilterTypeChange={onDateFilterTypeChange}
           selectedWeek={selectedWeek}
@@ -69,11 +76,12 @@ export const Header = ({
           onWeekChange={onWeekChange}
           dateRange={dateRange}
           onDateRangeChange={onDateRangeChange}
-        />
+          />
+        </div>
 
         {role !== 'admin' && (
           <TooltipProvider>
-            <div className="flex bg-muted/50 p-0.5 sm:p-1.5 rounded-lg sm:rounded-xl border border-border ml-auto">
+            <div className="flex bg-muted/50 p-0.5 sm:p-1.5 rounded-lg sm:rounded-xl border border-border ml-auto" data-tour="view-buttons">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button

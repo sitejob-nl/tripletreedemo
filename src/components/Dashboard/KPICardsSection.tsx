@@ -97,7 +97,7 @@ export function KPICardsSection({
     const callsPerHour = totalHours > 0 ? totalRecords / totalHours : 0;
 
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8" data-tour="kpi-cards">
         <KPICard
           title="Afgehandeld"
           value={`${handledPercent.toFixed(1)}%`}
@@ -137,7 +137,7 @@ export function KPICardsSection({
   // Inbound retentie KPIs
   if (isInboundProject) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8" data-tour="kpi-cards">
         <KPICard
           title="Behouden"
           value={totalSales}
@@ -177,7 +177,7 @@ export function KPICardsSection({
 
   // Outbound KPIs
   return (
-    <div className="space-y-4 mb-6 sm:mb-8">
+    <div className="space-y-4 mb-6 sm:mb-8" data-tour="kpi-cards">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         <KPICard
           title="Aantal Positief"
