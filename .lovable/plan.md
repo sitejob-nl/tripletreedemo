@@ -1,30 +1,45 @@
 
 
+# Globale Correctiefactor (hours_factor) Toevoegen
 
-# Fase 2 Implementatie: Status
-
-## Afgerond
-
-### Fase 1 (eerder)
-- Jaarwaarde/frequentie berekening fix
-- Configureerbare negatieve redenen
-- Handmatige urencorrectie per dag
-
-### Fase 2 Sprint 1 (zojuist)
-- **Afwijkend uurtarief per weekdag**: MappingConfig uitgebreid met `weekday_rates`, ReportMatrix en InboundReportMatrix gebruiken dag-specifieke tarieven, MappingTool heeft UI voor 7 weekdagen
-- **Badges / Te bellen restant**: `total_to_call` kolom toegevoegd aan projects, ProjectDialog heeft invoerveld, KPICardsSection toont voortgangsbalk
+De per-dag urencorrectie is al gebouwd en werkt. Dit voegt een **extra** globale factor toe die bovenop de dagelijkse waarden wordt toegepast.
 
 ---
 
-## Nog te bouwen
+## Wat verandert er
 
-### Sprint 2
-1. **Inbound Klantenservice Type** - ProjectType uitbreiden naar `inbound_retention` | `inbound_service`, ServiceReportMatrix component
-2. **Globale Correctiefactor** - `hours_factor` kolom, useLoggedTime vermenigvuldiging
+### Database
+- Nieuw veld `hours_factor` (NUMERIC, default 1.0) op de `projects` tabel
+- Voorbeeld: factor 0.8 betekent dat alle uren met 80% worden vermenigvuldigd
 
-### Parallel / extern
-3. Nachtelijke sync (VPS cronjob)
-4. Custom domein (DNS instructies)
-5. Badges via API (zodra beschikbaar)
-6. Steam connector (toekomst)
-7. Excel export weekday rates integratie
+### useLoggedTime Hook
+- Na het ophalen van de dagdata (met eventuele per-dag correcties) wordt alles vermenigvuldigd met `hours_factor`
+- Prioriteit: `corrected_seconds` -> `total_seconds`, daarna x `hours_factor`
+
+### Admin UI (MappingTool)
+- Nieuw invoerveld in de financiele sectie: "Globale urenfactor"
+- Uitleg: "Factor waarmee alle gelogde uren worden vermenigvuldigd (1.0 = geen aanpassing, 0.8 = 20% minder)"
+
+### ProjectDialog (Admin)
+- Optioneel: hours_factor invoerveld bij project aanmaken/bewerken
+
+---
+
+## Technische Details
+
+### Bestanden die wijzigen
+
+| Bestand | Wijziging |
+|---|---|
+| `supabase/migrations/xxx.sql` | `ALTER TABLE projects ADD COLUMN hours_factor NUMERIC DEFAULT 1.0` |
+| `src/types/database.ts` | `hours_factor` toevoegen aan `DBProject` en `DBProjectPublic` |
+| `src/hooks/useLoggedTime.ts` | Nieuwe parameter `hoursFactor`, vermenigvuldigen na aggregatie |
+| `src/components/Dashboard/MappingTool.tsx` | Invoerveld voor hours_factor in financiele sectie |
+| `src/pages/Dashboard.tsx` | `hoursFactor` doorgeven aan useLoggedTime |
+
+### Berekening
+```text
+effectieve_uren_per_dag = (corrected_seconds ?? total_seconds) * hours_factor / 3600
+```
+
+De globale factor werkt als aanvulling op de per-dag correcties - niet als vervanging.
