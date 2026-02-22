@@ -189,13 +189,13 @@ export const InboundReportMatrix = ({
 
     return (
       <tr className={`hover:bg-muted/30 transition-colors border-b border-border/50 ${bgClass}`}>
-        <td className="px-4 py-3 font-medium text-foreground bg-muted/30 sticky left-0 text-sm">{label}</td>
+        <td className="px-2 sm:px-4 py-2 sm:py-3 font-medium text-foreground bg-muted/30 sticky left-0 text-xs sm:text-sm whitespace-nowrap">{label}</td>
         {days.map((day) => (
-          <td key={day} className="px-4 py-3 text-right text-foreground text-sm">
+          <td key={day} className="px-2 sm:px-4 py-2 sm:py-3 text-right text-foreground text-xs sm:text-sm whitespace-nowrap">
             {formatValue(getValue(aggregated[day], day))}
           </td>
         ))}
-        <td className="px-4 py-3 text-right font-bold text-foreground bg-muted/50 text-sm">
+        <td className="px-2 sm:px-4 py-2 sm:py-3 text-right font-bold text-foreground bg-muted/50 text-xs sm:text-sm whitespace-nowrap">
           {formatValue(getValue(aggregated.total))}
         </td>
       </tr>
@@ -209,13 +209,13 @@ export const InboundReportMatrix = ({
     };
     return (
       <tr key={reason} className="hover:bg-muted/30 transition-colors border-b border-border/50 bg-muted/10">
-        <td className="px-4 py-2 pl-8 text-muted-foreground bg-muted/20 sticky left-0 text-xs">{reason}</td>
+        <td className="px-2 sm:px-4 py-1.5 sm:py-2 pl-4 sm:pl-8 text-muted-foreground bg-muted/20 sticky left-0 text-[10px] sm:text-xs truncate max-w-[120px] sm:max-w-none">{reason}</td>
         {days.map((day) => (
-          <td key={day} className="px-4 py-2 text-right text-muted-foreground text-xs">
+          <td key={day} className="px-2 sm:px-4 py-1.5 sm:py-2 text-right text-muted-foreground text-[10px] sm:text-xs">
             {getValue(aggregated[day]) || '-'}
           </td>
         ))}
-        <td className="px-4 py-2 text-right font-semibold text-muted-foreground bg-muted/30 text-xs">
+        <td className="px-2 sm:px-4 py-1.5 sm:py-2 text-right font-semibold text-muted-foreground bg-muted/30 text-[10px] sm:text-xs">
           {getValue(aggregated.total) || '-'}
         </td>
       </tr>
@@ -224,7 +224,7 @@ export const InboundReportMatrix = ({
 
   const renderSectionHeader = (title: string, bgClass: string, textClass: string) => (
     <tr>
-      <td colSpan={days.length + 2} className={`px-4 py-3 ${bgClass} ${textClass} font-bold text-xs uppercase tracking-wider`}>
+      <td colSpan={days.length + 2} className={`px-2 sm:px-4 py-2 sm:py-3 ${bgClass} ${textClass} font-bold text-[10px] sm:text-xs uppercase tracking-wider`}>
         {title}
       </td>
     </tr>
@@ -238,29 +238,29 @@ export const InboundReportMatrix = ({
     textClass: string
   ) => (
     <tr className="cursor-pointer" onClick={onToggle}>
-      <td colSpan={days.length + 2} className={`px-4 py-3 ${bgClass} ${textClass} font-bold text-xs uppercase tracking-wider`}>
+      <td colSpan={days.length + 2} className={`px-2 sm:px-4 py-2 sm:py-3 ${bgClass} ${textClass} font-bold text-[10px] sm:text-xs uppercase tracking-wider`}>
         <div className="flex items-center justify-between">
           <span>{title}</span>
-          {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          {isOpen ? <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />}
         </div>
       </td>
     </tr>
   );
 
   return (
-    <div className="overflow-x-auto bg-card rounded-2xl border border-border shadow-sm">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto bg-card rounded-xl sm:rounded-2xl border border-border shadow-sm -mx-4 sm:mx-0">
+      <table className="w-full text-xs sm:text-sm">
         <thead className="bg-muted/50 text-foreground font-semibold">
           <tr>
-            <th className="px-4 py-4 text-left sticky left-0 bg-muted/50 z-10 rounded-tl-2xl min-w-[200px]">
+            <th className="px-2 sm:px-4 py-3 sm:py-4 text-left sticky left-0 bg-muted/50 z-10 rounded-tl-xl sm:rounded-tl-2xl min-w-[100px] sm:min-w-[200px] text-xs sm:text-sm">
               {selectedWeek === 'all' ? 'Retentie Totaal 2025' : `Retentie Week ${selectedWeek}`}
             </th>
             {days.map((day) => (
-              <th key={day} className="px-4 py-4 text-right capitalize min-w-[100px]">
+              <th key={day} className="px-2 sm:px-4 py-3 sm:py-4 text-right capitalize min-w-[50px] sm:min-w-[100px] text-xs sm:text-sm">
                 {day.slice(0, 2)}
               </th>
             ))}
-            <th className="px-4 py-4 text-right rounded-tr-2xl bg-muted/70 min-w-[100px]">Totaal</th>
+            <th className="px-2 sm:px-4 py-3 sm:py-4 text-right rounded-tr-xl sm:rounded-tr-2xl bg-muted/70 min-w-[60px] sm:min-w-[100px] text-xs sm:text-sm">Totaal</th>
           </tr>
         </thead>
         <tbody>
