@@ -48,6 +48,7 @@ export interface DBProject {
   project_type: ProjectType;
   mapping_config: MappingConfig;
   total_to_call: number | null;
+  hours_factor: number;
   created_at: string;
   updated_at: string;
 }
@@ -114,6 +115,7 @@ export interface DBProjectPublic {
   project_type: ProjectType;
   mapping_config: MappingConfig;
   total_to_call: number | null;
+  hours_factor: number;
   created_at: string;
   updated_at: string;
   // GEEN basicall_token - dit is het verschil met DBProject

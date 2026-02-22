@@ -41,7 +41,8 @@ const emptyFormData: ProjectFormData = {
   vat_rate: "21",
   is_active: true,
   mapping_config: defaultMappingConfig,
-  total_to_call: ""
+  total_to_call: "",
+  hours_factor: "1.0"
 };
 
 export default function Admin() {
@@ -70,7 +71,8 @@ export default function Admin() {
       vat_rate: String(project.vat_rate),
       is_active: project.is_active,
       mapping_config: project.mapping_config,
-      total_to_call: project.total_to_call ? String(project.total_to_call) : ""
+      total_to_call: project.total_to_call ? String(project.total_to_call) : "",
+      hours_factor: String(project.hours_factor ?? 1.0)
     });
     setEditingProject(project);
     setIsProjectDialogOpen(true);
@@ -97,7 +99,8 @@ export default function Admin() {
       vat_rate: parseInt(formData.vat_rate),
       is_active: formData.is_active,
       mapping_config: formData.mapping_config,
-      total_to_call: formData.total_to_call ? parseInt(formData.total_to_call) : null
+      total_to_call: formData.total_to_call ? parseInt(formData.total_to_call) : null,
+      hours_factor: parseFloat(formData.hours_factor) || 1.0
     };
 
     try {
@@ -113,7 +116,8 @@ export default function Admin() {
             vat_rate: projectData.vat_rate,
             is_active: projectData.is_active,
             mapping_config: JSON.parse(JSON.stringify(projectData.mapping_config)),
-            total_to_call: projectData.total_to_call
+            total_to_call: projectData.total_to_call,
+            hours_factor: projectData.hours_factor
           })
           .eq("id", editingProject.id);
 
@@ -135,7 +139,8 @@ export default function Admin() {
             vat_rate: projectData.vat_rate,
             is_active: projectData.is_active,
             mapping_config: JSON.parse(JSON.stringify(projectData.mapping_config)),
-            total_to_call: projectData.total_to_call
+            total_to_call: projectData.total_to_call,
+            hours_factor: projectData.hours_factor
           });
 
         if (error) throw error;

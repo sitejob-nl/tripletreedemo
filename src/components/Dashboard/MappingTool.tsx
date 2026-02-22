@@ -33,7 +33,7 @@ import {
 
 interface MappingToolProps {
   project: DBProjectBase;
-  onSave: (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType) => Promise<void>;
+  onSave: (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType, hoursFactor: number) => Promise<void>;
   isSaving?: boolean;
 }
 
@@ -70,6 +70,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [weekdayRates, setWeekdayRates] = useState<Record<string, number | undefined>>(
     project.mapping_config.weekday_rates || {}
   );
+  
+  // Hours factor state
+  const [hoursFactor, setHoursFactor] = useState<number>(project.hours_factor ?? 1.0);
 
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
 
@@ -125,6 +128,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setNegativeArgumentated(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
     setNegativeNotArgumentated(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
     setWeekdayRates(project.mapping_config.weekday_rates || {});
+    setHoursFactor(project.hours_factor ?? 1.0);
   }, [project.id]);
 
   const handleSave = async () => {
@@ -145,7 +149,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       handled_results: handledResults,
       not_handled_results: notHandledResults,
     };
-    await onSave(project.id, hourlyRate, mappingConfig, projectType);
+    await onSave(project.id, hourlyRate, mappingConfig, projectType, hoursFactor);
   };
 
   const addFreqMapping = () => {
@@ -425,6 +429,20 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Global hours factor */}
+            <div className="mt-4">
+              <Label className="text-xs text-muted-foreground">Globale urenfactor</Label>
+              <p className="text-xs text-muted-foreground mb-2">Factor waarmee alle gelogde uren worden vermenigvuldigd (1.0 = geen aanpassing, 0.8 = 20% minder)</p>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={hoursFactor}
+                onChange={(e) => setHoursFactor(parseFloat(e.target.value) || 1.0)}
+                className="w-32"
+              />
             </div>
           </AccordionContent>
         </AccordionItem>

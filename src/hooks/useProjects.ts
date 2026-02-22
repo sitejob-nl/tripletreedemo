@@ -71,13 +71,14 @@ interface UpdateProjectParams {
   vatRate?: number;
   mappingConfig?: MappingConfig;
   projectType?: ProjectType;
+  hoursFactor?: number;
 }
 
 export const useUpdateProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, hourlyRate, vatRate, mappingConfig, projectType }: UpdateProjectParams) => {
+    mutationFn: async ({ projectId, hourlyRate, vatRate, mappingConfig, projectType, hoursFactor }: UpdateProjectParams) => {
       const updates: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
@@ -86,6 +87,7 @@ export const useUpdateProject = () => {
       if (vatRate !== undefined) updates.vat_rate = vatRate;
       if (mappingConfig !== undefined) updates.mapping_config = mappingConfig;
       if (projectType !== undefined) updates.project_type = projectType;
+      if (hoursFactor !== undefined) updates.hours_factor = hoursFactor;
 
       const { data, error } = await supabase
         .from('projects')

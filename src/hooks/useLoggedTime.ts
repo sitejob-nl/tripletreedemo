@@ -24,6 +24,7 @@ interface LoggedTimeData {
 interface UseLoggedTimeOptions {
   projectId?: string;
   dateFilter?: ResolvedDateFilter;
+  hoursFactor?: number;
 }
 
 // Map JS getDay() (0=Sunday) to Dutch day names
@@ -37,9 +38,9 @@ const dayIndexToDutch: Record<number, keyof DailyLoggedTimeBreakdown> = {
   6: 'zaterdag',
 };
 
-export const useLoggedTime = ({ projectId, dateFilter }: UseLoggedTimeOptions) => {
+export const useLoggedTime = ({ projectId, dateFilter, hoursFactor = 1.0 }: UseLoggedTimeOptions) => {
   return useQuery({
-    queryKey: ['logged_time', projectId, dateFilter?.startDate, dateFilter?.endDate],
+    queryKey: ['logged_time', projectId, dateFilter?.startDate, dateFilter?.endDate, hoursFactor],
     queryFn: async (): Promise<LoggedTimeData> => {
       if (!projectId) {
         return { totalSeconds: 0, totalHours: 0, hasData: false };
@@ -61,8 +62,9 @@ export const useLoggedTime = ({ projectId, dateFilter }: UseLoggedTimeOptions) =
       
       if (error) throw error;
       
-      // Use corrected_seconds if available, otherwise total_seconds
-      const totalSeconds = data?.reduce((sum, r) => sum + (r.corrected_seconds ?? r.total_seconds ?? 0), 0) || 0;
+      // Use corrected_seconds if available, otherwise total_seconds, then apply global factor
+      const factor = hoursFactor ?? 1.0;
+      const totalSeconds = (data?.reduce((sum, r) => sum + (r.corrected_seconds ?? r.total_seconds ?? 0), 0) || 0) * factor;
       const totalHours = totalSeconds / 3600;
       
       // Build daily breakdown when filtering is active
@@ -84,7 +86,7 @@ export const useLoggedTime = ({ projectId, dateFilter }: UseLoggedTimeOptions) =
             const dayIndex = getDay(date);
             const dayName = dayIndexToDutch[dayIndex];
             if (dayName) {
-              dailyHours![dayName] += (record.corrected_seconds ?? record.total_seconds ?? 0) / 3600;
+              dailyHours![dayName] += (record.corrected_seconds ?? record.total_seconds ?? 0) * factor / 3600;
             }
           }
         });

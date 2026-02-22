@@ -15,6 +15,7 @@ export interface ProjectFormData {
   is_active: boolean;
   mapping_config: MappingConfig;
   total_to_call: string;
+  hours_factor: string;
 }
 
 interface ProjectDialogProps {
@@ -155,6 +156,20 @@ export function ProjectDialog({
                   onChange={(e) => setFormData(prev => ({ ...prev, vat_rate: e.target.value }))}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hours_factor">Globale urenfactor</Label>
+              <Input
+                id="hours_factor"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.hours_factor}
+                onChange={(e) => setFormData(prev => ({ ...prev, hours_factor: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Factor waarmee gelogde uren worden vermenigvuldigd (1.0 = geen aanpassing).
+              </p>
             </div>
           </div>
 

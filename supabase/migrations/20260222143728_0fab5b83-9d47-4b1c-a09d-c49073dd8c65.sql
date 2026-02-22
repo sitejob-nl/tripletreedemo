@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN hours_factor NUMERIC DEFAULT 1.0;
