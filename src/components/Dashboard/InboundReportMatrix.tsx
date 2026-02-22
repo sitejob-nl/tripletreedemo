@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ProcessedCallRecord, InboundStats } from '@/types/dashboard';
 import { MappingConfig } from '@/types/database';
+import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { 
   createEmptyInboundStats, 
@@ -17,6 +18,8 @@ interface InboundReportMatrixProps {
   selectedWeek: string | number;
   mappingConfig: MappingConfig;
   amountCol?: string;
+  loggedTimeHours?: number;
+  dailyLoggedHours?: DailyLoggedTimeBreakdown;
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -33,6 +36,8 @@ export const InboundReportMatrix = ({
   selectedWeek,
   mappingConfig,
   amountCol = 'termijnbedrag',
+  loggedTimeHours,
+  dailyLoggedHours,
 }: InboundReportMatrixProps) => {
   const [showLostReasons, setShowLostReasons] = useState(false);
   const [showRetainedReasons, setShowRetainedReasons] = useState(false);
@@ -127,20 +132,28 @@ export const InboundReportMatrix = ({
     return hourlyRate;
   };
   
-  const calcHours = (stats: InboundStats) => stats.durationSec / 3600;
-  const calcCallsPerHour = (stats: InboundStats) => {
-    const hours = calcHours(stats);
+  const calcHours = (stats: InboundStats, dayName?: string) => {
+    // Total (no dayName): prefer loggedTimeHours
+    if (!dayName && loggedTimeHours !== undefined && loggedTimeHours > 0) return loggedTimeHours;
+    // Per day: prefer dailyLoggedHours
+    if (dayName && dailyLoggedHours) {
+      const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
+      if (dh !== undefined && dh > 0) return dh;
+    }
+    return stats.durationSec / 3600;
+  };
+  const calcCallsPerHour = (stats: InboundStats, dayName?: string) => {
+    const hours = calcHours(stats, dayName);
     return hours > 0 ? stats.calls / hours : 0;
   };
   const calcInvestment = (stats: InboundStats, dayName?: string) => {
     if (!dayName && mappingConfig?.weekday_rates) {
-      // Total: sum per day
       return days.reduce((sum, day) => {
-        const dayHours = aggregated[day] ? aggregated[day].durationSec / 3600 : 0;
+        const dayHours = calcHours(aggregated[day], day);
         return sum + dayHours * getHourlyRateForDay(day);
       }, 0);
     }
-    return calcHours(stats) * getHourlyRateForDay(dayName);
+    return calcHours(stats, dayName) * getHourlyRateForDay(dayName);
   };
   const calcInvestmentInclVat = (stats: InboundStats, dayName?: string) => calcInvestment(stats, dayName) * (1 + vatRate / 100);
   const calcCostPerRetained = (stats: InboundStats) =>
@@ -312,10 +325,10 @@ export const InboundReportMatrix = ({
 
           {/* PRODUCTIVITEIT */}
           {renderSectionHeader('Productiviteit', 'bg-kpi-cyan', 'text-kpi-cyan-text')}
-          {renderRow('Aantal beluren', calcHours, 'decimal')}
-          {renderRow('Gesprekken per uur', calcCallsPerHour, 'decimal')}
-          {renderRow('Behouden per uur', (s) => {
-            const hours = calcHours(s);
+          {renderRow('Aantal beluren', (s, dayName) => calcHours(s, dayName), 'decimal')}
+          {renderRow('Gesprekken per uur', (s, dayName) => calcCallsPerHour(s, dayName), 'decimal')}
+          {renderRow('Behouden per uur', (s, dayName) => {
+            const hours = calcHours(s, dayName);
             return hours > 0 ? s.retained / hours : 0;
           }, 'decimal')}
 
