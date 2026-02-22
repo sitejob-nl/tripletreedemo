@@ -90,7 +90,7 @@ export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
   };
 
   return (
-    <Card>
+    <Card data-tour="admin-projects-table">
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>

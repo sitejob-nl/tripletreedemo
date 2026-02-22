@@ -156,7 +156,7 @@ export function SyncManager() {
   const presetDates = preset !== "custom" ? getPresetDates(preset) : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour="admin-sync-manager">
       {/* Create Sync Job */}
       <Card>
         <CardHeader>
