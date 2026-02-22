@@ -279,7 +279,7 @@ const Index = () => {
 
   // Compute annual value breakdown by frequency type
   const annualValueBreakdown = useMemo((): AnnualValueBreakdown | undefined => {
-    if (projectType !== 'outbound' || !currentProject?.mapping_config) return undefined;
+    if (!['outbound', 'inbound'].includes(projectType) || !currentProject?.mapping_config) return undefined;
     const freqMap = currentProject.mapping_config.freq_map || {};
     const freqCol = currentProject.mapping_config.freq_col;
     const amountCol = currentProject.mapping_config.amount_col;
