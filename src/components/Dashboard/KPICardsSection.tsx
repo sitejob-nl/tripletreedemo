@@ -4,11 +4,11 @@ import { Progress } from '@/components/ui/progress';
 import { ProjectType } from '@/types/database';
 
 export interface AnnualValueBreakdown {
-  monthly: { count: number; value: number };
-  quarterly: { count: number; value: number };
-  halfYearly: { count: number; value: number };
-  yearly: { count: number; value: number };
-  oneoff: { count: number; value: number };
+  monthly: { count: number; value: number; totalAmount: number };
+  quarterly: { count: number; value: number; totalAmount: number };
+  halfYearly: { count: number; value: number; totalAmount: number };
+  yearly: { count: number; value: number; totalAmount: number };
+  oneoff: { count: number; value: number; totalAmount: number };
 }
 
 interface KPICardsSectionProps {
@@ -50,27 +50,35 @@ export function KPICardsSection({
 
   const fmt = (v: number) => `€ ${v.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  const freqLabels: Record<string, string> = {
-    monthly: 'Maandelijks (×12)',
-    quarterly: 'Per kwartaal (×4)',
-    halfYearly: 'Halfjaarlijks (×2)',
-    yearly: 'Jaarlijks (×1)',
-    oneoff: 'Eenmalig',
+  const freqLabels: Record<string, { label: string; multiplier: number }> = {
+    monthly: { label: 'Maandelijks', multiplier: 12 },
+    quarterly: { label: 'Per kwartaal', multiplier: 4 },
+    halfYearly: { label: 'Halfjaarlijks', multiplier: 2 },
+    yearly: { label: 'Jaarlijks', multiplier: 1 },
+    oneoff: { label: 'Eenmalig', multiplier: 0 },
   };
 
   const breakdownPopover = annualValueBreakdown ? (
-    <div className="space-y-3">
+    <div className="space-y-3 min-w-[280px]">
       <h4 className="font-semibold text-sm text-foreground">Opbouw Jaarwaarde</h4>
-      <div className="space-y-1.5">
+      <div className="space-y-3">
         {(['monthly', 'quarterly', 'halfYearly', 'yearly', 'oneoff'] as const).map((key) => {
           const item = annualValueBreakdown[key];
           if (item.count === 0) return null;
+          const { label, multiplier } = freqLabels[key];
+          const isOneOff = key === 'oneoff';
           return (
-            <div key={key} className="flex justify-between text-sm">
-              <span className="text-muted-foreground">
-                {freqLabels[key]} <span className="text-xs">({item.count}×)</span>
-              </span>
-              <span className="font-medium text-foreground">{fmt(item.value)}</span>
+            <div key={key} className="space-y-0.5">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {label} {!isOneOff && `(×${multiplier})`}
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {item.count} {item.count === 1 ? 'donateur' : 'donateurs'} | {fmt(item.totalAmount)}
+                  {!isOneOff && ` × ${multiplier}`}
+                </span>
+                <span className="font-medium text-foreground">{fmt(item.value)}</span>
+              </div>
             </div>
           );
         })}

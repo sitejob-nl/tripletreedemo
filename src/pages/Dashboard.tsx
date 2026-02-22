@@ -13,6 +13,7 @@ import { ReportViewSection } from '@/components/Dashboard/ReportViewSection';
 import { AnalysisViewSection } from '@/components/Dashboard/AnalysisViewSection';
 import { AdminViewToggle } from '@/components/Dashboard/AdminViewToggle';
 import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
+import { parseDutchFloat } from '@/lib/dataProcessing';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
@@ -281,12 +282,13 @@ const Index = () => {
     if (projectType !== 'outbound' || !currentProject?.mapping_config) return undefined;
     const freqMap = currentProject.mapping_config.freq_map || {};
     const freqCol = currentProject.mapping_config.freq_col;
+    const amountCol = currentProject.mapping_config.amount_col;
     const breakdown: AnnualValueBreakdown = {
-      monthly: { count: 0, value: 0 },
-      quarterly: { count: 0, value: 0 },
-      halfYearly: { count: 0, value: 0 },
-      yearly: { count: 0, value: 0 },
-      oneoff: { count: 0, value: 0 },
+      monthly: { count: 0, value: 0, totalAmount: 0 },
+      quarterly: { count: 0, value: 0, totalAmount: 0 },
+      halfYearly: { count: 0, value: 0, totalAmount: 0 },
+      yearly: { count: 0, value: 0, totalAmount: 0 },
+      oneoff: { count: 0, value: 0, totalAmount: 0 },
     };
 
     reportMatrixProcessedData.forEach((record) => {
@@ -297,6 +299,11 @@ const Index = () => {
       const key = result.type as keyof AnnualValueBreakdown;
       breakdown[key].count++;
       breakdown[key].value += record.annual_value || 0;
+      // Parse original term amount for breakdown display
+      const amountRaw = rawData?.[amountCol];
+      if (amountRaw) {
+        breakdown[key].totalAmount += parseDutchFloat(amountRaw as string | number);
+      }
     });
 
     return breakdown;
