@@ -258,6 +258,23 @@ const Index = () => {
   const projectType = (currentProject?.project_type || 'outbound') as ProjectType;
   const isInboundProject = projectType === 'inbound' || projectType === 'inbound_service';
 
+  // Compute handled/not-handled counts for inbound_service
+  const { totalHandled, totalNotHandled } = useMemo(() => {
+    if (projectType !== 'inbound_service' || !currentProject?.mapping_config) {
+      return { totalHandled: 0, totalNotHandled: 0 };
+    }
+    const mc = currentProject.mapping_config;
+    const handledResults = mc.handled_results || [];
+    const notHandledResults = mc.not_handled_results || [];
+    
+    // Count from reportMatrixProcessedData (all records for current filter)
+    const source = reportMatrixProcessedData;
+    const handled = source.filter(r => handledResults.includes(r.bc_result_naam)).length;
+    const notHandled = source.filter(r => notHandledResults.includes(r.bc_result_naam)).length;
+    
+    return { totalHandled: handled, totalNotHandled: notHandled };
+  }, [projectType, currentProject?.mapping_config, reportMatrixProcessedData]);
+
   // Get display label for current filter
   const filterLabel = useMemo(() => {
     if (dateFilterType === 'week') {
@@ -464,7 +481,7 @@ const Index = () => {
               {processedData.length > 0 && (
                 <>
                   <KPICardsSection
-                    isInboundProject={isInboundProject}
+                    projectType={projectType}
                     totalSales={totalSales}
                     totalAnnualValue={totalAnnualValue}
                     totalRecords={kpiAggregates?.totalRecords ?? 0}
@@ -474,6 +491,8 @@ const Index = () => {
                     selectedWeek={filterLabel}
                     isLoading={kpiLoading}
                     totalToCall={currentProject?.total_to_call}
+                    totalHandled={totalHandled}
+                    totalNotHandled={totalNotHandled}
                   />
 
                   {/* MAIN VIEW SWITCHER */}
