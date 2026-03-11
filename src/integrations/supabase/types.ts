@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      batches: {
+        Row: {
+          basicall_batch_id: number
+          created_at: string | null
+          handled: number | null
+          id: string
+          last_synced_at: string | null
+          name: string
+          project_id: string
+          remaining: number | null
+          status: number | null
+          total: number | null
+        }
+        Insert: {
+          basicall_batch_id: number
+          created_at?: string | null
+          handled?: number | null
+          id?: string
+          last_synced_at?: string | null
+          name: string
+          project_id: string
+          remaining?: number | null
+          status?: number | null
+          total?: number | null
+        }
+        Update: {
+          basicall_batch_id?: number
+          created_at?: string | null
+          handled?: number | null
+          id?: string
+          last_synced_at?: string | null
+          name?: string
+          project_id?: string
+          remaining?: number | null
+          status?: number | null
+          total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "batches_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_records: {
         Row: {
           basicall_record_id: number

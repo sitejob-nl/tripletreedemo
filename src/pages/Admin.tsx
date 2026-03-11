@@ -17,6 +17,7 @@ import { ProjectsTable } from "@/components/Admin/ProjectsTable";
 import { CustomersTable } from "@/components/Admin/CustomersTable";
 import { UsersTable } from "@/components/Admin/UsersTable";
 import { SyncManager } from "@/components/Admin/SyncManager";
+import { BatchManager } from "@/components/Admin/BatchManager";
 import { ProjectDialog, ProjectFormData } from "@/components/Admin/ProjectDialog";
 
 const defaultMappingConfig: MappingConfig = {
@@ -194,11 +195,12 @@ export default function Admin() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5" data-tour="admin-tabs">
+          <TabsList className="grid w-full grid-cols-6" data-tour="admin-tabs">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="projecten" data-tour="admin-projects-tab">Projecten</TabsTrigger>
             <TabsTrigger value="klanten" data-tour="admin-customers-tab">Klanten</TabsTrigger>
             <TabsTrigger value="gebruikers" data-tour="admin-users-tab">Gebruikers</TabsTrigger>
+            <TabsTrigger value="batches">Batches</TabsTrigger>
             <TabsTrigger value="sync" data-tour="admin-sync-tab">Synchronisatie</TabsTrigger>
           </TabsList>
 
@@ -226,6 +228,10 @@ export default function Admin() {
 
           <TabsContent value="gebruikers">
             <UsersTable />
+          </TabsContent>
+
+          <TabsContent value="batches">
+            <BatchManager />
           </TabsContent>
 
           <TabsContent value="sync">
