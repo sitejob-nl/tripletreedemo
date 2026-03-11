@@ -60,7 +60,6 @@ export const useGeocoding = (unknownCities: string[]) => {
     const fetchCoordinates = async () => {
       setIsLoading(true);
       try {
-        console.log(`Geocoding ${citiesToFetch.length} unknown cities...`);
         
         const { data, error } = await supabase.functions.invoke('geocode-city', {
           body: { cities: citiesToFetch }
