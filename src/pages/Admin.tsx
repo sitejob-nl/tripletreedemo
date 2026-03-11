@@ -17,6 +17,7 @@ import { ProjectsTable } from "@/components/Admin/ProjectsTable";
 import { CustomersTable } from "@/components/Admin/CustomersTable";
 import { UsersTable } from "@/components/Admin/UsersTable";
 import { SyncManager } from "@/components/Admin/SyncManager";
+import { BatchManager } from "@/components/Admin/BatchManager";
 import { ProjectDialog, ProjectFormData } from "@/components/Admin/ProjectDialog";
 
 const defaultMappingConfig: MappingConfig = {
