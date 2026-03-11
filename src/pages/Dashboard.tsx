@@ -11,6 +11,7 @@ import { WelcomeScreen } from '@/components/Dashboard/WelcomeScreen';
 import { KPICardsSection, AnnualValueBreakdown } from '@/components/Dashboard/KPICardsSection';
 import { ReportViewSection } from '@/components/Dashboard/ReportViewSection';
 import { AnalysisViewSection } from '@/components/Dashboard/AnalysisViewSection';
+import { BatchProgress } from '@/components/Dashboard/BatchProgress';
 import { AdminViewToggle } from '@/components/Dashboard/AdminViewToggle';
 import { OnboardingTour } from '@/components/Dashboard/OnboardingTour';
 import { useOnboardingTour } from '@/hooks/useOnboardingTour';
