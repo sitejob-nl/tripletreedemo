@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { parseDutchFloat } from '@/lib/dataProcessing';
 import { MappingConfig } from '@/types/database';
 import { ResolvedDateFilter } from './useDateFilter';
 
