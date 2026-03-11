@@ -544,6 +544,8 @@ const Index = () => {
                     annualValueBreakdown={annualValueBreakdown}
                   />
 
+                  <BatchProgress projectId={currentProject.id} />
+
                   {/* MAIN VIEW SWITCHER */}
                   {viewMode === 'report' ? (
                     <ReportViewSection

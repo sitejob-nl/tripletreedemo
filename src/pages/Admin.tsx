@@ -230,6 +230,10 @@ export default function Admin() {
             <UsersTable />
           </TabsContent>
 
+          <TabsContent value="batches">
+            <BatchManager />
+          </TabsContent>
+
           <TabsContent value="sync">
             <SyncManager />
           </TabsContent>
