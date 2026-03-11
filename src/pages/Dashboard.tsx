@@ -129,7 +129,7 @@ const Index = () => {
       queryClient.refetchQueries({ queryKey: ['available_weeks'] });
     }, 0);
 
-    console.log('[ProjectSwitch] Switched to:', newProjectKey, '- cache cleared, UI reset');
+    
   }, [selectedProjectKey, queryClient]);
 
   // Auto-select first project when projects are loaded and none selected

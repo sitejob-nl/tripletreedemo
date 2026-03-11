@@ -81,58 +81,22 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig }: UseKP
     enabled: !!projectId
   });
 
-  // Query 2: Get annual value by fetching only sales records
+  // Query 2: Get annual value via server-side RPC
   const annualValueQuery = useQuery({
-    queryKey: ['kpi_annual_value', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, mappingConfig?.amount_col, mappingConfig?.freq_col, saleResults],
+    queryKey: ['kpi_annual_value', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, dateFilter?.year],
     queryFn: async () => {
       if (!projectId || !mappingConfig?.amount_col || !mappingConfig?.freq_col) {
         return 0;
       }
-      
-      let query = supabase
-        .from('call_records')
-        .select('raw_data')
-        .eq('project_id', projectId)
-        .in('resultaat', saleResults);
-      
-      // Apply date filter
-      if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
-        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null && dateFilter.year !== null) {
-          query = query
-            .eq('week_number', dateFilter.weekNumber)
-            .gte('beldatum_date', `${dateFilter.year}-01-01`)
-            .lte('beldatum_date', `${dateFilter.year}-12-31`);
-        } else {
-          query = query
-            .gte('beldatum_date', dateFilter.startDate)
-            .lte('beldatum_date', dateFilter.endDate);
-        }
-      }
-      
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      let totalAnnualValue = 0;
-      const freqMap = mappingConfig.freq_map || {};
-      
-      (data || []).forEach((record) => {
-        const rawData = record.raw_data as Record<string, unknown> | null;
-        if (!rawData) return;
-        
-        const amountRaw = rawData[mappingConfig.amount_col];
-        const freqRaw = rawData[mappingConfig.freq_col];
-        
-        if (!amountRaw || !freqRaw) return;
-        
-        const amount = parseDutchFloat(String(amountRaw));
-        const freqKey = String(freqRaw).toLowerCase().trim();
-        const multiplier = freqMap[freqKey] || 1;
-        
-        totalAnnualValue += amount * multiplier;
+      const { data, error } = await supabase.rpc('get_project_annual_value', {
+        p_project_id: projectId,
+        p_start_date: dateFilter?.isFiltering ? dateFilter.startDate : null,
+        p_end_date: dateFilter?.isFiltering ? dateFilter.endDate : null,
+        p_week_number: (dateFilter?.isFiltering && dateFilter.filterType === 'week') ? dateFilter.weekNumber : null,
+        p_year: (dateFilter?.isFiltering && dateFilter.filterType === 'week') ? dateFilter.year : null,
       });
-      
-      return totalAnnualValue;
+      if (error) throw error;
+      return Number(data || 0);
     },
     enabled: !!projectId && !!mappingConfig?.amount_col && !!mappingConfig?.freq_col
   });

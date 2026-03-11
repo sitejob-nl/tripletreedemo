@@ -83,7 +83,6 @@ export const useGeocoding = (unknownCities: string[]) => {
 
           setCache(newCache);
           setGeocodedCoordinates(prev => ({ ...prev, ...newCoords }));
-          console.log(`Geocoded ${Object.keys(newCoords).length} cities successfully`);
         }
       } catch (error) {
         console.error('Error calling geocode function:', error);

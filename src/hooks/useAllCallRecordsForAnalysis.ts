@@ -62,7 +62,7 @@ export const useAllCallRecordsForAnalysis = (
         }
       }
 
-      console.log(`[useAllCallRecordsForAnalysis] Fetched ${allRecords.length} records for project ${project.name}, filter=${dateFilter?.isFiltering ? `${dateFilter.startDate} - ${dateFilter.endDate}` : 'all'}`);
+
 
       return allRecords.map((record) => {
         const calculated = calculateValuesFromRaw(
