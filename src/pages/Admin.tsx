@@ -195,11 +195,12 @@ export default function Admin() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5" data-tour="admin-tabs">
+          <TabsList className="grid w-full grid-cols-6" data-tour="admin-tabs">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="projecten" data-tour="admin-projects-tab">Projecten</TabsTrigger>
             <TabsTrigger value="klanten" data-tour="admin-customers-tab">Klanten</TabsTrigger>
             <TabsTrigger value="gebruikers" data-tour="admin-users-tab">Gebruikers</TabsTrigger>
+            <TabsTrigger value="batches">Batches</TabsTrigger>
             <TabsTrigger value="sync" data-tour="admin-sync-tab">Synchronisatie</TabsTrigger>
           </TabsList>
 
