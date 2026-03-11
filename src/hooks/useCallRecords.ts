@@ -214,8 +214,6 @@ export const useAvailableWeeks = (projectId?: string) => {
         value: row.value,
       }));
 
-      console.log(`[useAvailableWeeks] projectId=${projectId}, weeks=${result.length}, range=${result.length > 0 ? `${result[result.length - 1].value} → ${result[0].value}` : 'none'}`);
-
       return result;
     },
     enabled: !!projectId,

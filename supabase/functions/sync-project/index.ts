@@ -1,3 +1,10 @@
+/**
+ * DEPRECATED — NIET IN GEBRUIK
+ * 
+ * Deze edge function kan de BasicAll API niet bereiken (IP whitelist).
+ * De sync draait via VPS cron: /opt/basicall-sync/sync.js
+ * Frontend maakt sync_jobs aan (status: pending), VPS pikt ze op.
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {

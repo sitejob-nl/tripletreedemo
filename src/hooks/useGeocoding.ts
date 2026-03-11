@@ -60,7 +60,6 @@ export const useGeocoding = (unknownCities: string[]) => {
     const fetchCoordinates = async () => {
       setIsLoading(true);
       try {
-        console.log(`Geocoding ${citiesToFetch.length} unknown cities...`);
         
         const { data, error } = await supabase.functions.invoke('geocode-city', {
           body: { cities: citiesToFetch }
@@ -84,7 +83,6 @@ export const useGeocoding = (unknownCities: string[]) => {
 
           setCache(newCache);
           setGeocodedCoordinates(prev => ({ ...prev, ...newCoords }));
-          console.log(`Geocoded ${Object.keys(newCoords).length} cities successfully`);
         }
       } catch (error) {
         console.error('Error calling geocode function:', error);
