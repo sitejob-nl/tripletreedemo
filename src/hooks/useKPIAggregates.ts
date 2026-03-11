@@ -38,11 +38,11 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig }: UseKP
           .eq('project_id', projectId);
 
         // Apply date filter
-        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null && dateFilter.year !== null) {
+        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null) {
           query = query
             .eq('week_number', dateFilter.weekNumber)
-            .gte('beldatum_date', `${dateFilter.year}-01-01`)
-            .lte('beldatum_date', `${dateFilter.year}-12-31`);
+            .gte('beldatum_date', dateFilter.startDate)
+            .lte('beldatum_date', dateFilter.endDate);
         } else {
           query = query
             .gte('beldatum_date', dateFilter.startDate)

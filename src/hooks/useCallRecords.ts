@@ -140,12 +140,11 @@ export const useCallRecords = (
 
       // Apply date filter
       if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
-        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null && dateFilter.year !== null) {
-          // Week-based: use week_number + year bounds for efficiency
+        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null) {
           query = query
             .eq('week_number', dateFilter.weekNumber)
-            .gte('beldatum_date', `${dateFilter.year}-01-01`)
-            .lte('beldatum_date', `${dateFilter.year}-12-31`);
+            .gte('beldatum_date', dateFilter.startDate)
+            .lte('beldatum_date', dateFilter.endDate);
         } else {
           // Date range: direct date comparison
           query = query
