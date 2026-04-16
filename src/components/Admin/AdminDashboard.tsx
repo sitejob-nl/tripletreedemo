@@ -3,19 +3,21 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCustomersWithProjects } from "@/hooks/useCustomerProjects";
 import { useUsers } from "@/hooks/useUsers";
 import { useSyncJobs } from "@/hooks/useSyncJobs";
+import { useMappingIssues } from "@/hooks/useMappingIssues";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  FolderKanban, 
-  Users, 
-  UserCheck, 
-  RefreshCw, 
-  Plus, 
+import {
+  FolderKanban,
+  Users,
+  UserCheck,
+  RefreshCw,
+  Plus,
   UserPlus,
   CheckCircle,
   XCircle,
   Clock,
-  Loader2
+  Loader2,
+  AlertTriangle
 } from "lucide-react";
 
 interface AdminDashboardProps {
@@ -37,6 +39,7 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
   const { data: customers, isLoading: customersLoading } = useCustomersWithProjects();
   const { data: users, isLoading: usersLoading } = useUsers();
   const { data: syncJobs, isLoading: jobsLoading } = useSyncJobs(undefined, 5);
+  const { data: mappingIssues, isLoading: issuesLoading } = useMappingIssues();
 
   const activeProjects = projects.filter(p => p.is_active).length;
   const recentJobs = syncJobs?.slice(0, 5) || [];
@@ -130,6 +133,44 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
           Sync starten
         </Button>
       </div>
+
+      {/* Mapping-config issues — waarschuwt admin over projecten die silent €0 of foute metrics tonen */}
+      {!issuesLoading && mappingIssues && mappingIssues.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <h3 className="font-semibold">Mapping-config issues ({mappingIssues.length})</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Deze projecten hebben een configuratie die geen of foutieve KPI&apos;s oplevert. Open de betreffende project-configuratie om dit te corrigeren.
+            </p>
+            <div className="space-y-2">
+              {mappingIssues.map((iss) => (
+                <div
+                  key={`${iss.project_id}-${iss.issue_type}`}
+                  className="flex items-start justify-between gap-3 p-3 rounded-lg bg-background text-sm"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">
+                      {iss.name} <span className="text-xs text-muted-foreground">#{iss.basicall_project_id}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5">{iss.issue_message}</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onNavigate("projecten")}
+                    className="flex-shrink-0"
+                  >
+                    Configureer
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Sync Jobs */}
       <Card data-tour="admin-recent-jobs">

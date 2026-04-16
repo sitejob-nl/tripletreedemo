@@ -76,6 +76,15 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
 
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
 
+  // Field-existence checks: does the chosen column actually occur in raw_data of this project?
+  // Only meaningful once availableFields has loaded (non-empty); during load we suppress.
+  const hasData = availableFields.length > 0;
+  const amountColMissing = hasData && !!amountCol && !availableFields.includes(amountCol);
+  const freqColMissing = hasData && !!freqCol && !availableFields.includes(freqCol);
+  const freqMapMissingCount = availableFrequencyValues.filter(
+    (v) => !Object.keys(freqMap).some((k) => v.includes(k.toLowerCase()) || k.toLowerCase().includes(v))
+  ).length;
+
   // Build clean weekday_rates (filter out undefined)
   const cleanWeekdayRates = () => {
     const clean: Record<string, number> = {};
@@ -375,6 +384,15 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                     {availableFields.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {amountColMissing ? (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                    <AlertTriangle size={12} /> Veld "{amountCol}" komt niet voor in de records van dit project. Jaarwaarde blijft €0.
+                  </p>
+                ) : hasData && amountCol ? (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                    <CheckCircle size={12} /> Veld gevonden in raw_data.
+                  </p>
+                ) : null}
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Frequentie Kolom</Label>
@@ -384,6 +402,19 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                     {availableFields.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {freqColMissing ? (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                    <AlertTriangle size={12} /> Veld "{freqCol}" komt niet voor in de records van dit project.
+                  </p>
+                ) : hasData && freqCol && freqMapMissingCount > 0 ? (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                    <AlertTriangle size={12} /> {freqMapMissingCount} van {availableFrequencyValues.length} unieke waarden hebben geen match in freq_map.
+                  </p>
+                ) : hasData && freqCol ? (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                    <CheckCircle size={12} /> Veld gevonden in raw_data.
+                  </p>
+                ) : null}
               </div>
             </div>
           </AccordionContent>
@@ -578,6 +609,42 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      {/* Config-health summary — shows admin whether the config will produce valid numbers */}
+      {hasData && (
+        <div className="mt-6 p-4 rounded-lg border border-border bg-muted/30">
+          <div className="text-sm font-semibold mb-2">Configuratie-check</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              {amountColMissing ? <AlertTriangle size={14} className="text-destructive" /> : <CheckCircle size={14} className="text-green-600 dark:text-green-400" />}
+              <span>Bedrag-veld: <strong className={amountColMissing ? "text-destructive" : ""}>{amountCol || '—'}</strong></span>
+            </div>
+            <div className="flex items-center gap-2">
+              {freqColMissing ? <AlertTriangle size={14} className="text-destructive" /> : <CheckCircle size={14} className="text-green-600 dark:text-green-400" />}
+              <span>Frequentie-veld: <strong className={freqColMissing ? "text-destructive" : ""}>{freqCol || '—'}</strong></span>
+            </div>
+            <div className="flex items-center gap-2">
+              {projectType === 'outbound' && saleResults.length === 0 ? (
+                <><AlertTriangle size={14} className="text-destructive" /><span className="text-destructive">Geen positieve resultaten ingesteld</span></>
+              ) : projectType === 'inbound_service' && handledResults.length === 0 ? (
+                <><AlertTriangle size={14} className="text-destructive" /><span className="text-destructive">Geen afgehandeld-resultaten ingesteld</span></>
+              ) : projectType === 'inbound' && retentionResults.length === 0 && lostResults.length === 0 ? (
+                <><AlertTriangle size={14} className="text-destructive" /><span className="text-destructive">Geen behouden/verloren-resultaten ingesteld</span></>
+              ) : (
+                <><CheckCircle size={14} className="text-green-600 dark:text-green-400" /><span>Resultaat-mapping ingesteld</span></>
+              )}
+            </div>
+          </div>
+          {!previewLoading && previewRecords && previewRecords.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border text-xs">
+              <strong>Preview:</strong> {previewRecords.filter(r => r.annualValue > 0).length} van {previewRecords.length} sample sales krijgt een jaarwaarde &gt; €0
+              {previewRecords.filter(r => r.annualValue > 0).length === 0 && previewRecords.length > 0 && (
+                <span className="text-destructive ml-1">— controleer bedrag-/frequentie-kolom.</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-6 flex justify-end">
         <Button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2">

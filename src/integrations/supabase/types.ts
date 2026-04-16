@@ -281,10 +281,45 @@ export type Database = {
         }
         Relationships: []
       }
+      project_secrets: {
+        Row: {
+          basicall_token: string
+          created_at: string | null
+          project_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          basicall_token: string
+          created_at?: string | null
+          project_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          basicall_token?: string
+          created_at?: string | null
+          project_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_secrets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_secrets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           basicall_project_id: number
-          basicall_token: string
           created_at: string | null
           hourly_rate: number | null
           hours_factor: number | null
@@ -300,7 +335,6 @@ export type Database = {
         }
         Insert: {
           basicall_project_id: number
-          basicall_token: string
           created_at?: string | null
           hourly_rate?: number | null
           hours_factor?: number | null
@@ -316,7 +350,6 @@ export type Database = {
         }
         Update: {
           basicall_project_id?: number
-          basicall_token?: string
           created_at?: string | null
           hourly_rate?: number | null
           hours_factor?: number | null
@@ -466,45 +499,53 @@ export type Database = {
       }
     }
     Views: {
-      projects_public: {
+      mapping_issues: {
         Row: {
           basicall_project_id: number | null
+          issue_message: string | null
+          issue_type: string | null
+          name: string | null
+          project_id: string | null
+          project_type: string | null
+        }
+        Relationships: []
+      }
+      projects_public: {
+        Row: {
           created_at: string | null
-          hourly_rate: number | null
+          hours_factor: number | null
           id: string | null
           is_active: boolean | null
           mapping_config: Json | null
           name: string | null
           project_key: string | null
           project_type: string | null
+          total_to_call: number | null
           updated_at: string | null
-          vat_rate: number | null
         }
         Insert: {
-          basicall_project_id?: number | null
           created_at?: string | null
-          hourly_rate?: number | null
+          hours_factor?: number | null
           id?: string | null
           is_active?: boolean | null
           mapping_config?: Json | null
           name?: string | null
           project_key?: string | null
           project_type?: string | null
+          total_to_call?: number | null
           updated_at?: string | null
-          vat_rate?: number | null
         }
         Update: {
-          basicall_project_id?: number | null
           created_at?: string | null
-          hourly_rate?: number | null
+          hours_factor?: number | null
           id?: string | null
           is_active?: boolean | null
           mapping_config?: Json | null
           name?: string | null
           project_key?: string | null
           project_type?: string | null
+          total_to_call?: number | null
           updated_at?: string | null
-          vat_rate?: number | null
         }
         Relationships: []
       }
