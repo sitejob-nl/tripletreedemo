@@ -282,7 +282,7 @@ export const InboundReportMatrix = ({
         <thead className="bg-muted/50 text-foreground font-semibold">
           <tr>
             <th scope="col" className="px-2 sm:px-4 py-3 sm:py-4 text-left sticky left-0 bg-muted/50 z-10 rounded-tl-xl sm:rounded-tl-2xl min-w-[100px] sm:min-w-[200px] text-xs sm:text-sm">
-              {selectedWeek === 'all' ? 'Retentie Totaal 2025' : `Retentie Week ${selectedWeek}`}
+              {selectedWeek === 'all' ? 'Retentie Totaal' : `Retentie Week ${selectedWeek}`}
             </th>
             {days.map((day) => (
               <th key={day} scope="col" title={day} className="px-2 sm:px-4 py-3 sm:py-4 text-right capitalize min-w-[50px] sm:min-w-[100px] text-xs sm:text-sm">

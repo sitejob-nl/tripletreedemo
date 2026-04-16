@@ -116,11 +116,6 @@ export const useReportMatrixData = (
     queryKey: ['report_matrix_data', project?.id, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber],
     queryFn: async (): Promise<ProcessedDBCallRecordWithFreq[]> => {
       if (!project) return [];
-      
-      // Don't fetch when no filter is active
-      if (!dateFilter?.isFiltering || !dateFilter.startDate || !dateFilter.endDate) {
-        return [];
-      }
 
       let query = supabase
         .from('call_records')
@@ -128,16 +123,18 @@ export const useReportMatrixData = (
         .eq('project_id', project.id)
         .order('beldatum_date', { ascending: false, nullsFirst: false });
 
-      // Apply date filter
-      if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null) {
-        query = query
-          .eq('week_number', dateFilter.weekNumber)
-          .gte('beldatum_date', dateFilter.startDate)
-          .lte('beldatum_date', dateFilter.endDate);
-      } else {
-        query = query
-          .gte('beldatum_date', dateFilter.startDate)
-          .lte('beldatum_date', dateFilter.endDate);
+      // Apply date filter only when filtering is active; otherwise fetch all records for the project.
+      if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
+        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null) {
+          query = query
+            .eq('week_number', dateFilter.weekNumber)
+            .gte('beldatum_date', dateFilter.startDate)
+            .lte('beldatum_date', dateFilter.endDate);
+        } else {
+          query = query
+            .gte('beldatum_date', dateFilter.startDate)
+            .lte('beldatum_date', dateFilter.endDate);
+        }
       }
 
       const { data, error } = await query;
@@ -166,7 +163,7 @@ export const useReportMatrixData = (
         };
       });
     },
-    enabled: !!project?.id && !!dateFilter?.isFiltering,
+    enabled: !!project?.id,
     staleTime: 1000 * 60 * 5,
   });
 };
