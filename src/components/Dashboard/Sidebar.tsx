@@ -44,8 +44,8 @@ export const Sidebar = ({
           className={cn(
             "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
             isActive('/admin') 
-              ? "bg-primary text-primary-foreground font-medium" 
-              : "text-gray-400 hover:text-white hover:bg-gray-800"
+              ? "bg-primary text-primary-foreground font-medium"
+              : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
           )}
         >
           <Settings size={16} /> Projectbeheer
@@ -56,8 +56,8 @@ export const Sidebar = ({
           className={cn(
             "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
             isActive('/admin/users') 
-              ? "bg-primary text-primary-foreground font-medium" 
-              : "text-gray-400 hover:text-white hover:bg-gray-800"
+              ? "bg-primary text-primary-foreground font-medium"
+              : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
           )}
         >
           <Users size={16} /> Gebruikers
@@ -68,8 +68,8 @@ export const Sidebar = ({
           className={cn(
             "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
             isActive('/admin/customers') 
-              ? "bg-primary text-primary-foreground font-medium" 
-              : "text-gray-400 hover:text-white hover:bg-gray-800"
+              ? "bg-primary text-primary-foreground font-medium"
+              : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
           )}
         >
           <Building2 size={16} /> Klantenbeheer
@@ -89,8 +89,8 @@ export const Sidebar = ({
         className={cn(
           "flex items-center gap-2 text-sm w-full px-3 py-2 rounded-lg transition-colors",
           isActive('/developer') 
-            ? "bg-kpi-purple text-kpi-purple-text font-medium" 
-            : "text-kpi-purple-text hover:text-white hover:bg-gray-800"
+            ? "bg-kpi-purple text-kpi-purple-text font-medium"
+            : "text-kpi-purple-text hover:text-sidebar-foreground hover:bg-sidebar-accent"
         )}
       >
         <Code size={16} /> Developer
@@ -115,7 +115,7 @@ export const Sidebar = ({
       </div>
 
       <nav className="p-3 sm:p-4 space-y-1 flex-1 overflow-y-auto min-h-0" data-tour="sidebar-projects">
-        <div className="text-xs uppercase text-gray-400 font-bold px-3 mb-3 mt-2">
+        <div className="text-xs uppercase text-sidebar-foreground/60 font-bold px-3 mb-3 mt-2">
           Campagnes
         </div>
         {projects.map((proj, idx) => (
@@ -128,7 +128,7 @@ export const Sidebar = ({
               "w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar-background",
               selectedProject === proj
                 ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-white hover:bg-gray-800'
+                : 'text-sidebar-foreground hover:bg-sidebar-accent'
             )}
           >
             <div aria-hidden="true" className={`w-2 h-2 rounded-full ${projectColors[idx % projectColors.length]}`}></div>
@@ -138,12 +138,12 @@ export const Sidebar = ({
         ))}
       </nav>
 
-      <div className="p-3 sm:p-4 border-t border-gray-800 space-y-1 flex-shrink-0" data-tour="sidebar-admin-links">
+      <div className="p-3 sm:p-4 border-t border-sidebar-border space-y-1 flex-shrink-0" data-tour="sidebar-admin-links">
         {adminMenuItems}
         {devMenuItem}
         <button 
           onClick={handleLogout} 
-          className="flex items-center gap-2 text-gray-400 hover:text-white text-sm w-full px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors"
+          className="flex items-center gap-2 text-sidebar-foreground/60 hover:text-sidebar-foreground text-sm w-full px-3 py-2 rounded-lg hover:bg-sidebar-accent transition-colors"
         >
           <LogOut size={16} /> Uitloggen
         </button>
