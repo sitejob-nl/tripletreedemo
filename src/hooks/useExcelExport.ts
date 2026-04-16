@@ -26,6 +26,15 @@ export function useExcelExport({
   const { toast } = useToast();
 
   const handleExportToExcel = useCallback(() => {
+    if (!data || data.length === 0) {
+      toast({
+        title: 'Geen gegevens',
+        description: 'Er zijn geen records om te exporteren.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const days = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
 
     const getHourlyRateForDay = (dayName?: string): number => {
@@ -314,12 +323,19 @@ export function useExcelExport({
       const weekLabel = typeof selectedWeek === 'string' && selectedWeek.includes('-') ? selectedWeek.replace(/\//g, '-') : `Week${selectedWeek}`;
       const filename = `${projectName}_${weekLabel}_Rapport.xlsx`;
 
-      XLSX.writeFile(wb, filename);
-
-      toast({
-        title: 'Export succesvol',
-        description: `Rapport geëxporteerd als ${filename}`,
-      });
+      try {
+        XLSX.writeFile(wb, filename);
+        toast({
+          title: 'Export succesvol',
+          description: `Rapport geëxporteerd als ${filename}`,
+        });
+      } catch (error) {
+        toast({
+          title: 'Export mislukt',
+          description: error instanceof Error ? error.message : 'Onbekende fout bij het schrijven van het Excel-bestand.',
+          variant: 'destructive',
+        });
+      }
     }
   }, [data, hourlyRate, selectedWeek, projectName, toast, mappingConfig, vatRate, loggedTimeHours, dailyLoggedHours, projectType]);
 
