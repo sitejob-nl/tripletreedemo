@@ -1,0 +1,20 @@
+{
+  "name": "basicall-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nightly sync van BasiCall SOAP API naar Supabase. Draait op VPS Hetzner 85.10.132.126 onder user sitejob-tt. Cron-invoked, Europe/Amsterdam.",
+  "main": "sync.js",
+  "scripts": {
+    "start": "node sync.js",
+    "sync": "node sync.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "xml2js": "^0.6.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
