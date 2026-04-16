@@ -19,6 +19,7 @@
 | B.5 | `getIngelogdeTijden` 500-errors kosten ~12s retry per dag | P2 | §B.5 |
 | B.6 | Stale `sync_jobs` in `processing`-status zonder cleanup | P2 | §B.6 |
 | B.7 | VPS-script niet in Git | P3 | §B.7 |
+| B.8 | `MAX_CONSECUTIVE_ERRORS = 3` breekt hele dagreeks af bij tijdelijke BasiCall-500's | **P1** (gedeployed) | §B.8 |
 
 Overall: het script is **robuust gebouwd** (PII-filter, retry-logica, NL-timezone, dynamic project-list, missed-days-fallback) — de gevonden issues zijn detail-problemen op de ruggengraat, geen fundamentele gebreken.
 
@@ -363,13 +364,90 @@ Voeg deze cron-regel ook toe aan `scripts/vps-sync/README.md`.
 
 ---
 
+## B.8 `MAX_CONSECUTIVE_ERRORS` sluit hele dagreeks af — P1 (gedeployed)
+
+**Ontdekt op 2026-04-16 tijdens overhandigingsdag**, nadat de B.2-patch was gedeployed maar ANBO online informatiepakket (734) voor week 15/16 nog steeds 0 inzet-uren toonde terwijl er wel records waren.
+
+### Oorzaak
+
+`syncLoggedTimeRange` (regel 302-343) gebruikt een heuristiek: **3 opeenvolgende failures → rest van de dagreeks overslaan**:
+
+```js
+// sync.js regel 308-323
+const MAX_CONSECUTIVE_ERRORS = 3;
+
+while (currentDate <= end) {
+    const seconds = await syncLoggedTimeDay(project, currentDate);
+
+    if (seconds === null) {
+        errorDays++;
+        consecutiveErrors++;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            console.log(`   ⏭️  ${MAX_CONSECUTIVE_ERRORS}x achter elkaar mislukt — project ondersteunt waarschijnlijk geen inlogtijd. Overslaan.`);
+            break;  // ← BUG: stopt hele loop
+        }
+    } else {
+        consecutiveErrors = 0;
+        // ...
+    }
+}
+```
+
+Bedoeling was waarschijnlijk projecten die **structureel** geen `getIngelogdeTijden` ondersteunen snel overslaan. In praktijk zijn BasiCall-500's **willekeurig en tijdelijk**, niet project-specifiek. Bewijs uit run-output 2026-04-16:
+
+- **ANBO (734)**: dag 1+2 gelukt, dag 3+4+5 faalden → script stopt. Dagen 6-15 **nooit geprobeerd**, week 16 uren blijven leeg ondanks 62 records.
+- **Inbound opvang (500)**: failures op dag 5, 6, 12 — niet consecutief door successen ertussen → geen trigger → 12 van 15 dagen binnen.
+
+Gevolg: inzet-uren (en dus kosten + investering + terugverdientijd + ROI) leeg voor elke week waar één patch van 3+ opeenvolgende BasiCall-hiccups tussen zat.
+
+### Fix (gedeployed 2026-04-16 13:30 NL)
+
+```js
+// sync.js regel 310 — één cijfer
+const MAX_CONSECUTIVE_ERRORS = 999;
+```
+
+Effectief schakelt de heuristiek uit. Nu probeert het script elke dag individueel; 500's worden nog wel geretryd (§B.5 blijft openstaand, maar de kosten zijn leesbaar: ~12s per tijdelijke 500 i.p.v. data-verlies voor hele weken).
+
+Backfill uitgevoerd voor alle actieve projecten op 2026-04-16 via:
+```sql
+INSERT INTO sync_jobs (project_id, start_date, end_date, status, created_at)
+SELECT id, '2026-04-01', '2026-04-15', 'pending', now()
+FROM projects WHERE is_active = true;
+```
+gevolgd door `sudo node /opt/basicall-sync/sync.js` op VPS.
+
+### Betere fix (later, samen met §B.5)
+
+Combineer dit met de no-retry-op-500 patch uit §B.5. Dan wordt de loop snel (geen retries op dagen zonder data) én compleet (geen early-break). Als §B.5 gedeployed is, kan `MAX_CONSECUTIVE_ERRORS` zelfs helemaal weg of teruggezet naar iets groots (bijv. 365) — maakt niks meer uit want 500's throwen niet langer.
+
+### Verificatie
+
+```sql
+-- Per project: aantal dagen met logged time in de laatste 15 dagen
+SELECT p.name, COUNT(dlt.date) AS days_with_hours,
+       ROUND(SUM(dlt.total_seconds) / 3600.0, 1) AS total_hours
+FROM projects p
+LEFT JOIN daily_logged_time dlt
+  ON dlt.project_id = p.id
+  AND dlt.date >= current_date - interval '15 days'
+WHERE p.is_active = true
+GROUP BY p.name
+ORDER BY days_with_hours DESC;
+```
+
+Projecten die voorheen afgebroken waren, horen nu meer dagen te tonen.
+
+---
+
 ## Deploy-volgorde bij aanvaarding
 
-1. **Nu**: B.2 deployen (silent-token-fix). 6 regels, zero risk, direct zichtbaarheid terug voor 19 projecten.
-2. **Deze week**: B.1 verificatie (log + robuuste parse) zodra eerste batch gekoppeld is.
-3. **Deze week**: B.3 verificatie (debug-log voor gesprekstijd).
-4. **Volgende sprint**: B.5 + B.6 (optimalisaties, geen datafouten).
-5. **Volgende sprint**: B.7 (script in Git + README + deploy-workflow). B.4 (casing) meenemen in dezelfde commit.
+1. ~~**Nu**: B.2 deployen (silent-token-fix). 6 regels, zero risk, direct zichtbaarheid terug voor 19 projecten.~~ **Gedeployed 2026-04-16 13:10 NL** — Demo Campagne verschijnt nu correct als `failed` in sync_logs.
+2. ~~**Nu**: B.8 (MAX_CONSECUTIVE_ERRORS 3→999). 1 cijfer, voorkomt data-loss bij BasiCall-hiccups.~~ **Gedeployed 2026-04-16 13:30 NL** + backfill voor alle actieve projecten uitgevoerd.
+3. **Deze week**: B.1 verificatie (log + robuuste parse) zodra eerste batch gekoppeld is.
+4. **Deze week**: B.3 verificatie (debug-log voor gesprekstijd).
+5. **Volgende sprint**: B.5 + B.6 (optimalisaties, geen datafouten). Na B.5 kan B.8's `999` terug naar iets zinnigers of weg.
+6. **Volgende sprint**: B.7 (script in Git + README + deploy-workflow). B.4 (casing) meenemen in dezelfde commit.
 
 ---
 
