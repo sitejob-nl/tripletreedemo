@@ -25,7 +25,23 @@ interface BatchProgressProps {
 export function BatchProgress({ projectId }: BatchProgressProps) {
   const { data: batches } = useBatches(projectId);
 
-  if (!batches?.length) return null;
+  if (!batches?.length) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Package className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+            Batch Voortgang
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Nog geen batches gekoppeld aan deze campagne.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   const latestSync = batches
     .map((b) => b.last_synced_at)

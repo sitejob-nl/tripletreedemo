@@ -79,7 +79,11 @@ export const Header = ({
           />
         </div>
 
-        {role !== 'admin' && (
+        {role === 'admin' ? (
+          <div className="ml-auto text-[10px] sm:text-xs text-muted-foreground italic self-center">
+            Weergave-modus alleen zichtbaar voor klanten
+          </div>
+        ) : (
           <TooltipProvider>
             <div className="flex bg-muted/50 p-0.5 sm:p-1.5 rounded-lg sm:rounded-xl border border-border ml-auto" data-tour="view-buttons">
               <Tooltip>
