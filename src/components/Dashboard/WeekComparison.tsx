@@ -391,7 +391,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
               </tr>
               {metrics.slice(0, 6).map((metric) => (
                 <tr key={metric.label} className="hover:bg-muted/30 transition-colors border-b border-border/50">
-                  <td className="px-6 py-4 font-medium text-foreground bg-muted/30 sticky left-0">{metric.label}</td>
+                  <td className="px-6 py-4 font-medium text-foreground bg-card sticky left-0 z-10 shadow-[4px_0_4px_-2px_rgba(0,0,0,0.04)]">{metric.label}</td>
                   {filteredStats.map((stats, idx) => {
                     const value = metric.getValue(stats);
                     const prevStats = filteredStats[idx + 1];
@@ -426,7 +426,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
               </tr>
               {metrics.slice(6, 9).map((metric) => (
                 <tr key={metric.label} className="hover:bg-muted/30 transition-colors border-b border-border/50">
-                  <td className="px-6 py-4 font-medium text-foreground bg-muted/30 sticky left-0">{metric.label}</td>
+                  <td className="px-6 py-4 font-medium text-foreground bg-card sticky left-0 z-10 shadow-[4px_0_4px_-2px_rgba(0,0,0,0.04)]">{metric.label}</td>
                   {filteredStats.map((stats, idx) => {
                     const value = metric.getValue(stats);
                     const prevStats = filteredStats[idx + 1];
@@ -461,7 +461,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
               </tr>
               {metrics.slice(9, 12).map((metric) => (
                 <tr key={metric.label} className="hover:bg-muted/30 transition-colors border-b border-border/50">
-                  <td className="px-6 py-4 font-medium text-foreground bg-muted/30 sticky left-0">{metric.label}</td>
+                  <td className="px-6 py-4 font-medium text-foreground bg-card sticky left-0 z-10 shadow-[4px_0_4px_-2px_rgba(0,0,0,0.04)]">{metric.label}</td>
                   {filteredStats.map((stats, idx) => {
                     const value = metric.getValue(stats);
                     const prevStats = filteredStats[idx + 1];
@@ -496,7 +496,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
               </tr>
               {metrics.slice(12).map((metric) => (
                 <tr key={metric.label} className="hover:bg-muted/30 transition-colors border-b border-border/50">
-                  <td className="px-6 py-4 font-medium text-foreground bg-muted/30 sticky left-0">{metric.label}</td>
+                  <td className="px-6 py-4 font-medium text-foreground bg-card sticky left-0 z-10 shadow-[4px_0_4px_-2px_rgba(0,0,0,0.04)]">{metric.label}</td>
                   {filteredStats.map((stats, idx) => {
                     const value = metric.getValue(stats);
                     const prevStats = filteredStats[idx + 1];

@@ -15,7 +15,7 @@ export const RoleSelection = ({ onSelectRole }: RoleSelectionProps) => {
             <img src={logo} alt="Triple Tree Logo" className="h-12 w-12" />
             <h1 className="text-4xl font-bold text-foreground">Triple Tree</h1>
           </div>
-          <p className="text-muted-foreground text-lg">Selecteer uw rol om door te gaan</p>
+          <p className="text-muted-foreground text-lg">Selecteer je rol om door te gaan</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div

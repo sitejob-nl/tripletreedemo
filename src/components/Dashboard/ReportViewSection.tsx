@@ -67,11 +67,12 @@ export function ReportViewSection({
           <span className="truncate">{getTitle()}</span>
           {typeBadge()}
         </h3>
-        <button 
+        <button
           onClick={onExportToExcel}
-          className="text-primary text-xs sm:text-sm font-medium hover:underline flex items-center gap-1 shrink-0"
+          aria-label="Exporteer rapport naar Excel"
+          className="text-primary text-xs sm:text-sm font-medium hover:underline focus-visible:underline focus-visible:outline-none flex items-center gap-1 shrink-0"
         >
-          <FileSpreadsheet size={14} className="sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Exporteer naar</span> Excel
+          <FileSpreadsheet size={14} className="sm:w-4 sm:h-4" aria-hidden="true" /> <span className="hidden sm:inline">Exporteer naar</span> Excel
         </button>
       </div>
       
@@ -97,12 +98,6 @@ export function ReportViewSection({
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
         />
-      ) : selectedWeek === 'all' ? (
-        <div className="bg-muted/50 border border-border rounded-lg p-6 text-center">
-          <p className="text-muted-foreground">
-            Selecteer een specifieke week om het gedetailleerde weekoverzicht te zien.
-          </p>
-        </div>
       ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

@@ -370,7 +370,7 @@ export const GeographicAnalysis = ({ data, locationCol }: GeographicAnalysisProp
               <p style="margin: 2px 0;"><strong>Calls:</strong> ${location.calls}</p>
               <p style="margin: 2px 0;"><strong>Sales:</strong> ${location.sales}</p>
               <p style="margin: 2px 0;"><strong>Conversie:</strong> ${location.conversion.toFixed(1)}%</p>
-              <p style="margin: 2px 0;"><strong>Jaarwaarde:</strong> €${location.annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}</p>
+              <p style="margin: 2px 0;"><strong>Jaarwaarde:</strong> €${location.annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
           `)
         )

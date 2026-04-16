@@ -43,7 +43,7 @@ export const ProjectSelector = ({
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Projecten laden...</span>
+        <span>Campagnes laden...</span>
       </div>
     );
   }
@@ -51,7 +51,7 @@ export const ProjectSelector = ({
   if (projects.length === 0) {
     return (
       <div className="text-muted-foreground text-sm">
-        Geen actieve projecten gevonden
+        Geen actieve campagnes gevonden
       </div>
     );
   }
@@ -60,8 +60,8 @@ export const ProjectSelector = ({
 
   return (
     <Select value={selectedProjectKey} onValueChange={onProjectChange}>
-      <SelectTrigger className="w-[220px]">
-        <SelectValue placeholder="Selecteer project">
+      <SelectTrigger className="w-full sm:w-[220px]">
+        <SelectValue placeholder="Selecteer campagne">
           {selected && (
             <span className="flex items-center gap-2 truncate">
               {typeIcon(selected.project_type)}

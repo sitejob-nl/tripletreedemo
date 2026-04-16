@@ -205,7 +205,7 @@ export const TimeAnalysis = ({ data }: TimeAnalysisProps) => {
             <CardTitle className="text-lg">Calls per Uur</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
+            <div className="h-[240px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={timeData.chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -250,7 +250,7 @@ export const TimeAnalysis = ({ data }: TimeAnalysisProps) => {
             <CardTitle className="text-lg">Conversie per Uur</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
+            <div className="h-[240px] sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={timeData.chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />

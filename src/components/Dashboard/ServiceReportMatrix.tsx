@@ -177,20 +177,30 @@ export const ServiceReportMatrix = ({
     </tr>
   );
 
+  if (data.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center shadow-sm">
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Geen klantenservice-gesprekken in {selectedWeek === 'all' ? 'deze periode' : `week ${selectedWeek}`}.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="overflow-x-auto bg-card rounded-xl sm:rounded-2xl border border-border shadow-sm -mx-4 sm:mx-0">
       <table className="w-full text-xs sm:text-sm">
         <thead className="bg-muted/50 text-foreground font-semibold">
           <tr>
-            <th className="px-2 sm:px-4 py-3 sm:py-4 text-left sticky left-0 bg-muted/50 z-10 rounded-tl-xl sm:rounded-tl-2xl min-w-[100px] sm:min-w-[200px] text-xs sm:text-sm">
+            <th scope="col" className="px-2 sm:px-4 py-3 sm:py-4 text-left sticky left-0 bg-muted/50 z-10 rounded-tl-xl sm:rounded-tl-2xl min-w-[100px] sm:min-w-[200px] text-xs sm:text-sm">
               {selectedWeek === 'all' ? 'Klantenservice Totaal' : `Klantenservice Week ${selectedWeek}`}
             </th>
             {days.map((day) => (
-              <th key={day} className="px-2 sm:px-4 py-3 sm:py-4 text-right capitalize min-w-[50px] sm:min-w-[100px] text-xs sm:text-sm">
+              <th key={day} scope="col" title={day} className="px-2 sm:px-4 py-3 sm:py-4 text-right capitalize min-w-[50px] sm:min-w-[100px] text-xs sm:text-sm">
                 {day.slice(0, 2)}
               </th>
             ))}
-            <th className="px-2 sm:px-4 py-3 sm:py-4 text-right rounded-tr-xl sm:rounded-tr-2xl bg-muted/70 min-w-[60px] sm:min-w-[100px] text-xs sm:text-sm">Totaal</th>
+            <th scope="col" className="px-2 sm:px-4 py-3 sm:py-4 text-right rounded-tr-xl sm:rounded-tr-2xl bg-muted/70 min-w-[60px] sm:min-w-[100px] text-xs sm:text-sm">Totaal</th>
           </tr>
         </thead>
         <tbody>

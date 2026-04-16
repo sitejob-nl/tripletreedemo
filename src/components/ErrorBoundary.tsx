@@ -24,9 +24,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log the error to the database
     errorLogger.logReactError(error, 'ErrorBoundary', errorInfo);
-    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+    if (import.meta.env.DEV) {
+      console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+    }
   }
 
   private handleReload = () => {
@@ -59,7 +60,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </p>
             </div>
 
-            {this.state.error && (
+            {this.state.error && import.meta.env.DEV && (
               <div className="p-4 rounded-lg bg-destructive/10 text-left">
                 <p className="text-sm font-mono text-destructive break-all">
                   {this.state.error.message}

@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useExcelExport } from '@/hooks/useExcelExport';
 import { Navigate } from 'react-router-dom';
 import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
+import { errorLogger } from '@/lib/errorLogger';
 
 const Index = () => {
   const [selectedProjectKey, setSelectedProjectKeyState] = useState<string>('');
@@ -377,10 +378,10 @@ const Index = () => {
         timeoutPromise
       ]);
     } catch (error) {
-      console.warn('Logout warning (ignored):', error);
+      errorLogger.logApiError('logout', error);
     } finally {
       queryClient.clear();
-      window.location.replace('/auth');
+      window.location.replace('/');
     }
   }, [signOut, queryClient]);
 
@@ -389,7 +390,7 @@ const Index = () => {
 
   // Redirect to auth if not logged in
   if (!authLoading && !user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // Show loading while checking auth and role

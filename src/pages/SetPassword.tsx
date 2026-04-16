@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle, Eye, EyeOff, KeyRound } from "lucide-react";
 import tripleTreeLogo from "@/assets/triple-tree-logo.png";
+import { errorLogger } from "@/lib/errorLogger";
 
 export default function SetPassword() {
   const [password, setPassword] = useState("");
@@ -87,7 +88,7 @@ export default function SetPassword() {
         navigate('/dashboard');
       }, 2000);
     } catch (error: any) {
-      console.error('Set password error:', error);
+      errorLogger.logApiError('set_password', error);
       toast({
         title: "Fout",
         description: error.message || "Kon wachtwoord niet instellen.",

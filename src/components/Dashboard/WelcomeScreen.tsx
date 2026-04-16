@@ -21,7 +21,7 @@ export const WelcomeScreen = () => {
             Welkom bij het Dashboard
           </h1>
           <p className="text-lg text-muted-foreground">
-            Selecteer een project in de sidebar om te beginnen met het analyseren van uw beldata.
+            Selecteer een campagne in de sidebar om te beginnen met het analyseren van je beldata.
           </p>
         </div>
         

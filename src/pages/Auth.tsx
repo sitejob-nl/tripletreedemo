@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
+import tripleTreeLogo from '@/assets/triple-tree-logo.png';
 import {
   Dialog,
   DialogContent,
@@ -113,7 +114,7 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center text-primary-foreground bg-popover-foreground">
-          <img alt="Triple Tree Logo" className="h-16 mx-auto mb-4" src="/lovable-uploads/88aa155b-88a2-45d0-a554-eaafefd22704.png" />
+          <img alt="Triple Tree Logo" className="h-16 mx-auto mb-4" src={tripleTreeLogo} />
           <CardDescription>Log in om verder te gaan</CardDescription>
         </CardHeader>
         <CardContent className="pt-[20px]">

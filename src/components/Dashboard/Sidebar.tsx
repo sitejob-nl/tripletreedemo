@@ -119,19 +119,21 @@ export const Sidebar = ({
           Campagnes
         </div>
         {projects.map((proj, idx) => (
-          <button 
-            key={proj} 
-            onClick={() => handleProjectChange(proj)} 
+          <button
+            key={proj}
+            onClick={() => handleProjectChange(proj)}
+            aria-label={`Selecteer campagne ${proj}`}
+            aria-current={selectedProject === proj ? 'true' : undefined}
             className={cn(
-              "w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all",
-              selectedProject === proj 
-                ? 'bg-primary text-primary-foreground shadow-sm' 
+              "w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar-background",
+              selectedProject === proj
+                ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-white hover:bg-gray-800'
             )}
           >
-            <div className={`w-2 h-2 rounded-full ${projectColors[idx % projectColors.length]}`}></div>
+            <div aria-hidden="true" className={`w-2 h-2 rounded-full ${projectColors[idx % projectColors.length]}`}></div>
             <span className="capitalize font-medium text-sm sm:text-base">{proj}</span>
-            {selectedProject === proj && <ChevronRight size={16} className="ml-auto" />}
+            {selectedProject === proj && <ChevronRight size={16} className="ml-auto" aria-hidden="true" />}
           </button>
         ))}
       </nav>
@@ -156,7 +158,7 @@ export const Sidebar = ({
         <img src={logo} alt="Triple Tree Logo" className="h-8 w-auto object-contain" />
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-gray-800">
+            <Button variant="ghost" size="icon" aria-label="Menu openen" className="text-white hover:bg-gray-800">
               <Menu size={24} />
             </Button>
           </SheetTrigger>

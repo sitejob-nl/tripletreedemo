@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { z } from 'zod';
+import tripleTreeLogo from '@/assets/triple-tree-logo.png';
 
 const passwordSchema = z.string().min(6, 'Wachtwoord moet minimaal 6 tekens zijn');
 
@@ -106,7 +107,7 @@ export default function ResetPassword() {
           <img
             alt="Triple Tree Logo"
             className="h-16 mx-auto mb-4"
-            src="/lovable-uploads/88aa155b-88a2-45d0-a554-eaafefd22704.png"
+            src={tripleTreeLogo}
           />
           <CardDescription>Kies een nieuw wachtwoord</CardDescription>
         </CardHeader>

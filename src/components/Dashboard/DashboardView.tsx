@@ -38,18 +38,19 @@ export const DashboardView = ({
 }: DashboardViewProps) => {
   const salesData = data.filter((d) => d.is_sale);
 
-  const statusCounts = [
-    'Sale',
-    'Donateur',
-    'Voicemail',
-    'Weigering',
-    'Geen interesse',
-  ].map((status) => {
-    const count = data.filter((d) => d.bc_result_naam === status).length;
+  const statusCounts = (() => {
     const total = data.length;
-    const pct = total > 0 ? ((count / total) * 100) : 0;
-    return { status, count, pct, name: status };
-  }).filter(item => item.count > 0);
+    if (total === 0) return [];
+    const freq: Record<string, number> = {};
+    data.forEach((d) => {
+      const key = d.bc_result_naam || 'Onbekend';
+      freq[key] = (freq[key] || 0) + 1;
+    });
+    return Object.entries(freq)
+      .map(([status, count]) => ({ status, count, pct: (count / total) * 100, name: status }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  })();
 
   const pieColors = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 

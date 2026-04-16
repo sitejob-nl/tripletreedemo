@@ -244,30 +244,52 @@ export const InboundReportMatrix = ({
     bgClass: string,
     textClass: string
   ) => (
-    <tr className="cursor-pointer" onClick={onToggle}>
+    <tr
+      className="cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-ring"
+      onClick={onToggle}
+      role="button"
+      tabIndex={0}
+      aria-expanded={isOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+    >
       <td colSpan={days.length + 2} className={`px-2 sm:px-4 py-2 sm:py-3 ${bgClass} ${textClass} font-bold text-[10px] sm:text-xs uppercase tracking-wider`}>
         <div className="flex items-center justify-between">
           <span>{title}</span>
-          {isOpen ? <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />}
+          {isOpen ? <ChevronUp className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" /> : <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" aria-hidden="true" />}
         </div>
       </td>
     </tr>
   );
+
+  if (data.length === 0) {
+    return (
+      <div className="bg-card border border-border rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center shadow-sm">
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Geen retentie-gesprekken in {selectedWeek === 'all' ? 'deze periode' : `week ${selectedWeek}`}.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-x-auto bg-card rounded-xl sm:rounded-2xl border border-border shadow-sm -mx-4 sm:mx-0">
       <table className="w-full text-xs sm:text-sm">
         <thead className="bg-muted/50 text-foreground font-semibold">
           <tr>
-            <th className="px-2 sm:px-4 py-3 sm:py-4 text-left sticky left-0 bg-muted/50 z-10 rounded-tl-xl sm:rounded-tl-2xl min-w-[100px] sm:min-w-[200px] text-xs sm:text-sm">
+            <th scope="col" className="px-2 sm:px-4 py-3 sm:py-4 text-left sticky left-0 bg-muted/50 z-10 rounded-tl-xl sm:rounded-tl-2xl min-w-[100px] sm:min-w-[200px] text-xs sm:text-sm">
               {selectedWeek === 'all' ? 'Retentie Totaal 2025' : `Retentie Week ${selectedWeek}`}
             </th>
             {days.map((day) => (
-              <th key={day} className="px-2 sm:px-4 py-3 sm:py-4 text-right capitalize min-w-[50px] sm:min-w-[100px] text-xs sm:text-sm">
+              <th key={day} scope="col" title={day} className="px-2 sm:px-4 py-3 sm:py-4 text-right capitalize min-w-[50px] sm:min-w-[100px] text-xs sm:text-sm">
                 {day.slice(0, 2)}
               </th>
             ))}
-            <th className="px-2 sm:px-4 py-3 sm:py-4 text-right rounded-tr-xl sm:rounded-tr-2xl bg-muted/70 min-w-[60px] sm:min-w-[100px] text-xs sm:text-sm">Totaal</th>
+            <th scope="col" className="px-2 sm:px-4 py-3 sm:py-4 text-right rounded-tr-xl sm:rounded-tr-2xl bg-muted/70 min-w-[60px] sm:min-w-[100px] text-xs sm:text-sm">Totaal</th>
           </tr>
         </thead>
         <tbody>

@@ -34,7 +34,7 @@ export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', 
       <div className="flex-1 min-w-0 mr-2">
         <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-2 truncate">{title}</p>
         {isLoading ? (
-          <Skeleton className="h-6 sm:h-9 w-16 sm:w-24 mb-0.5 sm:mb-2" />
+          <Skeleton className="h-6 sm:h-9 w-24 sm:w-32 mb-0.5 sm:mb-2" />
         ) : (
           <h3 className={`text-lg sm:text-3xl font-bold ${styles.text} mb-0.5 sm:mb-2 truncate`}>{value}</h3>
         )}
@@ -57,7 +57,7 @@ export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', 
     return (
       <Popover>
         <PopoverTrigger asChild>{cardContent}</PopoverTrigger>
-        <PopoverContent className="w-72 p-4" align="start">
+        <PopoverContent className="w-72 max-w-[calc(100vw-2rem)] p-4" align="start">
           {popoverContent}
         </PopoverContent>
       </Popover>

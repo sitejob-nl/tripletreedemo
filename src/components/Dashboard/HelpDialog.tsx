@@ -20,7 +20,7 @@ export const HelpDialog = () => {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" size="icon" aria-label="Help en uitleg" className="text-muted-foreground hover:text-foreground">
           <HelpCircle className="h-5 w-5" />
         </Button>
       </DialogTrigger>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { ProcessedCallRecord } from '@/types/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart as PieChartIcon, Filter } from 'lucide-react';
@@ -80,6 +81,7 @@ const CATEGORY_LABELS = {
 
 export const ResultsBreakdown = ({ data }: ResultsBreakdownProps) => {
   const [showCount, setShowCount] = useState<string>('10');
+  const isMobile = useIsMobile();
 
   const resultsData = useMemo(() => {
     const byResult: Record<string, { count: number; annualValue: number; category: string }> = {};
@@ -234,24 +236,24 @@ export const ResultsBreakdown = ({ data }: ResultsBreakdownProps) => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px]">
+          <div className="h-[320px] sm:h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart 
-                data={displayedResults} 
+              <BarChart
+                data={displayedResults}
                 layout="vertical"
-                margin={{ left: 120, right: 20 }}
+                margin={{ left: isMobile ? 10 : 120, right: 20 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis 
+                <XAxis
                   type="number"
                   tick={{ fill: 'hsl(var(--muted-foreground))' }}
                   axisLine={{ stroke: 'hsl(var(--border))' }}
                 />
-                <YAxis 
+                <YAxis
                   type="category"
                   dataKey="name"
-                  width={110}
-                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+                  width={isMobile ? 90 : 110}
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: isMobile ? 10 : 12 }}
                   axisLine={{ stroke: 'hsl(var(--border))' }}
                 />
                 <Tooltip 

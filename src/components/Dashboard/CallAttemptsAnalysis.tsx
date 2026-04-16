@@ -85,6 +85,16 @@ export const CallAttemptsAnalysis = ({ data }: CallAttemptsAnalysisProps) => {
     };
   }, [data]);
 
+  if (attemptsData.totalWithAttempts < 10) {
+    return (
+      <div className="bg-card border border-border rounded-xl p-8 sm:p-12 text-center shadow-sm">
+        <p className="text-sm sm:text-base text-muted-foreground">
+          Minimaal 10 gesprekken met poging-data nodig voor analyse ({attemptsData.totalWithAttempts} beschikbaar).
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}

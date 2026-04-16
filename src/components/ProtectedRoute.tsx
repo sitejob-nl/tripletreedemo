@@ -30,7 +30,7 @@ export function ProtectedRoute({ children, requireAdmin = false, requireSuperAdm
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (requireSuperAdmin && !isSuperAdmin) {
