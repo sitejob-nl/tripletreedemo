@@ -62,8 +62,7 @@ export function OnboardingTour({
     // Scroll element into view
     el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
 
-    // Wait for scroll to settle
-    setTimeout(() => {
+    const computePositions = () => {
       const rect = el.getBoundingClientRect();
       const padding = 8;
       const spotlight = {
@@ -108,7 +107,30 @@ export function OnboardingTour({
       }
 
       setTooltipStyle(style);
-    }, 300);
+    };
+
+    // Wait for scroll to settle using IntersectionObserver,
+    // with a safety-net timeout in case IO never fires.
+    let settled = false;
+    const fallback = window.setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        computePositions();
+      }
+    }, 500);
+
+    const io = new IntersectionObserver((entries) => {
+      if (settled) return;
+      const entry = entries[0];
+      if (entry?.isIntersecting) {
+        settled = true;
+        clearTimeout(fallback);
+        io.disconnect();
+        // One more RAF so the final scroll position is painted
+        requestAnimationFrame(() => computePositions());
+      }
+    }, { threshold: 0.5 });
+    io.observe(el);
   }, [currentStep]);
 
   // Update position when step changes
