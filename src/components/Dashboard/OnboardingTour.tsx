@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { X, ChevronLeft, ChevronRight, SkipForward } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -34,8 +34,16 @@ export function OnboardingTour({
   const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null);
   const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
   const [isVisible, setIsVisible] = useState(false);
+  const pendingSettleRef = useRef<{ io: IntersectionObserver; fallback: number } | null>(null);
 
   const updatePosition = useCallback(() => {
+    // Cancel any in-flight settle before starting a new one.
+    if (pendingSettleRef.current) {
+      pendingSettleRef.current.io.disconnect();
+      clearTimeout(pendingSettleRef.current.fallback);
+      pendingSettleRef.current = null;
+    }
+
     if (!currentStep?.target) {
       setSpotlightRect(null);
       setTooltipStyle({
@@ -116,6 +124,7 @@ export function OnboardingTour({
       if (!settled) {
         settled = true;
         computePositions();
+        pendingSettleRef.current = null;
       }
     }, 500);
 
@@ -126,12 +135,28 @@ export function OnboardingTour({
         settled = true;
         clearTimeout(fallback);
         io.disconnect();
-        // One more RAF so the final scroll position is painted
-        requestAnimationFrame(() => computePositions());
+        pendingSettleRef.current = null;
+        // Double RAF so the rect read happens post-layout, after smooth-scroll
+        // has finished compositing the final frame.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => computePositions());
+        });
       }
-    }, { threshold: 0.5 });
+    }, { threshold: [0, 0.5] });
     io.observe(el);
+    pendingSettleRef.current = { io, fallback };
   }, [currentStep]);
+
+  // Cleanup pending IO/timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingSettleRef.current) {
+        pendingSettleRef.current.io.disconnect();
+        clearTimeout(pendingSettleRef.current.fallback);
+        pendingSettleRef.current = null;
+      }
+    };
+  }, []);
 
   // Update position when step changes
   useEffect(() => {
@@ -164,12 +189,21 @@ export function OnboardingTour({
   // Reposition on resize/scroll
   useEffect(() => {
     if (!isActive) return;
-    const handler = () => updatePosition();
+    const handler = () => {
+      // Don't thrash during a pending settle — the in-flight observer will handle the new position.
+      if (pendingSettleRef.current) return;
+      updatePosition();
+    };
     window.addEventListener('resize', handler);
     window.addEventListener('scroll', handler, true);
     return () => {
       window.removeEventListener('resize', handler);
       window.removeEventListener('scroll', handler, true);
+      if (pendingSettleRef.current) {
+        pendingSettleRef.current.io.disconnect();
+        clearTimeout(pendingSettleRef.current.fallback);
+        pendingSettleRef.current = null;
+      }
     };
   }, [isActive, updatePosition]);
 
