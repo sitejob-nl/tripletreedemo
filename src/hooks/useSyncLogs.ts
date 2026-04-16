@@ -49,6 +49,29 @@ export function useSyncLogs(projectId?: string, limit = 50) {
   });
 }
 
+export function useRecentSyncFailures(hoursBack = 24) {
+  return useQuery({
+    queryKey: ['sync-failures', hoursBack],
+    queryFn: async (): Promise<SyncLogWithProject[]> => {
+      const since = new Date(Date.now() - hoursBack * 3600_000).toISOString();
+      const { data, error } = await supabase
+        .from('sync_logs')
+        .select(`*, projects!inner(name)`)
+        .eq('status', 'failed')
+        .gte('started_at', since)
+        .order('started_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map(log => ({
+        ...log,
+        project_name: (log.projects as any)?.name || null
+      }));
+    },
+    refetchInterval: 60_000, // 1 min: binnen 24u na nachtsync moet failure zichtbaar zijn
+  });
+}
+
 export function useDbStats() {
   return useQuery({
     queryKey: ['db-stats'],

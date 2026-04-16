@@ -80,13 +80,14 @@ export default function SetPassword() {
       setIsSuccess(true);
       toast({
         title: "Wachtwoord ingesteld",
-        description: "Je account is nu actief. Je wordt doorgestuurd naar het dashboard."
+        description: "Je account is nu actief. We nemen je nog kort mee langs een installatie-tip."
       });
 
-      // Redirect to dashboard after a short delay
+      // Redirect to /welcome zodat nieuwe gebruikers de PWA-install-uitleg zien voordat ze het
+      // dashboard binnenstappen. Vanuit /welcome kunnen ze door naar /dashboard.
       setTimeout(() => {
-        navigate('/dashboard');
-      }, 2000);
+        navigate('/welcome');
+      }, 1500);
     } catch (error: any) {
       errorLogger.logApiError('set_password', error);
       toast({

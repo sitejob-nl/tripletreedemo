@@ -3,7 +3,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCustomersWithProjects } from "@/hooks/useCustomerProjects";
 import { useUsers } from "@/hooks/useUsers";
 import { useSyncJobs } from "@/hooks/useSyncJobs";
+import { useRecentSyncFailures } from "@/hooks/useSyncLogs";
 import { useMappingIssues } from "@/hooks/useMappingIssues";
+import { OnboardingChecklist } from "@/components/Admin/OnboardingChecklist";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +41,7 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
   const { data: customers, isLoading: customersLoading } = useCustomersWithProjects();
   const { data: users, isLoading: usersLoading } = useUsers();
   const { data: syncJobs, isLoading: jobsLoading } = useSyncJobs(undefined, 5);
+  const { data: syncFailures } = useRecentSyncFailures(24);
   const { data: mappingIssues, isLoading: issuesLoading } = useMappingIssues();
 
   const activeProjects = projects.filter(p => p.is_active).length;
@@ -133,6 +136,61 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
           Sync starten
         </Button>
       </div>
+
+      {/* Onboarding-checklist — projecten met open kritieke stappen (token/mapping/records) */}
+      <OnboardingChecklist onNavigate={onNavigate} />
+
+      {/* Sync-failures laatste 24u — rood omdat nachtsync-falen = geen verse data voor klant */}
+      {syncFailures && syncFailures.length > 0 && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <XCircle className="h-5 w-5 text-destructive" />
+              <h3 className="font-semibold">Sync-failures laatste 24u ({syncFailures.length})</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Deze syncs zijn gefaald — klanten zien mogelijk geen verse data. Controleer token, BasiCall-API of log.
+            </p>
+            <div className="space-y-2">
+              {syncFailures.slice(0, 10).map((f) => (
+                <div
+                  key={f.id}
+                  className="flex items-start justify-between gap-3 p-3 rounded-lg bg-background text-sm"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">
+                      {f.project_name ?? "Onbekend project"}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5 truncate" title={f.error_message ?? undefined}>
+                      {f.error_message ?? "Geen error-message"}
+                    </div>
+                    {f.started_at && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {new Date(f.started_at).toLocaleString("nl-NL", {
+                          day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onNavigate("sync")}
+                    className="flex-shrink-0"
+                  >
+                    Sync-tab
+                  </Button>
+                </div>
+              ))}
+              {syncFailures.length > 10 && (
+                <p className="text-xs text-muted-foreground pt-1">
+                  + {syncFailures.length - 10} eerdere failures — zie sync-tab voor volledig overzicht.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Mapping-config issues — waarschuwt admin over projecten die silent €0 of foute metrics tonen */}
       {!issuesLoading && mappingIssues && mappingIssues.length > 0 && (

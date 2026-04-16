@@ -28,6 +28,28 @@ export const useLastSync = (projectId?: string) => {
   });
 };
 
+// Allerlaatste sync-poging voor een project, ongeacht status. Gebruik deze om te detecteren
+// of de meest recente attempt gefaald is (SyncStatus toont alleen laatste success).
+export const useLastSyncAttempt = (projectId?: string) => {
+  return useQuery({
+    queryKey: ['last_sync_attempt', projectId],
+    queryFn: async (): Promise<DBSyncLog | null> => {
+      if (!projectId) return null;
+      const { data, error } = await supabase
+        .from('sync_logs')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error(`Fout bij ophalen sync-poging: ${error.message}`);
+      return data as DBSyncLog | null;
+    },
+    enabled: !!projectId,
+    refetchInterval: 60_000,
+  });
+};
+
 export const getSyncStatusColor = (lastSync: DBSyncLog | null): 'green' | 'orange' | 'red' => {
   if (!lastSync || !lastSync.completed_at) return 'red';
 

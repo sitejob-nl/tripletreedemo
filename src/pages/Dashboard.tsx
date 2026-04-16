@@ -7,6 +7,7 @@ import { MappingTool } from '@/components/Dashboard/MappingTool';
 import { HoursCorrection } from '@/components/Dashboard/HoursCorrection';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { SyncStatus } from '@/components/Dashboard/SyncStatus';
+import { SyncHealthBanner } from '@/components/Dashboard/SyncHealthBanner';
 import { WelcomeScreen } from '@/components/Dashboard/WelcomeScreen';
 import { KPICardsSection, AnnualValueBreakdown } from '@/components/Dashboard/KPICardsSection';
 import { ReportViewSection } from '@/components/Dashboard/ReportViewSection';
@@ -448,6 +449,9 @@ const Index = () => {
         )}
 
         <div className="p-3 sm:p-8 max-w-7xl mx-auto">
+          {/* Sync health banner (rood) als laatste sync-attempt faalde en er geen recent success is */}
+          <SyncHealthBanner projectId={currentProject?.id} />
+
           {/* Sync Status */}
           <div className="flex justify-end mb-4">
             <SyncStatus projectId={currentProject?.id} />
