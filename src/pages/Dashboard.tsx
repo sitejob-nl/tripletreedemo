@@ -301,7 +301,7 @@ const Index = () => {
 
     reportMatrixProcessedData.forEach((record) => {
       if (!record.is_sale) return;
-      const rawData = (record as any).raw_data as Record<string, unknown> | undefined;
+      const rawData = record.raw_data;
       const freqRaw = rawData?.[freqCol];
       const result = detectFrequencyFromConfig(freqRaw, freqMap, record.bc_result_naam);
       const key = result.type as keyof AnnualValueBreakdown;
@@ -414,9 +414,9 @@ const Index = () => {
       <div className="h-14 md:hidden flex-shrink-0" />
       
       <Sidebar
-        selectedProject={selectedProjectKey as any}
+        selectedProject={selectedProjectKey}
         onProjectChange={(key) => setSelectedProjectKey(key)}
-        projects={projectKeys as any}
+        projects={projectKeys}
         role={effectiveRole}
         onLogout={handleLogout}
         isSuperAdmin={isSuperAdmin}
@@ -425,7 +425,7 @@ const Index = () => {
 
       <main className="flex-1 overflow-y-auto">
         <Header
-          project={selectedProjectKey as any}
+          project={selectedProjectKey}
           role={effectiveRole}
           selectedWeek={selectedWeek}
           availableWeeks={availableWeeks}

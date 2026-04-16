@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'client';
 export type ViewMode = 'dashboard' | 'report' | 'analytics';
 export type AnalyticsTab = 'geographic' | 'attempts' | 'results' | 'time';
-export type Project = 'hersenstichting' | 'anbo' | 'cliniclowns';
+export type Project = string;
 
 export interface RawCallRecord {
   id: number;
@@ -13,6 +13,7 @@ export interface RawCallRecord {
   Frequentie?: string;
   bedrag?: string;
   DonatieBedrag?: string;
+  raw_data?: Record<string, unknown>;
 }
 
 export interface ProcessedCallRecord extends RawCallRecord {
