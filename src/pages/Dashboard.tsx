@@ -542,7 +542,7 @@ const Index = () => {
                     totalHours={totalHours}
                     costPerDonor={costPerDonor}
                     hourlyRate={hourlyRate}
-                    selectedWeek={filterLabel}
+                    selectedWeek={selectedWeek}
                     isLoading={kpiLoading}
                     totalToCall={currentProject?.total_to_call}
                     totalHandled={totalHandled}
@@ -556,7 +556,7 @@ const Index = () => {
                   {viewMode === 'report' ? (
                     <ReportViewSection
                       projectType={projectType}
-                      selectedWeek={filterLabel}
+                      selectedWeek={selectedWeek}
                       data={reportMatrixProcessedData}
                       hourlyRate={hourlyRate}
                       vatRate={currentProject?.vat_rate || 21}
