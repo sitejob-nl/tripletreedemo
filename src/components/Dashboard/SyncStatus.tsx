@@ -22,14 +22,14 @@ export const SyncStatus = ({ projectId }: SyncStatusProps) => {
   const syncTime = formatSyncTime(lastSync);
 
   const colorClasses = {
-    green: 'bg-green-500',
-    orange: 'bg-orange-500',
-    red: 'bg-red-500',
+    green: 'bg-green-500 text-green-500',
+    orange: 'bg-orange-500 text-orange-500',
+    red: 'bg-red-500 text-red-500',
   };
 
   return (
     <div className="flex items-center gap-2 text-sm" data-tour="sync-status">
-      <div className={cn('h-2.5 w-2.5 rounded-full ring-2 ring-offset-1 ring-current', colorClasses[statusColor])} />
+      <div className={cn('h-2.5 w-2.5 rounded-full ring-2 ring-offset-1 ring-offset-background ring-current', colorClasses[statusColor])} />
       <span className="text-muted-foreground">
         Sync: {syncTime}
         {lastSync?.records_synced !== undefined && lastSync.records_synced > 0 && (
