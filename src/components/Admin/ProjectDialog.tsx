@@ -121,14 +121,20 @@ export function ProjectDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="basicall_token">API Token *</Label>
+                <Label htmlFor="basicall_token">
+                  API Token {isEditing ? "" : "*"}
+                </Label>
                 <Input
                   id="basicall_token"
                   type="password"
                   value={formData.basicall_token}
                   onChange={(e) => setFormData(prev => ({ ...prev, basicall_token: e.target.value }))}
-                  placeholder="••••••••••••••••"
+                  placeholder={isEditing ? "Laat leeg om bestaande token te behouden" : "Verplicht bij nieuw project"}
+                  autoComplete="new-password"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Wordt veilig opgeslagen in <code>project_secrets</code> (niet zichtbaar na opslaan).
+                </p>
               </div>
             </div>
           </div>

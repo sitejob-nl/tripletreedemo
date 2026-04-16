@@ -45,7 +45,6 @@ export interface DBProject {
   name: string;
   project_key: string;
   basicall_project_id: number;
-  basicall_token: string;
   is_active: boolean;
   hourly_rate: number;
   vat_rate: number;

@@ -264,7 +264,6 @@ serve(async (req) => {
           name: 'Demo Campagne',
           project_key: 'demo',
           basicall_project_id: 0,
-          basicall_token: 'demo-token-niet-synchroniseren',
           hourly_rate: 35.00,
           vat_rate: 21,
           project_type: 'outbound',

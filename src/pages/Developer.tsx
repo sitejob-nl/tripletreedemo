@@ -680,16 +680,10 @@ export default function Developer() {
 
                 <div className="p-4 rounded-lg border bg-card">
                   <h4 className="font-medium mb-2">BasiCall API Tokens</h4>
-                  <div className="space-y-2">
-                    {projects.map((project) => (
-                      <div key={project.id} className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{project.name}:</span>
-                        <span className="font-mono">
-                          {project.basicall_token.substring(0, 8)}...{project.basicall_token.slice(-4)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Tokens staan in <code>project_secrets</code> (service-role only). Beheer via
+                    Admin → Projecten → Bewerken.
+                  </p>
                 </div>
               </CardContent>
             </Card>

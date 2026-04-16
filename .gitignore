@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Env files (frontend VITE_* in .env.local; never commit raw .env with service keys)
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

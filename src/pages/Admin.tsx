@@ -72,11 +72,14 @@ export default function Admin() {
   };
 
   const handleOpenEditProject = (project: DBProject) => {
+    // Token-veld start leeg bij edit: de bestaande waarde is onzichtbaar omdat
+    // project_secrets service-role-only is. Admin laat leeg om te houden, of tikt
+    // nieuwe waarde om te roteren.
     setFormData({
       name: project.name,
       project_key: project.project_key,
       basicall_project_id: String(project.basicall_project_id),
-      basicall_token: project.basicall_token,
+      basicall_token: "",
       hourly_rate: String(project.hourly_rate),
       vat_rate: String(project.vat_rate),
       is_active: project.is_active,
@@ -89,7 +92,10 @@ export default function Admin() {
   };
 
   const handleSaveProject = async () => {
-    if (!formData.name || !formData.project_key || !formData.basicall_project_id || !formData.basicall_token) {
+    // Token is alleen verplicht bij een NIEUW project. Bij edit mag het leeg blijven
+    // (betekent: behoud bestaande token in project_secrets).
+    const tokenRequired = !editingProject;
+    if (!formData.name || !formData.project_key || !formData.basicall_project_id || (tokenRequired && !formData.basicall_token)) {
       toast({
         title: "Validatie fout",
         description: "Vul alle verplichte velden in.",
@@ -104,62 +110,48 @@ export default function Admin() {
       name: formData.name,
       project_key: formData.project_key.toLowerCase().replace(/\s+/g, "-"),
       basicall_project_id: parseInt(formData.basicall_project_id),
-      basicall_token: formData.basicall_token,
       hourly_rate: parseFloat(formData.hourly_rate),
       vat_rate: parseInt(formData.vat_rate),
       is_active: formData.is_active,
-      mapping_config: formData.mapping_config,
+      mapping_config: JSON.parse(JSON.stringify(formData.mapping_config)),
       total_to_call: formData.total_to_call ? parseInt(formData.total_to_call) : null,
       hours_factor: parseFloat(formData.hours_factor) || 1.0
     };
 
     try {
+      let projectId: string;
+
       if (editingProject) {
         const { error } = await supabase
           .from("projects")
-          .update({
-            name: projectData.name,
-            project_key: projectData.project_key,
-            basicall_project_id: projectData.basicall_project_id,
-            basicall_token: projectData.basicall_token,
-            hourly_rate: projectData.hourly_rate,
-            vat_rate: projectData.vat_rate,
-            is_active: projectData.is_active,
-            mapping_config: JSON.parse(JSON.stringify(projectData.mapping_config)),
-            total_to_call: projectData.total_to_call,
-            hours_factor: projectData.hours_factor
-          })
+          .update(projectData)
           .eq("id", editingProject.id);
-
         if (error) throw error;
-
-        toast({
-          title: "Project bijgewerkt",
-          description: `${formData.name} is succesvol bijgewerkt.`
-        });
+        projectId = editingProject.id;
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("projects")
-          .insert({
-            name: projectData.name,
-            project_key: projectData.project_key,
-            basicall_project_id: projectData.basicall_project_id,
-            basicall_token: projectData.basicall_token,
-            hourly_rate: projectData.hourly_rate,
-            vat_rate: projectData.vat_rate,
-            is_active: projectData.is_active,
-            mapping_config: JSON.parse(JSON.stringify(projectData.mapping_config)),
-            total_to_call: projectData.total_to_call,
-            hours_factor: projectData.hours_factor
-          });
-
+          .insert(projectData)
+          .select("id")
+          .single();
         if (error) throw error;
-
-        toast({
-          title: "Project toegevoegd",
-          description: `${formData.name} is succesvol toegevoegd.`
-        });
+        projectId = data.id;
       }
+
+      // Token apart wegschrijven via edge function (project_secrets is service-role-only).
+      // Alleen oproepen als de admin een waarde heeft ingevoerd; een leeg veld op edit-modus
+      // betekent "behoud bestaande".
+      if (formData.basicall_token) {
+        const { error: tokenError } = await supabase.functions.invoke("project-secret", {
+          body: { project_id: projectId, token: formData.basicall_token }
+        });
+        if (tokenError) throw new Error(`Token opslaan mislukt: ${tokenError.message}`);
+      }
+
+      toast({
+        title: editingProject ? "Project bijgewerkt" : "Project toegevoegd",
+        description: `${formData.name} is succesvol ${editingProject ? "bijgewerkt" : "toegevoegd"}.`
+      });
 
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       setIsProjectDialogOpen(false);
