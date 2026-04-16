@@ -53,7 +53,7 @@ export function BatchProgress({ projectId }: BatchProgressProps) {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Package className="h-5 w-5 text-muted-foreground" />
+          <Package className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
           Batch Voortgang
         </CardTitle>
       </CardHeader>
