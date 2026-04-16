@@ -153,6 +153,7 @@ export const createEmptyStats = (): DayStats => ({
   negativeArgumentedCount: 0,
   negativeNotArgumentedCount: 0,
   unreachableCount: 0,
+  excludedFromNetCount: 0,
 });
 
 // Empty stats for inbound (retention) projects
@@ -176,6 +177,7 @@ export const createEmptyInboundStats = (): InboundStats => ({
   
   // Unreachable
   unreachableCount: 0,
+  excludedFromRetentionCount: 0,
 });
 
 // Negative results categorization - argumentated (explained by prospect)
@@ -258,10 +260,25 @@ export const categorizeNegativeResult = (
 
 export const isUnreachable = (resultName: string, config?: MappingConfig): boolean => {
   const lower = resultName.toLowerCase().trim();
-  const unreachable = config?.unreachable_results?.length 
-    ? config.unreachable_results 
+  const unreachable = config?.unreachable_results?.length
+    ? config.unreachable_results
     : UNREACHABLE_RESULTS;
   return unreachable.some(r => lower.includes(r.toLowerCase()));
+};
+
+// Marks a result-code as "do not count in netto conversion denominator"
+// (additional to unreachable; used for semantically non-unreachable exclusions like "overleden")
+export const isExcludedFromNet = (resultName: string, config?: MappingConfig): boolean => {
+  if (!config?.exclude_from_net?.length) return false;
+  const lower = resultName.toLowerCase().trim();
+  return config.exclude_from_net.some(r => lower.includes(r.toLowerCase()));
+};
+
+// Marks a result-code as "do not count in retention ratio denominator"
+export const isExcludedFromRetention = (resultName: string, config?: MappingConfig): boolean => {
+  if (!config?.exclude_from_retention?.length) return false;
+  const lower = resultName.toLowerCase().trim();
+  return config.exclude_from_retention.some(r => lower.includes(r.toLowerCase()));
 };
 
 // Legacy wrapper - uses the new centralized function with empty freq_map for backwards compatibility
@@ -315,11 +332,12 @@ export const categorizeInboundResult = (
 };
 
 /**
- * Calculate retention ratio
+ * Calculate retention ratio — subtracts per-code excluded denominators
+ * (e.g. "overleden" lost-codes that should not count as missed retention).
  */
 export const calcRetentionRatio = (stats: InboundStats): number => {
-  const totalDecided = stats.retained + stats.lost + stats.partialSuccess;
-  if (totalDecided === 0) return 0;
+  const totalDecided = stats.retained + stats.lost + stats.partialSuccess - stats.excludedFromRetentionCount;
+  if (totalDecided <= 0) return 0;
   return ((stats.retained + stats.partialSuccess) / totalDecided) * 100;
 };
 
@@ -327,8 +345,8 @@ export const calcRetentionRatio = (stats: InboundStats): number => {
  * Calculate save rate (only full retentions, no partial)
  */
 export const calcSaveRate = (stats: InboundStats): number => {
-  const totalDecided = stats.retained + stats.lost + stats.partialSuccess;
-  if (totalDecided === 0) return 0;
+  const totalDecided = stats.retained + stats.lost + stats.partialSuccess - stats.excludedFromRetentionCount;
+  if (totalDecided <= 0) return 0;
   return (stats.retained / totalDecided) * 100;
 };
 

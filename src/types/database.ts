@@ -23,6 +23,10 @@ export interface MappingConfig {
   unreachable_results?: string[];          // Resultaten die niet meetellen voor netto conversie
   negative_argumentated?: string[];        // Beargumenteerde weigeringen
   negative_not_argumentated?: string[];    // Niet-beargumenteerde weigeringen (externe factoren)
+
+  // Per-result-code uitsluitingen van de noemer in ratio's (additief bovenop unreachable)
+  exclude_from_net?: string[];             // Outbound: codes die niet meetellen in netto-conversie (bv. "overleden")
+  exclude_from_retention?: string[];       // Inbound: codes die niet meetellen in retentie-ratio-noemer
   
   // Afwijkend uurtarief per weekdag
   weekday_rates?: {

@@ -560,6 +560,7 @@ const Index = () => {
                       dailyLoggedHours={loggedTime?.dailyHours}
                       isLoading={reportMatrixLoading}
                       onExportToExcel={handleExportToExcel}
+                      isAdmin={isDbAdmin}
                     />
                   ) : viewMode === 'dashboard' ? (
                     <DashboardView 

@@ -11,6 +11,8 @@ interface ServiceReportMatrixProps {
   mappingConfig: MappingConfig;
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
+  /** Show the Investering section (admin-only — klanten zien geen kostenberekening voor klantenservice) */
+  showInvestment?: boolean;
 }
 
 interface ServiceDayStats {
@@ -41,6 +43,7 @@ export const ServiceReportMatrix = ({
   mappingConfig,
   loggedTimeHours,
   dailyLoggedHours,
+  showInvestment = false,
 }: ServiceReportMatrixProps) => {
   const days = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
 
@@ -216,18 +219,22 @@ export const ServiceReportMatrix = ({
             return hours > 0 ? s.handled / hours : 0;
           }, 'decimal')}
 
-          {/* INVESTERING */}
-          {renderSectionHeader('Investering', 'bg-muted/80', 'text-foreground')}
-          {renderRow('Investering (Excl BTW)', (s, isTotal, dayName) => calcInvestment(s, isTotal, dayName), 'currency')}
-          {renderRow('Investering (Incl BTW)', (s, isTotal, dayName) => calcInvestment(s, isTotal, dayName) * (1 + vatRate / 100), 'currency')}
-          {renderRow('Kosten per gesprek', (s, isTotal, dayName) => {
-            const inv = calcInvestment(s, isTotal, dayName);
-            return s.calls > 0 ? inv / s.calls : 0;
-          }, 'currency')}
-          {renderRow('Kosten per afgehandeld', (s, isTotal, dayName) => {
-            const inv = calcInvestment(s, isTotal, dayName);
-            return s.handled > 0 ? inv / s.handled : 0;
-          }, 'currency')}
+          {/* INVESTERING (admin-only) */}
+          {showInvestment && (
+            <>
+              {renderSectionHeader('Investering (intern)', 'bg-muted/80', 'text-foreground')}
+              {renderRow('Investering (Excl BTW)', (s, isTotal, dayName) => calcInvestment(s, isTotal, dayName), 'currency')}
+              {renderRow('Investering (Incl BTW)', (s, isTotal, dayName) => calcInvestment(s, isTotal, dayName) * (1 + vatRate / 100), 'currency')}
+              {renderRow('Kosten per gesprek', (s, isTotal, dayName) => {
+                const inv = calcInvestment(s, isTotal, dayName);
+                return s.calls > 0 ? inv / s.calls : 0;
+              }, 'currency')}
+              {renderRow('Kosten per afgehandeld', (s, isTotal, dayName) => {
+                const inv = calcInvestment(s, isTotal, dayName);
+                return s.handled > 0 ? inv / s.handled : 0;
+              }, 'currency')}
+            </>
+          )}
         </tbody>
       </table>
     </div>

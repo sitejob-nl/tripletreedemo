@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff } from 'lucide-react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban } from 'lucide-react';
 import { DBProjectBase, MappingConfig, ProjectType } from '@/types/database';
 import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED } from '@/lib/statsHelpers';
+import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,6 +42,7 @@ const EMPTY_VALUE = "__none__";
 const AUTO_VALUE = "__auto__";
 
 export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolProps) => {
+  const { toast } = useToast();
   const [projectType, setProjectType] = useState<ProjectType>(project.project_type || 'outbound');
   const [hourlyRate, setHourlyRate] = useState(project.hourly_rate);
   const [amountCol, setAmountCol] = useState(project.mapping_config.amount_col);
@@ -65,6 +67,10 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [unreachableResults, setUnreachableResults] = useState<string[]>(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
   const [negativeArgumentated, setNegativeArgumentated] = useState<string[]>(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
   const [negativeNotArgumentated, setNegativeNotArgumentated] = useState<string[]>(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
+
+  // Per-result exclusions from ratio denominators
+  const [excludeFromNet, setExcludeFromNet] = useState<string[]>(project.mapping_config.exclude_from_net || []);
+  const [excludeFromRetention, setExcludeFromRetention] = useState<string[]>(project.mapping_config.exclude_from_retention || []);
   
   // Weekday rates state
   const [weekdayRates, setWeekdayRates] = useState<Record<string, number | undefined>>(
@@ -108,6 +114,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     unreachable_results: unreachableResults,
     negative_argumentated: negativeArgumentated,
     negative_not_argumentated: negativeNotArgumentated,
+    exclude_from_net: excludeFromNet,
+    exclude_from_retention: excludeFromRetention,
     weekday_rates: cleanWeekdayRates(),
     handled_results: handledResults,
     not_handled_results: notHandledResults,
@@ -136,6 +144,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setUnreachableResults(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
     setNegativeArgumentated(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
     setNegativeNotArgumentated(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
+    setExcludeFromNet(project.mapping_config.exclude_from_net || []);
+    setExcludeFromRetention(project.mapping_config.exclude_from_retention || []);
     setWeekdayRates(project.mapping_config.weekday_rates || {});
     setHoursFactor(project.hours_factor ?? 1.0);
   }, [project.id]);
@@ -154,6 +164,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       unreachable_results: unreachableResults,
       negative_argumentated: negativeArgumentated,
       negative_not_argumentated: negativeNotArgumentated,
+      exclude_from_net: excludeFromNet,
+      exclude_from_retention: excludeFromRetention,
       weekday_rates: cleanWeekdayRates(),
       handled_results: handledResults,
       not_handled_results: notHandledResults,
@@ -181,18 +193,102 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults];
   const availableResultsFiltered = availableResults.filter((r) => !allSelected.includes(r));
 
-  const renderResultBadges = (results: string[], onRemove: (r: string) => void) => (
+  // Look up which named category a result-code already lives in (case-insensitive)
+  const findExistingCategory = (candidate: string): string | null => {
+    const lc = candidate.toLowerCase();
+    const check = (name: string, list: string[]) =>
+      list.some((r) => r.toLowerCase() === lc) ? name : null;
+    return (
+      check('Positieve Resultaten', saleResults) ||
+      check('Niet Bereikbaar', unreachableResults) ||
+      check('Negatief Beargumenteerd', negativeArgumentated) ||
+      check('Negatief Niet Beargumenteerd', negativeNotArgumentated) ||
+      check('Behouden', retentionResults) ||
+      check('Verloren', lostResults) ||
+      check('Gedeeltelijk Succes', partialSuccessResults) ||
+      check('Afgehandeld', handledResults) ||
+      check('Niet Afgehandeld', notHandledResults)
+    );
+  };
+
+  // Shared handler for manual text-input Enter: trims, deduplicates case-insensitively against all categories,
+  // toasts when duplicate, otherwise appends to the given setter.
+  const addManualResult = (
+    raw: string,
+    current: string[],
+    setter: (next: string[]) => void,
+    categoryLabel: string,
+    clearInput: () => void,
+  ) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const existing = findExistingCategory(trimmed);
+    if (existing) {
+      toast({
+        title: 'Resultaat bestaat al',
+        description: existing === categoryLabel
+          ? `"${trimmed}" staat al in deze categorie.`
+          : `"${trimmed}" staat al in categorie "${existing}". Verplaats het eerst.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setter([...current, trimmed]);
+    clearInput();
+  };
+
+  interface ExcludeConfig {
+    excluded: string[];
+    toggle: (r: string) => void;
+    label: string; // tooltip text
+  }
+
+  const renderResultBadges = (
+    results: string[],
+    onRemove: (r: string) => void,
+    excludeConfig?: ExcludeConfig,
+  ) => (
     <div className="flex flex-wrap gap-2">
-      {results.map((result) => (
-        <Badge key={result} variant="secondary" className="flex items-center gap-1 px-3 py-1">
-          {result}
-          <button onClick={() => onRemove(result)} className="ml-1 hover:text-destructive transition-colors">
-            <X size={14} />
-          </button>
-        </Badge>
-      ))}
+      {results.map((result) => {
+        const isExcluded = excludeConfig?.excluded.some((r) => r.toLowerCase() === result.toLowerCase()) ?? false;
+        return (
+          <Badge
+            key={result}
+            variant="secondary"
+            className={`flex items-center gap-1 px-3 py-1 ${isExcluded ? 'line-through decoration-destructive decoration-2 border border-destructive/60' : ''}`}
+          >
+            {excludeConfig && (
+              <button
+                type="button"
+                onClick={() => excludeConfig.toggle(result)}
+                title={isExcluded ? `Telt NIET mee in ${excludeConfig.label}. Klik om weer mee te tellen.` : `Uitsluiten van ${excludeConfig.label}`}
+                className={`mr-1 transition-colors ${isExcluded ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`}
+              >
+                <Ban size={12} />
+              </button>
+            )}
+            {result}
+            <button onClick={() => onRemove(result)} className="ml-1 hover:text-destructive transition-colors">
+              <X size={14} />
+            </button>
+          </Badge>
+        );
+      })}
     </div>
   );
+
+  const toggleExcludeFromNet = (r: string) => {
+    const lc = r.toLowerCase();
+    setExcludeFromNet((prev) =>
+      prev.some((x) => x.toLowerCase() === lc) ? prev.filter((x) => x.toLowerCase() !== lc) : [...prev, r],
+    );
+  };
+  const toggleExcludeFromRetention = (r: string) => {
+    const lc = r.toLowerCase();
+    setExcludeFromRetention((prev) =>
+      prev.some((x) => x.toLowerCase() === lc) ? prev.filter((x) => x.toLowerCase() !== lc) : [...prev, r],
+    );
+  };
 
   const renderResultSelect = (onAdd: (r: string) => void) => (
     availableResultsFiltered.length > 0 && (
@@ -279,20 +375,29 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
               </AccordionContent>
             </AccordionItem>
 
+            <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+              <Ban size={14} className="mt-0.5 shrink-0 text-destructive" />
+              <span>
+                <strong>Tip:</strong> klik op het <Ban size={11} className="inline mx-0.5" />-icoon naast een result-code in de secties
+                {' '}<em>Beargumenteerd</em> of <em>Niet Beargumenteerd</em> om die uit de netto-conversie te halen
+                (bv. "overleden" of "te oud" telt dan niet mee in de noemer).
+              </span>
+            </div>
+
             <AccordionItem value="unreachable" className="border border-border rounded-lg px-4">
               <AccordionTrigger className="text-sm font-semibold">
                 <span className="flex items-center gap-2"><PhoneOff size={16} /> Niet Bereikbaar ({unreachableResults.length})</span>
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
-                <p className="text-xs text-muted-foreground">Resultaten die niet meetellen voor netto conversie (niet bereikbare contacten).</p>
+                <p className="text-xs text-muted-foreground">Contacten die nooit bereikt zijn (geen gehoor, voicemail, foutief nummer). Deze worden automatisch uit de netto-conversie-noemer gehaald.</p>
                 {renderResultBadges(unreachableResults, (r) => setUnreachableResults(unreachableResults.filter(x => x !== r)))}
                 {renderResultSelect((r) => setUnreachableResults([...unreachableResults, r]))}
-                <Input 
-                  placeholder="Handmatig resultaat toevoegen..." 
+                <Input
+                  placeholder="Handmatig resultaat toevoegen..."
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                      setUnreachableResults([...unreachableResults, e.currentTarget.value.trim()]);
-                      e.currentTarget.value = '';
+                    if (e.key === 'Enter') {
+                      const el = e.currentTarget;
+                      addManualResult(el.value, unreachableResults, setUnreachableResults, 'Niet Bereikbaar', () => { el.value = ''; });
                     }
                   }}
                   className="w-full md:w-80"
@@ -305,15 +410,19 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                 <span className="flex items-center gap-2"><MessageSquareOff size={16} /> Negatief Beargumenteerd ({negativeArgumentated.length})</span>
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
-                <p className="text-xs text-muted-foreground">Bewuste weigeringen door de prospect (bijv. geen interesse, geen geld).</p>
-                {renderResultBadges(negativeArgumentated, (r) => setNegativeArgumentated(negativeArgumentated.filter(x => x !== r)))}
+                <p className="text-xs text-muted-foreground">💬 Bewuste weigering door de prospect zelf (bv. "geen geld", "geen interesse", "te oud"). Klik op <Ban size={10} className="inline" /> per code om uit netto-conversie te halen.</p>
+                {renderResultBadges(
+                  negativeArgumentated,
+                  (r) => setNegativeArgumentated(negativeArgumentated.filter((x) => x !== r)),
+                  { excluded: excludeFromNet, toggle: toggleExcludeFromNet, label: 'netto-conversie' },
+                )}
                 {renderResultSelect((r) => setNegativeArgumentated([...negativeArgumentated, r]))}
-                <Input 
-                  placeholder="Handmatig resultaat toevoegen..." 
+                <Input
+                  placeholder="Handmatig resultaat toevoegen..."
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                      setNegativeArgumentated([...negativeArgumentated, e.currentTarget.value.trim()]);
-                      e.currentTarget.value = '';
+                    if (e.key === 'Enter') {
+                      const el = e.currentTarget;
+                      addManualResult(el.value, negativeArgumentated, setNegativeArgumentated, 'Negatief Beargumenteerd', () => { el.value = ''; });
                     }
                   }}
                   className="w-full md:w-80"
@@ -326,15 +435,19 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                 <span className="flex items-center gap-2"><ShieldOff size={16} /> Negatief Niet Beargumenteerd ({negativeNotArgumentated.length})</span>
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
-                <p className="text-xs text-muted-foreground">Externe factoren (bijv. overleden, onjuiste gegevens, fax).</p>
-                {renderResultBadges(negativeNotArgumentated, (r) => setNegativeNotArgumentated(negativeNotArgumentated.filter(x => x !== r)))}
+                <p className="text-xs text-muted-foreground">🛡️ Externe factor waar de agent niets aan kon doen (bv. "overleden", "onjuiste NAW", "fax", "verhuisd"). Klik op <Ban size={10} className="inline" /> per code om uit netto-conversie te halen.</p>
+                {renderResultBadges(
+                  negativeNotArgumentated,
+                  (r) => setNegativeNotArgumentated(negativeNotArgumentated.filter((x) => x !== r)),
+                  { excluded: excludeFromNet, toggle: toggleExcludeFromNet, label: 'netto-conversie' },
+                )}
                 {renderResultSelect((r) => setNegativeNotArgumentated([...negativeNotArgumentated, r]))}
-                <Input 
-                  placeholder="Handmatig resultaat toevoegen..." 
+                <Input
+                  placeholder="Handmatig resultaat toevoegen..."
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                      setNegativeNotArgumentated([...negativeNotArgumentated, e.currentTarget.value.trim()]);
-                      e.currentTarget.value = '';
+                    if (e.key === 'Enter') {
+                      const el = e.currentTarget;
+                      addManualResult(el.value, negativeNotArgumentated, setNegativeNotArgumentated, 'Negatief Niet Beargumenteerd', () => { el.value = ''; });
                     }
                   }}
                   className="w-full md:w-80"
@@ -355,8 +468,14 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             <AccordionItem value="lost" className="border border-border rounded-lg px-4">
               <AccordionTrigger className="text-sm font-semibold">❌ Verloren Resultaten ({lostResults.length})</AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
-                <p className="text-xs text-muted-foreground">Resultaten waarbij de donateur definitief verloren is.</p>
-                {renderResultBadges(lostResults, (r) => setLostResults(lostResults.filter(x => x !== r)))}
+                <p className="text-xs text-muted-foreground">
+                  Donateur definitief verloren. Klik op <Ban size={10} className="inline" /> per code om die uit de retentie-ratio-noemer te halen (bv. "overleden" telt niet als gemiste retentie).
+                </p>
+                {renderResultBadges(
+                  lostResults,
+                  (r) => setLostResults(lostResults.filter((x) => x !== r)),
+                  { excluded: excludeFromRetention, toggle: toggleExcludeFromRetention, label: 'retentie-ratio' },
+                )}
                 {renderResultSelect((r) => setLostResults([...lostResults, r]))}
               </AccordionContent>
             </AccordionItem>

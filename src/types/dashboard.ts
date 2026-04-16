@@ -65,6 +65,8 @@ export interface DayStats {
   negativeNotArgumentedCount: number;
   // Unreachable for netto conversion
   unreachableCount: number;
+  // Per-result-code uitsluiting van netto-noemer (additief bovenop unreachable)
+  excludedFromNetCount: number;
 }
 
 // ============= INBOUND (RETENTION) STATS =============
@@ -89,4 +91,6 @@ export interface InboundStats {
   
   // Unreachable
   unreachableCount: number;
+  // Per-result-code uitsluiting van retentie-ratio-noemer (voor codes zoals "overleden")
+  excludedFromRetentionCount: number;
 }

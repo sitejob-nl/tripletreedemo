@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { ProcessedCallRecord, DayStats } from '@/types/dashboard';
 import { MappingConfig } from '@/types/database';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { 
-  createEmptyStats, 
-  detectFrequencyFromConfig, 
-  categorizeNegativeResult, 
+import {
+  createEmptyStats,
+  detectFrequencyFromConfig,
+  categorizeNegativeResult,
   isUnreachable,
+  isExcludedFromNet,
   getFrequencyLabel,
   FrequencyType
 } from '@/lib/statsHelpers';
@@ -114,6 +115,13 @@ export const ReportMatrix = ({
           result.total.unreachableCount++;
         }
 
+        // Check per-code exclusion from netto (orthogonal to unreachable/category)
+        // Avoid double-counting when the code is already unreachable.
+        if (!isUnreachable(resultName, mappingConfig) && isExcludedFromNet(resultName, mappingConfig)) {
+          result[day].excludedFromNetCount++;
+          result.total.excludedFromNetCount++;
+        }
+
         // Categorize negative
         const category = categorizeNegativeResult(resultName, mappingConfig);
         if (category === 'argumentated') {
@@ -209,8 +217,8 @@ export const ReportMatrix = ({
   const calcBrutoConversion = (stats: DayStats) =>
     stats.calls > 0 ? (stats.sales / stats.calls) * 100 : 0;
   const calcNettoConversion = (stats: DayStats) => {
-    const reachable = stats.calls - stats.unreachableCount;
-    return reachable > 0 ? (stats.sales / reachable) * 100 : 0;
+    const denom = stats.calls - stats.unreachableCount - stats.excludedFromNetCount;
+    return denom > 0 ? (stats.sales / denom) * 100 : 0;
   };
   const calcAvgAmount = (stats: DayStats) =>
     stats.sales > 0 ? stats.totalAmount / stats.sales : 0;

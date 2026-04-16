@@ -3,10 +3,11 @@ import { ProcessedCallRecord, InboundStats } from '@/types/dashboard';
 import { MappingConfig } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { 
-  createEmptyInboundStats, 
+import {
+  createEmptyInboundStats,
   categorizeInboundResult,
   isUnreachable,
+  isExcludedFromRetention,
   calcRetentionRatio,
   calcSaveRate,
 } from '@/lib/statsHelpers';
@@ -73,7 +74,14 @@ export const InboundReportMatrix = ({
 
       // Categorize based on inbound config
       const category = categorizeInboundResult(resultName, mappingConfig);
-      
+
+      // Track per-code exclusions from retention ratio denominator (e.g. "overleden").
+      // Orthogonal to category — counted separately so we can subtract from totalDecided.
+      if (isExcludedFromRetention(resultName, mappingConfig)) {
+        result[day].excludedFromRetentionCount++;
+        result.total.excludedFromRetentionCount++;
+      }
+
       if (category === 'unreachable') {
         result[day].unreachableCount++;
         result.total.unreachableCount++;
@@ -160,9 +168,8 @@ export const InboundReportMatrix = ({
     stats.retained > 0 ? calcInvestment(stats) / stats.retained : 0;
   const calcNetReachable = (stats: InboundStats) => stats.calls - stats.unreachableCount;
   const calcNetRetentionRatio = (stats: InboundStats) => {
-    const reachable = calcNetReachable(stats);
-    const totalDecided = stats.retained + stats.lost + stats.partialSuccess;
-    if (totalDecided === 0) return 0;
+    const totalDecided = stats.retained + stats.lost + stats.partialSuccess - stats.excludedFromRetentionCount;
+    if (totalDecided <= 0) return 0;
     return ((stats.retained + stats.partialSuccess) / totalDecided) * 100;
   };
 
