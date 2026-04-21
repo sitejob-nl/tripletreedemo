@@ -2,7 +2,8 @@ import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
-import { getAllWeeksForYear, getISOWeekYear } from '@/lib/weekHelpers';
+import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
+import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -199,12 +200,12 @@ export async function exportInboundRetentionYear(args: ExportArgs): Promise<void
     const yearTotal = emptyWeek(categoryNames);
 
     const amountCol = mappingConfig?.amount_col ?? 'termijnbedrag';
+    const freqCol = mappingConfig?.freq_col ?? 'frequentie';
+    const freqMap = mappingConfig?.freq_map ?? {};
 
     records.forEach((record) => {
-      const dateStr = record.beldatum_date ?? record.beldatum;
-      if (!dateStr) return;
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return;
+      const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
+      if (!date) return;
       if (getISOWeekYear(date) !== year) return;
       const week = record.week_number ?? null;
       if (!week || !weekStats[week]) return;
@@ -214,10 +215,12 @@ export async function exportInboundRetentionYear(args: ExportArgs): Promise<void
       const rawData = record.raw_data ?? {};
       const resultName = record.resultaat ?? ((rawData['bc_result_naam'] as string) ?? 'Onbekend');
       const amountRaw = rawData[amountCol] ?? rawData['Bedrag'] ?? rawData['termijnbedrag'];
-      const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
-      // Use multiplier 12 as a reasonable default for monthly annual-value estimate
-      // (majority of Hersenstichting retentie donateurs zijn maandelijks).
-      const annualValue = amount * 12;
+      const amount = amountRaw ? parseDutchFloat(amountRaw as string | number) : 0;
+      // Detect frequency per record — donors may be monthly/quarterly/yearly.
+      // Uses the same logic as the rest of the dashboard (statsHelpers).
+      const freqRaw = rawData[freqCol] ?? rawData['frequentie'] ?? rawData['Frequentie'] ?? rawData['Termijn'];
+      const freq = detectFrequencyFromConfig(freqRaw, freqMap, resultName);
+      const annualValue = amount * freq.multiplier;
       const durationSec = Number(record.gesprekstijd_sec) || 0;
       const reasonCat = codeToCategory.get(resultName);
 
@@ -248,8 +251,8 @@ export async function exportInboundRetentionYear(args: ExportArgs): Promise<void
     });
 
     (loggedRows ?? []).forEach((row) => {
-      const date = new Date(row.date);
-      if (isNaN(date.getTime())) return;
+      const date = parseBasiCallDate(row.date);
+      if (!date) return;
       if (getISOWeekYear(date) !== year) return;
       const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
       d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));

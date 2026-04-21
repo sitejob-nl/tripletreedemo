@@ -251,9 +251,19 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setFreqMap(updated);
   };
 
-  const allReasonResults = Object.values(reasonCategories).flat();
-  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults, ...flatVoicemailResults, ...flatNawtResults, ...allReasonResults];
+  // Categorieën die elkaar uitsluiten (outcome-categorisatie): als een code
+  // in een van deze lijsten staat, verdwijnt-ie uit de shared "Resultaat
+  // toevoegen"-dropdown. Reason-categorieën zijn hier NIET bij: die leven op
+  // een andere dimensie (waarom een donateur verloren is, niet of het positief/
+  // negatief telt). Dezelfde code kan dus tegelijk in lost_results én in
+  // reason_categories.Overleden voorkomen.
+  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults, ...flatVoicemailResults, ...flatNawtResults];
   const availableResultsFiltered = availableResults.filter((r) => !allSelected.includes(r));
+  // Dropdown-filter specifiek voor reason-categorieën: elke code mag in
+  // precies één reason-categorie zitten, maar onafhankelijk van de outcome-
+  // lijsten hierboven.
+  const allReasonResults = Object.values(reasonCategories).flat();
+  const availableForReason = availableResults.filter((r) => !allReasonResults.includes(r));
 
   // Look up which named category a result-code already lives in (case-insensitive)
   const findExistingCategory = (candidate: string): string | null => {
@@ -271,14 +281,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       check('Afgehandeld', handledResults) ||
       check('Niet Afgehandeld', notHandledResults) ||
       check('Max voicemail', flatVoicemailResults) ||
-      check('NAWT fout', flatNawtResults) ||
-      (() => {
-        const lc = candidate.toLowerCase();
-        for (const [catName, codes] of Object.entries(reasonCategories)) {
-          if (codes.some((r) => r.toLowerCase() === lc)) return `Reden: ${catName}`;
-        }
-        return null;
-      })()
+      check('NAWT fout', flatNawtResults)
+      // reason_categories bewust niet meegenomen: reden is een orthogonale
+      // dimensie (waarom verloren, niet of verloren).
     );
   };
 
@@ -361,14 +366,14 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     );
   };
 
-  const renderResultSelect = (onAdd: (r: string) => void) => (
-    availableResultsFiltered.length > 0 && (
+  const renderResultSelect = (onAdd: (r: string) => void, source: string[] = availableResultsFiltered) => (
+    source.length > 0 && (
       <Select onValueChange={onAdd} value="">
         <SelectTrigger className="w-full md:w-80">
           <SelectValue placeholder="Resultaat toevoegen..." />
         </SelectTrigger>
         <SelectContent>
-          {availableResultsFiltered.map((result) => (
+          {source.map((result) => (
             <SelectItem key={result} value={result}>{result}</SelectItem>
           ))}
         </SelectContent>
@@ -589,7 +594,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                       ...reasonCategories,
                       [catName]: [...reasonCategories[catName], r],
                     });
-                  })}
+                  }, availableForReason)}
                 </div>
               ))}
             </AccordionContent>

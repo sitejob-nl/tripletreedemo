@@ -31,3 +31,21 @@ export const getISOWeekYear = (date: Date): number => {
 export const formatWeekLabel = (weekNumber: number, padding = 2): string => {
   return `W${String(weekNumber).padStart(padding, '0')}`;
 };
+
+// Parse a BasiCall date string (YYYY-MM-DD or DD-MM-YYYY) as a local-time Date.
+// Using new Date('YYYY-MM-DD') would treat the string as UTC midnight, which
+// then shifts to the previous calendar day in negative-UTC timezones when
+// reading back via getDay()/getMonth(). Returning a local-midnight Date keeps
+// day/month/year stable across timezones. Returns null on unrecognised input.
+export const parseBasiCallDate = (str: string | null | undefined): Date | null => {
+  if (!str) return null;
+  // YYYY-MM-DD (ISO from beldatum_date trigger)
+  let m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  // DD-MM-YYYY (legacy beldatum text)
+  m = str.match(/^(\d{2})-(\d{2})-(\d{4})/);
+  if (m) return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+  // Fallback: let JS parse it (may still have timezone shift for other ISO variants)
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+};

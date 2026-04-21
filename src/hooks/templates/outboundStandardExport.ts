@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig } from '@/types/database';
 import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
 import { parseDutchFloat } from '@/lib/dataProcessing';
-import { getAllWeeksForYear, getISOWeekYear } from '@/lib/weekHelpers';
+import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -228,10 +228,8 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
     const yearTotal: DailyWeekStats = emptyWeek();
 
     records.forEach((record) => {
-      const dateStr = record.beldatum_date ?? record.beldatum;
-      if (!dateStr) return;
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return;
+      const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
+      if (!date) return;
 
       const isoYear = getISOWeekYear(date);
       if (isoYear !== year) return;
@@ -285,8 +283,8 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
 
     // 5. Apply logged time per day/week
     (loggedRows ?? []).forEach((row) => {
-      const date = new Date(row.date);
-      if (isNaN(date.getTime())) return;
+      const date = parseBasiCallDate(row.date);
+      if (!date) return;
       const isoYear = getISOWeekYear(date);
       if (isoYear !== year) return;
       const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));

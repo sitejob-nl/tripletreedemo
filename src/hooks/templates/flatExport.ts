@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig } from '@/types/database';
-import { getAllWeeksForYear, getISOWeekYear } from '@/lib/weekHelpers';
+import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -137,10 +137,8 @@ export async function exportFlatYear(args: ExportArgs): Promise<void> {
     weeks.forEach((w) => (weekBuckets[w] = { results: new Map(), loggedSeconds: 0 }));
 
     records.forEach((record) => {
-      const dateStr = record.beldatum_date ?? record.beldatum;
-      if (!dateStr) return;
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return;
+      const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
+      if (!date) return;
       if (getISOWeekYear(date) !== year) return;
       const week = record.week_number ?? null;
       if (!week || !weekBuckets[week]) return;
@@ -160,8 +158,8 @@ export async function exportFlatYear(args: ExportArgs): Promise<void> {
     });
 
     (loggedRows ?? []).forEach((row) => {
-      const date = new Date(row.date);
-      if (isNaN(date.getTime())) return;
+      const date = parseBasiCallDate(row.date);
+      if (!date) return;
       if (getISOWeekYear(date) !== year) return;
       const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
       d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
