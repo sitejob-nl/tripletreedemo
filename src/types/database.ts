@@ -2,6 +2,14 @@
 
 export type ProjectType = 'outbound' | 'inbound' | 'inbound_service';
 
+// Optional report template per project. NULL = legacy behavior.
+// Set by admin to switch UI + Excel export to historical rapportage layout.
+export type ReportTemplate =
+  | 'outbound_standard'
+  | 'inbound_retention'
+  | 'inbound_service'
+  | 'flat';
+
 export interface MappingConfig {
   amount_col: string;
   freq_col: string;
@@ -28,6 +36,30 @@ export interface MappingConfig {
   exclude_from_net?: string[];             // Outbound: codes die niet meetellen in netto-conversie (bv. "overleden")
   exclude_from_retention?: string[];       // Inbound: codes die niet meetellen in retentie-ratio-noemer
   
+  // Flat-template (ANBO / TTG) specifieke categorieën.
+  // Records met deze resultaat-namen worden in een aparte rij "Max voicemail"
+  // of "NAWT fout" getoond en tellen NIET mee in Totaal afgehandeld (denominator
+  // voor percentages). Alleen relevant wanneer projects.report_template = 'flat'.
+  flat_voicemail_results?: string[];
+  flat_nawt_results?: string[];
+
+  // Inbound-service-template targets (Sligro / NL Tour / Take 5 / Kemkens / Doorpro).
+  // Alleen relevant wanneer projects.report_template = 'inbound_service'.
+  // Bereikbaarheid = handled / (handled + notHandled); Service level = calls met
+  // gesprekstijd < service_level_sec / totaal gesprekken. Targets standaard
+  // 0.95 / 0.70 / 30s conform historische rapportages.
+  service_targets?: {
+    bereikbaarheid?: number;      // Doel-ratio, 0-1 (bijv. 0.95 = 95%)
+    service_level?: number;       // Doel-ratio, 0-1 (bijv. 0.70 = 70%)
+    service_level_sec?: number;   // Drempel in seconden (standaard 30)
+  };
+
+  // Inbound-retention-template reden-breakdown (Hersenstichting).
+  // Map van reden-categorie (bv. "Overleden", "Financiele redenen") naar
+  // een lijst van BasiCall result-codes die in die categorie vallen.
+  // Alleen relevant wanneer projects.report_template = 'inbound_retention'.
+  reason_categories?: Record<string, string[]>;
+
   // Afwijkend uurtarief per weekdag
   weekday_rates?: {
     maandag?: number;
@@ -52,6 +84,7 @@ export interface DBProject {
   mapping_config: MappingConfig;
   total_to_call: number | null;
   hours_factor: number;
+  report_template: ReportTemplate | null;
   created_at: string;
   updated_at: string;
 }
@@ -119,6 +152,7 @@ export interface DBProjectPublic {
   mapping_config: MappingConfig;
   total_to_call: number | null;
   hours_factor: number;
+  report_template: ReportTemplate | null;
   created_at: string;
   updated_at: string;
   // GEEN basicall_token - dit is het verschil met DBProject

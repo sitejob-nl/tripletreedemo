@@ -2,9 +2,13 @@ import { useCallback } from 'react';
 import * as XLSX from 'xlsx-js-style';
 import { useToast } from '@/hooks/use-toast';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig, ProjectType } from '@/types/database';
+import { MappingConfig, ProjectType, ReportTemplate } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { categorizeInboundResult } from '@/lib/statsHelpers';
+import { exportOutboundStandardYear } from '@/hooks/templates/outboundStandardExport';
+import { exportFlatYear } from '@/hooks/templates/flatExport';
+import { exportInboundServiceYear } from '@/hooks/templates/inboundServiceExport';
+import { exportInboundRetentionYear } from '@/hooks/templates/inboundRetentionExport';
 
 interface UseExcelExportParams {
   data: ProcessedCallRecord[];
@@ -16,16 +20,66 @@ interface UseExcelExportParams {
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
   projectType?: ProjectType;
+  projectId?: string;
+  reportTemplate?: ReportTemplate | null;
 }
 
 export function useExcelExport({
   data, hourlyRate, selectedWeek, projectName,
   mappingConfig, vatRate = 21, loggedTimeHours, dailyLoggedHours,
   projectType = 'outbound',
+  projectId,
+  reportTemplate,
 }: UseExcelExportParams) {
   const { toast } = useToast();
 
   const handleExportToExcel = useCallback(() => {
+    // Template-specific year export: when a report_template is set, route to its builder.
+    // Each template writes its own multi-sheet workbook (Totaal + weektabs) matching the
+    // historical rapportage layout. Falls through to legacy single-week export when the
+    // template has no builder yet.
+    if (reportTemplate === 'outbound_standard' && projectId) {
+      void exportOutboundStandardYear({
+        projectId,
+        projectName,
+        hourlyRate,
+        vatRate,
+        mappingConfig,
+        onToast: (msg) => toast(msg),
+      });
+      return;
+    }
+
+    if (reportTemplate === 'flat' && projectId) {
+      void exportFlatYear({
+        projectId,
+        projectName,
+        mappingConfig,
+        onToast: (msg) => toast(msg),
+      });
+      return;
+    }
+
+    if (reportTemplate === 'inbound_service' && projectId) {
+      void exportInboundServiceYear({
+        projectId,
+        projectName,
+        mappingConfig,
+        onToast: (msg) => toast(msg),
+      });
+      return;
+    }
+
+    if (reportTemplate === 'inbound_retention' && projectId) {
+      void exportInboundRetentionYear({
+        projectId,
+        projectName,
+        mappingConfig,
+        onToast: (msg) => toast(msg),
+      });
+      return;
+    }
+
     if (!data || data.length === 0) {
       toast({
         title: 'Geen gegevens',
@@ -337,7 +391,7 @@ export function useExcelExport({
         });
       }
     }
-  }, [data, hourlyRate, selectedWeek, projectName, toast, mappingConfig, vatRate, loggedTimeHours, dailyLoggedHours, projectType]);
+  }, [data, hourlyRate, selectedWeek, projectName, toast, mappingConfig, vatRate, loggedTimeHours, dailyLoggedHours, projectType, projectId, reportTemplate]);
 
   return { handleExportToExcel };
 }

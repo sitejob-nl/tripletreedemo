@@ -2,8 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { MappingConfig } from "@/types/database";
+import type { MappingConfig, ReportTemplate } from "@/types/database";
 
 export interface ProjectFormData {
   name: string;
@@ -16,7 +17,17 @@ export interface ProjectFormData {
   mapping_config: MappingConfig;
   total_to_call: string;
   hours_factor: string;
+  report_template: ReportTemplate | null;
 }
+
+const REPORT_TEMPLATE_NONE = "__none__";
+
+const REPORT_TEMPLATE_OPTIONS: { value: ReportTemplate; label: string; description: string }[] = [
+  { value: "outbound_standard", label: "Outbound standaard", description: "Totaaltab + 52 weektabs, machtiging-frequentie, terugverdientijd" },
+  { value: "inbound_retention", label: "Inbound retentie", description: "Reden-breakdown voor opzeggingen, behouden waarde" },
+  { value: "inbound_service", label: "Inbound klantenservice", description: "Bereikbaarheid + service level met targets" },
+  { value: "flat", label: "ANBO / TTG plat", description: "Plat resultaat-overzicht met aantal en percentage" },
+];
 
 interface ProjectDialogProps {
   isOpen: boolean;
@@ -175,6 +186,40 @@ export function ProjectDialog({
               />
               <p className="text-xs text-muted-foreground">
                 Factor waarmee gelogde uren worden vermenigvuldigd (1.0 = geen aanpassing).
+              </p>
+            </div>
+          </div>
+
+          {/* Rapportage-template */}
+          <div className="space-y-4">
+            <h3 className="font-semibold text-foreground">Rapportage-template</h3>
+            <div className="space-y-2">
+              <Label htmlFor="report_template">Template voor project-pagina en Excel-export</Label>
+              <Select
+                value={formData.report_template ?? REPORT_TEMPLATE_NONE}
+                onValueChange={(v) =>
+                  setFormData(prev => ({
+                    ...prev,
+                    report_template: v === REPORT_TEMPLATE_NONE ? null : (v as ReportTemplate),
+                  }))
+                }
+              >
+                <SelectTrigger id="report_template">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={REPORT_TEMPLATE_NONE}>Geen (huidige weergave)</SelectItem>
+                  {REPORT_TEMPLATE_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {formData.report_template
+                  ? REPORT_TEMPLATE_OPTIONS.find(o => o.value === formData.report_template)?.description
+                  : "Zonder template blijft het project de huidige dashboard-weergave en Excel-export gebruiken."}
               </p>
             </div>
           </div>

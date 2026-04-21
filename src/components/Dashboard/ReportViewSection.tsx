@@ -2,12 +2,18 @@ import { FileSpreadsheet, Loader2, PhoneOutgoing, PhoneIncoming, Headphones } fr
 import { ReportMatrix } from './ReportMatrix';
 import { InboundReportMatrix } from './InboundReportMatrix';
 import { ServiceReportMatrix } from './ServiceReportMatrix';
+import { OutboundStandardMatrix } from './templates/OutboundStandardMatrix';
+import { InboundServiceMatrix } from './templates/InboundServiceMatrix';
+import { InboundRetentionMatrix } from './templates/InboundRetentionMatrix';
+import { FlatReportMatrix } from './templates/FlatReportMatrix';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig, ProjectType } from '@/types/database';
+import { MappingConfig, ProjectType, ReportTemplate } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 
 interface ReportViewSectionProps {
+  projectId?: string;
   projectType: ProjectType;
+  reportTemplate?: ReportTemplate | null;
   selectedWeek: string | number;
   data: ProcessedCallRecord[];
   hourlyRate: number;
@@ -21,7 +27,9 @@ interface ReportViewSectionProps {
 }
 
 export function ReportViewSection({
+  projectId,
   projectType,
+  reportTemplate,
   selectedWeek,
   data,
   hourlyRate,
@@ -35,6 +43,67 @@ export function ReportViewSection({
 }: ReportViewSectionProps) {
   const isInboundProject = projectType === 'inbound';
   const isServiceProject = projectType === 'inbound_service';
+
+  // Template routing: when a report_template is set, route to template-specific matrix.
+  // Templates are built incrementally (see plan); remaining values fall back to legacy
+  // project_type-based rendering below until their matrix is built.
+  const templateComponent = (() => {
+    if (!reportTemplate) return null;
+    switch (reportTemplate) {
+      case 'outbound_standard':
+        if (!projectId) return null;
+        return (
+          <OutboundStandardMatrix
+            projectId={projectId}
+            data={data}
+            hourlyRate={hourlyRate}
+            vatRate={vatRate}
+            selectedWeek={selectedWeek}
+            mappingConfig={mappingConfig}
+            loggedTimeHours={loggedTimeHours}
+            dailyLoggedHours={dailyLoggedHours}
+          />
+        );
+      case 'flat':
+        return (
+          <FlatReportMatrix
+            data={data}
+            mappingConfig={mappingConfig}
+            selectedWeek={selectedWeek}
+            loggedTimeHours={loggedTimeHours}
+          />
+        );
+      case 'inbound_service':
+        return (
+          <InboundServiceMatrix
+            data={data}
+            hourlyRate={hourlyRate}
+            vatRate={vatRate}
+            selectedWeek={selectedWeek}
+            mappingConfig={mappingConfig}
+            loggedTimeHours={loggedTimeHours}
+            dailyLoggedHours={dailyLoggedHours}
+            showInvestment={isAdmin}
+          />
+        );
+      case 'inbound_retention':
+        return (
+          <InboundRetentionMatrix
+            data={data}
+            hourlyRate={hourlyRate}
+            vatRate={vatRate}
+            selectedWeek={selectedWeek}
+            mappingConfig={mappingConfig}
+            loggedTimeHours={loggedTimeHours}
+            dailyLoggedHours={dailyLoggedHours}
+          />
+        );
+      default: {
+        const _exhaustive: never = reportTemplate;
+        return _exhaustive;
+      }
+    }
+  })();
 
   const getTitle = () => {
     if (isServiceProject) return selectedWeek === 'all' ? 'Klantenservice Overzicht' : `Klantenservice Week ${selectedWeek}`;
@@ -76,7 +145,9 @@ export function ReportViewSection({
         </button>
       </div>
       
-      {isServiceProject && mappingConfig ? (
+      {templateComponent ? (
+        templateComponent
+      ) : isServiceProject && mappingConfig ? (
         <ServiceReportMatrix
           data={data}
           hourlyRate={hourlyRate}

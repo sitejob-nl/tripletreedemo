@@ -46,7 +46,8 @@ const emptyFormData: ProjectFormData = {
   is_active: true,
   mapping_config: defaultMappingConfig,
   total_to_call: "",
-  hours_factor: "1.0"
+  hours_factor: "1.0",
+  report_template: null
 };
 
 export default function Admin() {
@@ -85,7 +86,8 @@ export default function Admin() {
       is_active: project.is_active,
       mapping_config: project.mapping_config,
       total_to_call: project.total_to_call ? String(project.total_to_call) : "",
-      hours_factor: String(project.hours_factor ?? 1.0)
+      hours_factor: String(project.hours_factor ?? 1.0),
+      report_template: project.report_template ?? null
     });
     setEditingProject(project);
     setIsProjectDialogOpen(true);
@@ -115,7 +117,8 @@ export default function Admin() {
       is_active: formData.is_active,
       mapping_config: JSON.parse(JSON.stringify(formData.mapping_config)),
       total_to_call: formData.total_to_call ? parseInt(formData.total_to_call) : null,
-      hours_factor: parseFloat(formData.hours_factor) || 1.0
+      hours_factor: parseFloat(formData.hours_factor) || 1.0,
+      report_template: formData.report_template
     };
 
     try {

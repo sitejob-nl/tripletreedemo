@@ -63,6 +63,41 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [handledResults, setHandledResults] = useState<string[]>(project.mapping_config.handled_results || []);
   const [notHandledResults, setNotHandledResults] = useState<string[]>(project.mapping_config.not_handled_results || []);
 
+  // Flat-template (ANBO/TTG) state
+  const [flatVoicemailResults, setFlatVoicemailResults] = useState<string[]>(project.mapping_config.flat_voicemail_results || []);
+  const [flatNawtResults, setFlatNawtResults] = useState<string[]>(project.mapping_config.flat_nawt_results || []);
+
+  // Inbound-service-template targets state
+  const [serviceTargetBereikbaarheid, setServiceTargetBereikbaarheid] = useState<number>(
+    project.mapping_config.service_targets?.bereikbaarheid ?? 0.95
+  );
+  const [serviceTargetServiceLevel, setServiceTargetServiceLevel] = useState<number>(
+    project.mapping_config.service_targets?.service_level ?? 0.70
+  );
+  const [serviceTargetSeconds, setServiceTargetSeconds] = useState<number>(
+    project.mapping_config.service_targets?.service_level_sec ?? 30
+  );
+
+  // Inbound-retention-template reason categories state
+  const DEFAULT_REASON_CATEGORIES: Record<string, string[]> = {
+    'Overleden': [],
+    'Hoge leeftijd': [],
+    'Financiele redenen': [],
+    'Nieuwe machtiging / wijziging': [],
+    'Klacht / niet tevreden': [],
+    'Heeft al machtiging': [],
+    'Eenmalig': [],
+    'Storno': [],
+    'Overig / onbekend': [],
+    'Coronavirus': [],
+    'Actualiteit': [],
+  };
+  const [reasonCategories, setReasonCategories] = useState<Record<string, string[]>>(
+    project.mapping_config.reason_categories
+      ? { ...DEFAULT_REASON_CATEGORIES, ...project.mapping_config.reason_categories }
+      : DEFAULT_REASON_CATEGORIES
+  );
+
   // Negative categorization state (outbound)
   const [unreachableResults, setUnreachableResults] = useState<string[]>(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
   const [negativeArgumentated, setNegativeArgumentated] = useState<string[]>(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
@@ -119,6 +154,14 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     weekday_rates: cleanWeekdayRates(),
     handled_results: handledResults,
     not_handled_results: notHandledResults,
+    flat_voicemail_results: flatVoicemailResults,
+    flat_nawt_results: flatNawtResults,
+    service_targets: {
+      bereikbaarheid: serviceTargetBereikbaarheid,
+      service_level: serviceTargetServiceLevel,
+      service_level_sec: serviceTargetSeconds,
+    },
+    reason_categories: reasonCategories,
   };
 
   const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
@@ -141,6 +184,16 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setPartialSuccessResults(project.mapping_config.partial_success_results || []);
     setHandledResults(project.mapping_config.handled_results || []);
     setNotHandledResults(project.mapping_config.not_handled_results || []);
+    setFlatVoicemailResults(project.mapping_config.flat_voicemail_results || []);
+    setFlatNawtResults(project.mapping_config.flat_nawt_results || []);
+    setServiceTargetBereikbaarheid(project.mapping_config.service_targets?.bereikbaarheid ?? 0.95);
+    setServiceTargetServiceLevel(project.mapping_config.service_targets?.service_level ?? 0.70);
+    setServiceTargetSeconds(project.mapping_config.service_targets?.service_level_sec ?? 30);
+    setReasonCategories(
+      project.mapping_config.reason_categories
+        ? { ...DEFAULT_REASON_CATEGORIES, ...project.mapping_config.reason_categories }
+        : DEFAULT_REASON_CATEGORIES
+    );
     setUnreachableResults(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
     setNegativeArgumentated(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
     setNegativeNotArgumentated(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
@@ -169,6 +222,14 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       weekday_rates: cleanWeekdayRates(),
       handled_results: handledResults,
       not_handled_results: notHandledResults,
+      flat_voicemail_results: flatVoicemailResults,
+      flat_nawt_results: flatNawtResults,
+      service_targets: {
+        bereikbaarheid: serviceTargetBereikbaarheid,
+        service_level: serviceTargetServiceLevel,
+        service_level_sec: serviceTargetSeconds,
+      },
+      reason_categories: reasonCategories,
     };
     await onSave(project.id, hourlyRate, mappingConfig, projectType, hoursFactor);
   };
@@ -190,7 +251,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setFreqMap(updated);
   };
 
-  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults];
+  const allReasonResults = Object.values(reasonCategories).flat();
+  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults, ...flatVoicemailResults, ...flatNawtResults, ...allReasonResults];
   const availableResultsFiltered = availableResults.filter((r) => !allSelected.includes(r));
 
   // Look up which named category a result-code already lives in (case-insensitive)
@@ -207,7 +269,16 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       check('Verloren', lostResults) ||
       check('Gedeeltelijk Succes', partialSuccessResults) ||
       check('Afgehandeld', handledResults) ||
-      check('Niet Afgehandeld', notHandledResults)
+      check('Niet Afgehandeld', notHandledResults) ||
+      check('Max voicemail', flatVoicemailResults) ||
+      check('NAWT fout', flatNawtResults) ||
+      (() => {
+        const lc = candidate.toLowerCase();
+        for (const [catName, codes] of Object.entries(reasonCategories)) {
+          if (codes.some((r) => r.toLowerCase() === lc)) return `Reden: ${catName}`;
+        }
+        return null;
+      })()
     );
   };
 
@@ -485,6 +556,151 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                 <p className="text-xs text-muted-foreground">Resultaten zoals omzetten naar eenmalig.</p>
                 {renderResultBadges(partialSuccessResults, (r) => setPartialSuccessResults(partialSuccessResults.filter(x => x !== r)))}
                 {renderResultSelect((r) => setPartialSuccessResults([...partialSuccessResults, r]))}
+              </AccordionContent>
+            </AccordionItem>
+          </>
+        )}
+
+        {/* Inbound-retention-template: reden-breakdown voor opzeggers.
+            Alleen zichtbaar als het project-template 'inbound_retention' is.
+            Admin mapt BasiCall result-codes naar de 11 historische reden-
+            categorieën (Overleden, Hoge leeftijd, Financiële redenen, etc.). */}
+        {project.report_template === 'inbound_retention' && (
+          <AccordionItem value="reason_categories" className="border border-border rounded-lg px-4">
+            <AccordionTrigger className="text-sm font-semibold">
+              📋 Reden-breakdown ({Object.values(reasonCategories).reduce((n, arr) => n + arr.length, 0)} codes in {Object.keys(reasonCategories).length} categorieën)
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4 pt-4">
+              <p className="text-xs text-muted-foreground">
+                Map BasiCall result-codes naar reden-categorieën voor opzeggers. Verschijnt als
+                aparte sectie in de retentie-rapportage, matcht historische Hersenstichting-rapport.
+              </p>
+              {Object.keys(reasonCategories).map((catName) => (
+                <div key={catName} className="rounded-md border border-border/60 p-3 space-y-2">
+                  <Label className="text-xs font-semibold text-foreground">{catName}</Label>
+                  {renderResultBadges(reasonCategories[catName], (r) => {
+                    setReasonCategories({
+                      ...reasonCategories,
+                      [catName]: reasonCategories[catName].filter((x) => x !== r),
+                    });
+                  })}
+                  {renderResultSelect((r) => {
+                    setReasonCategories({
+                      ...reasonCategories,
+                      [catName]: [...reasonCategories[catName], r],
+                    });
+                  })}
+                </div>
+              ))}
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {/* Inbound-service-template: targets voor Bereikbaarheid en Service level.
+            Alleen zichtbaar als het project-template 'inbound_service' is. De
+            template toont deze als extra kolom naast de gemeten waardes en
+            markeert of het target gehaald is. */}
+        {project.report_template === 'inbound_service' && (
+          <AccordionItem value="service_targets" className="border border-border rounded-lg px-4">
+            <AccordionTrigger className="text-sm font-semibold">
+              🎯 Service-targets (Bereikbaarheid, Service level)
+            </AccordionTrigger>
+            <AccordionContent className="space-y-4 pt-4">
+              <p className="text-xs text-muted-foreground">
+                Doel-percentages die naast de gemeten waarde verschijnen. Historische Sligro-rapportages
+                gebruikten 95% bereikbaarheid en 70% service level (binnen 30 seconden).
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Bereikbaarheid-target (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={Math.round(serviceTargetBereikbaarheid * 1000) / 10}
+                    onChange={(e) => {
+                      const pct = parseFloat(e.target.value);
+                      if (!isNaN(pct)) setServiceTargetBereikbaarheid(pct / 100);
+                    }}
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Afgehandeld / (afgehandeld + niet afgehandeld)
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Service-level-target (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={Math.round(serviceTargetServiceLevel * 1000) / 10}
+                    onChange={(e) => {
+                      const pct = parseFloat(e.target.value);
+                      if (!isNaN(pct)) setServiceTargetServiceLevel(pct / 100);
+                    }}
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Gesprekken korter dan N seconden / totaal
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Drempel (seconden)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={600}
+                    step={1}
+                    value={serviceTargetSeconds}
+                    onChange={(e) => {
+                      const s = parseInt(e.target.value, 10);
+                      if (!isNaN(s) && s > 0) setServiceTargetSeconds(s);
+                    }}
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Standaard 30s (historisch).
+                  </p>
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+
+        {/* Flat-template (ANBO / TTG) specific: voicemail / NAWT categories.
+            Alleen zichtbaar als het project-template 'flat' is. Deze codes
+            worden apart getoond in de flat-rapportage en tellen NIET mee in
+            Totaal afgehandeld (denominator voor percentages). */}
+        {project.report_template === 'flat' && (
+          <>
+            <AccordionItem value="flat_voicemail" className="border border-border rounded-lg px-4">
+              <AccordionTrigger className="text-sm font-semibold">
+                📞 Max voicemail ({flatVoicemailResults.length})
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-4">
+                <p className="text-xs text-muted-foreground">
+                  Resultaat-codes die als "Max voicemail" worden getoond — records die de max aantal
+                  voicemail-pogingen bereikten. Apart gerapporteerd, niet in Totaal afgehandeld.
+                </p>
+                {renderResultBadges(flatVoicemailResults, (r) => setFlatVoicemailResults(flatVoicemailResults.filter(x => x !== r)))}
+                {renderResultSelect((r) => setFlatVoicemailResults([...flatVoicemailResults, r]))}
+              </AccordionContent>
+            </AccordionItem>
+
+            <AccordionItem value="flat_nawt" className="border border-border rounded-lg px-4">
+              <AccordionTrigger className="text-sm font-semibold">
+                ⚠️ NAWT fout ({flatNawtResults.length})
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-4">
+                <p className="text-xs text-muted-foreground">
+                  Resultaat-codes voor NAW-fouten (naam/adres/woonplaats/telefoon onjuist of onbekend).
+                  Apart gerapporteerd, niet in Totaal afgehandeld.
+                </p>
+                {renderResultBadges(flatNawtResults, (r) => setFlatNawtResults(flatNawtResults.filter(x => x !== r)))}
+                {renderResultSelect((r) => setFlatNawtResults([...flatNawtResults, r]))}
               </AccordionContent>
             </AccordionItem>
           </>

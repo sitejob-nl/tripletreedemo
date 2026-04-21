@@ -340,6 +340,8 @@ const Index = () => {
     loggedTimeHours: loggedTime?.hasData ? loggedTime.totalHours : undefined,
     dailyLoggedHours: loggedTime?.dailyHours,
     projectType,
+    projectId: currentProject?.id,
+    reportTemplate: currentProject?.report_template ?? null,
   });
 
   const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType, hoursFactor?: number) => {
@@ -555,7 +557,9 @@ const Index = () => {
                   {/* MAIN VIEW SWITCHER */}
                   {viewMode === 'report' ? (
                     <ReportViewSection
+                      projectId={currentProject?.id}
                       projectType={projectType}
+                      reportTemplate={currentProject?.report_template ?? null}
                       selectedWeek={selectedWeek}
                       data={reportMatrixProcessedData}
                       hourlyRate={hourlyRate}
