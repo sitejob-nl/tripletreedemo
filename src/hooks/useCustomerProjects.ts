@@ -79,6 +79,23 @@ export function useCustomersWithProjects() {
 
       const projectsMap = new Map(projects?.map(p => [p.id, p]) || []);
 
+      // Fetch real email addresses via admin-gated edge function.
+      // auth.users is service-role-only, so we expose a narrow proxy.
+      // On failure we fall back to showing user_id — no blocking error.
+      const userIds = (userRoles || []).map(r => r.user_id);
+      let emailsMap: Record<string, string | null> = {};
+      if (userIds.length > 0) {
+        const { data: emailsData, error: emailsError } = await supabase.functions.invoke(
+          'get-customer-emails',
+          { body: { userIds } }
+        );
+        if (emailsError) {
+          console.warn('Kon klant-emails niet ophalen:', emailsError.message);
+        } else if (emailsData?.emails) {
+          emailsMap = emailsData.emails;
+        }
+      }
+
       // Build customer data with their projects
       const customers: CustomerWithProjects[] = (userRoles || []).map(role => {
         const userProjects = (customerProjects || [])
@@ -95,7 +112,7 @@ export function useCustomersWithProjects() {
 
         return {
           user_id: role.user_id,
-          email: role.user_id, // Will be shown as user_id since we can't access auth.users
+          email: emailsMap[role.user_id] || role.user_id,
           role: role.role as 'user',
           role_id: role.id,
           created_at: role.created_at || new Date().toISOString(),

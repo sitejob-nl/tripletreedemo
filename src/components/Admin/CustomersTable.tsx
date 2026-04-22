@@ -44,8 +44,10 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
 
   const filteredCustomers = useMemo(() => {
-    return customers?.filter(customer => 
-      customer.user_id.toLowerCase().includes(search.toLowerCase())
+    const q = search.toLowerCase();
+    return customers?.filter(customer =>
+      customer.email.toLowerCase().includes(q) ||
+      customer.user_id.toLowerCase().includes(q)
     ) || [];
   }, [customers, search]);
 
@@ -208,7 +210,7 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Zoek op email of user ID..."
+              placeholder="Zoek op e-mail..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
@@ -239,17 +241,21 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>User ID</TableHead>
+                        <TableHead>E-mail</TableHead>
                         <TableHead>Projecten</TableHead>
                         <TableHead className="hidden md:table-cell">Aangemaakt</TableHead>
                         <TableHead className="text-right">Acties</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredCustomers.map((customer) => (
+                      {filteredCustomers.map((customer) => {
+                        // email is either the real address (from edge fn) or falls back to user_id.
+                        // We treat a UUID-shaped value as "no email resolved" to keep the UX honest.
+                        const isUuid = customer.email === customer.user_id;
+                        return (
                         <TableRow key={customer.user_id}>
-                          <TableCell className="font-mono text-sm max-w-[200px] truncate">
-                            {customer.user_id}
+                          <TableCell className={`text-sm max-w-[260px] truncate ${isUuid ? 'font-mono text-muted-foreground' : 'font-medium'}`} title={customer.user_id}>
+                            {isUuid ? <em>(geen e-mail gevonden)</em> : customer.email}
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
@@ -290,7 +296,8 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
                             </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
+                      );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

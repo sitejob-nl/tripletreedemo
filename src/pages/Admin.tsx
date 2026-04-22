@@ -126,6 +126,7 @@ export default function Admin() {
 
     try {
       let projectId: string;
+      let justCreated = false;
 
       if (editingProject) {
         const { error } = await supabase
@@ -142,6 +143,7 @@ export default function Admin() {
           .single();
         if (error) throw error;
         projectId = data.id;
+        justCreated = true;
       }
 
       // Token apart wegschrijven via edge function (project_secrets is service-role-only).
@@ -151,7 +153,30 @@ export default function Admin() {
         const { error: tokenError } = await supabase.functions.invoke("project-secret", {
           body: { project_id: projectId, token: formData.basicall_token }
         });
-        if (tokenError) throw new Error(`Token opslaan mislukt: ${tokenError.message}`);
+        if (tokenError) {
+          // Atomic create: als token-save faalt bij een nieuw project, verwijderen
+          // we de zojuist aangemaakte projects-rij zodat we geen half-aangemaakt
+          // project achterlaten zonder werkende sync.
+          if (justCreated) {
+            const { error: cleanupError } = await supabase
+              .from("projects")
+              .delete()
+              .eq("id", projectId);
+            if (cleanupError) {
+              console.error("Cleanup after failed token-save also failed:", cleanupError);
+              throw new Error(
+                `Token opslaan mislukt (${tokenError.message}). Project staat ONGELDIG in DB — verwijder handmatig via beheer.`
+              );
+            }
+            throw new Error(
+              `Token opslaan mislukt: ${tokenError.message}. Project niet aangemaakt.`
+            );
+          }
+          // Bij edit: project blijft bestaan, alleen token-rotatie faalde.
+          throw new Error(
+            `Token opslaan mislukt: ${tokenError.message}. Bestaande token ongewijzigd.`
+          );
+        }
       }
 
       toast({
