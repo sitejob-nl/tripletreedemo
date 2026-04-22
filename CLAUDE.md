@@ -15,7 +15,7 @@
 - **Hosting frontend**: Vercel, CNAME `app.ttcallcenters.nl` → Vercel (DNS bij Meetwerk ICT)
 - **DB**: Supabase project `tvsdbztjqksxybxjwtrf` (Frankfurt eu-central-2, Postgres 17.6)
 - **Sync**: Node.js script op VPS Hetzner `85.10.132.126` (user `sitejob-tt`), **niet in deze repo** — `/opt/basicall-sync/sync.js`, cron nachtelijks (zie §Status)
-- **Origin**: bootstrapped met Lovable (project-id `3a3f02f2-25bd-41de-acfa-7434d8da8532`). Schema-wijzigingen via Lovable/dashboard belanden soms NIET in `supabase/migrations/` → altijd live schema checken via MCP.
+- **Origin**: project is extern gescaffold, eerste live-schema wijzigingen belandden daardoor niet allemaal in `supabase/migrations/`. Altijd live schema checken via MCP voor je lokale migrations baseert op wat er in de repo staat.
 
 ## Architectuur
 
@@ -171,7 +171,7 @@ Zie [AUDIT-2026-04-16.md](./AUDIT-2026-04-16.md) + [AUDIT-VPS-SYNC-2026-04-16.md
 ## Conventies
 
 - Dutch UI-strings (klanten lezen Nederlands). Code + comments: Engels.
-- Geen nieuwe migrations uploaden naar `supabase/migrations/` zonder ze eerst tegen live toe te passen (MCP `apply_migration`) — Lovable-drift maakt dat lokale migrations niet overeenkomen met productie.
+- Geen nieuwe migrations uploaden naar `supabase/migrations/` zonder ze eerst tegen live toe te passen (MCP `apply_migration`) — historische schema-drift maakt dat lokale migrations niet automatisch overeenkomen met productie.
 - `beldatum` is TEXT (VPS voert DD-MM-YYYY in of ISO YYYY-MM-DD; beide paths ondersteund in sync.js regel 411), trigger `sync_beldatum_to_date()` vult `beldatum_date` (DATE). Queries: **altijd** `beldatum_date` gebruiken, nooit string-sort op `beldatum`.
 - Tijdzone: TIMESTAMPTZ staat in UTC; frontend interpreteert via date-fns. VPS-script forceert `TZ=Europe/Amsterdam` bovenaan (sync.js regel 2). Geen expliciete `AT TIME ZONE 'Europe/Amsterdam'` in SQL-queries nodig.
 - Frontend heeft al `BatchProgress.tsx` en `BatchManager.tsx` — backend levert data via `syncBatchTotals` zodra admin batches koppelt.

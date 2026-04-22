@@ -1,73 +1,45 @@
-# Welcome to your Lovable project
+# Triple Tree Portal
 
-## Project info
+Geautomatiseerd rapportageplatform voor call center Triple Tree (ttcallcenters.nl). Vervangt handmatige Excel-rapportage met een live dashboard: BasiCall → Supabase → klantportaal.
 
-**URL**: https://lovable.dev/projects/3a3f02f2-25bd-41de-acfa-7434d8da8532
+**Productie**: https://app.ttcallcenters.nl
 
-## How can I edit this code?
+Zie [CLAUDE.md](./CLAUDE.md) voor de volledige architectuur, deploy-flow, bekende probleemgebieden en conventies.
 
-There are several ways of editing your application.
+## Stack
 
-**Use Lovable**
+- React 18 + TypeScript + Vite + shadcn/ui + Tailwind
+- Tanstack Query v5 + Supabase JS v2
+- Recharts + Mapbox GL
+- xlsx-js-style (Excel weekrapportage per project_type)
+- PWA (installable op mobiel + desktop)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/3a3f02f2-25bd-41de-acfa-7434d8da8532) and start prompting.
+## Lokaal draaien
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Vereist: Node.js + npm.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+git clone git@github.com:sitejob-nl/tripletreedemo.git
+cd tripletreedemo
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Server draait op `http://localhost:8080`. Environment vars staan in `.env.local`:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```
+VITE_SUPABASE_URL=https://tvsdbztjqksxybxjwtrf.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
+```
 
-**Use GitHub Codespaces**
+## Deploy
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Merges naar `main` op GitHub `sitejob-nl/tripletreedemo` → Vercel auto-deploy naar `app.ttcallcenters.nl`.
 
-## What technologies are used for this project?
+## Scripts
 
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/3a3f02f2-25bd-41de-acfa-7434d8da8532) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```sh
+npm run dev      # dev server
+npm run build    # production bundle
+npm run lint     # eslint
+```

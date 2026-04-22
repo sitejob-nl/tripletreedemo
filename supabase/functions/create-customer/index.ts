@@ -95,8 +95,10 @@ serve(async (req) => {
       );
     }
 
-    // Get the site URL for redirect
-    const siteUrl = req.headers.get('origin') || 'https://tripletreedemo.lovable.app';
+    // Get the site URL for redirect. Fallback is the production portal so
+    // een magic link die server-side wordt gegenereerd nooit op een doodlopend
+    // domein landt.
+    const siteUrl = req.headers.get('origin') || 'https://app.ttcallcenters.nl';
 
     // Invite the user using Supabase Auth admin API
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
