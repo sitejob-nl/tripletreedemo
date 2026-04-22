@@ -4,7 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { MappingConfig, ReportTemplate } from "@/types/database";
+import { PhoneOutgoing, PhoneIncoming, Headphones } from "lucide-react";
+import type { MappingConfig, ProjectType, ReportTemplate } from "@/types/database";
 
 export interface ProjectFormData {
   name: string;
@@ -14,6 +15,7 @@ export interface ProjectFormData {
   hourly_rate: string;
   vat_rate: string;
   is_active: boolean;
+  project_type: ProjectType;
   mapping_config: MappingConfig;
   total_to_call: string;
   hours_factor: string;
@@ -114,6 +116,38 @@ export function ProjectDialog({
                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
               />
               <Label>Project actief</Label>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project_type">Project-type *</Label>
+              <Select
+                value={formData.project_type}
+                onValueChange={(v) => setFormData(prev => ({ ...prev, project_type: v as ProjectType }))}
+              >
+                <SelectTrigger id="project_type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="outbound">
+                    <span className="inline-flex items-center gap-2">
+                      <PhoneOutgoing size={14} /> Outbound — werving / upgrade / storno
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="inbound">
+                    <span className="inline-flex items-center gap-2">
+                      <PhoneIncoming size={14} /> Inbound (Retentie) — behouden van donateurs
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="inbound_service">
+                    <span className="inline-flex items-center gap-2">
+                      <Headphones size={14} /> Inbound klantenservice — afhandel-ratio
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Bepaalt welke KPI-kaarten en tabellen standaard worden getoond. Kan later aangepast worden via de Mapping Tool.
+              </p>
             </div>
           </div>
 

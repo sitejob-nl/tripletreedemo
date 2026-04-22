@@ -70,7 +70,11 @@ serve(async (req) => {
 
     console.log(`Inviting customer with email: ${email}`);
 
-    // Store pending invitation with project IDs (for trigger to link after signup)
+    // Store pending invitation with project IDs (for trigger to link after signup).
+    // CRITICAL: if this fails we must NOT proceed — the handle_new_user_from_invite
+    // trigger reads this row to assign the 'user' role and link customer_projects.
+    // Without it the invited user would activate their account but end up with
+    // zero permissions and no linked projects (silently broken).
     const { error: pendingError } = await supabaseAdmin
       .from('pending_invitations')
       .upsert({
@@ -83,7 +87,12 @@ serve(async (req) => {
 
     if (pendingError) {
       console.error('Pending invitation error:', pendingError);
-      // Continue anyway - this is not critical
+      return new Response(
+        JSON.stringify({
+          error: `Kon uitnodiging niet voorbereiden: ${pendingError.message}. Probeer opnieuw.`,
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Get the site URL for redirect
@@ -103,13 +112,41 @@ serve(async (req) => {
 
     if (inviteError) {
       console.error('Invite error:', inviteError);
-      
-      // Clean up pending invitation on failure
+
+      // Supabase returns "User already registered" (or status 422 / code email_exists)
+      // when the email already has an auth.users row. The invite trigger has
+      // therefore already fired once — pending_invitations is either empty (user
+      // activated) or we're re-inviting someone who abandoned activation. Either
+      // way, the invite API won't re-send a magic link; surface a clear message
+      // so admin knows what action to take instead of retrying.
+      const msg = (inviteError.message || '').toLowerCase();
+      const alreadyRegistered =
+        msg.includes('already') ||
+        msg.includes('registered') ||
+        msg.includes('exists') ||
+        (inviteError as { code?: string }).code === 'email_exists';
+
+      if (alreadyRegistered) {
+        // Keep the pending_invitations row intact: if the user re-confirms via a
+        // "wachtwoord vergeten"-flow, a password update alone won't fire our INSERT
+        // trigger. Admin may need to manually link projects via "Koppelen".
+        return new Response(
+          JSON.stringify({
+            error:
+              'Dit e-mailadres heeft al een account in het systeem. Vraag de klant om via "Wachtwoord vergeten" in te loggen, of koppel extra projecten via de Koppelen-knop zodra het account zichtbaar is in de Actief-tab.',
+            code: 'already_registered',
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Any other invite failure: clean up the pending row so we don't have a
+      // stale entry with no matching auth.users.
       await supabaseAdmin
         .from('pending_invitations')
         .delete()
         .eq('email', email.toLowerCase());
-      
+
       return new Response(
         JSON.stringify({ error: inviteError.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
