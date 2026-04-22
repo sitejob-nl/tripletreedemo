@@ -632,6 +632,89 @@ async function performSync(project, start, end, jobId = null) {
     }
 }
 
+// --- DISCOVER BATCHES ---
+// Vraagt via Batch.getAll alle bekende batches op bij BasiCall en voegt nieuwe toe
+// aan de `batches`-tabel. Bestaande rijen worden nooit verwijderd (historie +
+// eventuele handmatig toegevoegde rijen blijven behouden).
+async function discoverBatches(project) {
+    let respBody;
+    try {
+        respBody = await soapCall(
+            'Batch.list',
+            '',
+            project.basicall_token,
+            project.basicall_project_id
+        );
+    } catch (err) {
+        console.warn(`   ⚠️  Batch.list mislukt voor ${project.name}: ${err.message}`);
+        return;
+    }
+
+    const responseObj = respBody['Batch.listResponse'];
+    const items = unboxRecords(responseObj);
+
+    if (!items || items.length === 0) {
+        return;
+    }
+
+    // Parse items: elk item is óf een struct met veld/waarde pairs, óf een object met directe keys.
+    const discovered = items
+        .map(item => {
+            const parsed = parseBasicallStruct(item);
+            const rawId = parsed.batch_id ?? parsed.id ?? item.batch_id ?? item.id;
+            const rawName = parsed.naam ?? parsed.name ?? item.naam ?? item.name;
+            const rawStatus = parsed.status ?? item.status;
+            const batchId = rawId ? parseInt(rawId, 10) : NaN;
+            if (isNaN(batchId)) return null;
+            return {
+                basicall_batch_id: batchId,
+                name: rawName ? String(rawName) : `Batch ${batchId}`,
+                status: rawStatus !== undefined ? parseInt(rawStatus, 10) : null,
+            };
+        })
+        .filter(Boolean);
+
+    if (discovered.length === 0) {
+        console.warn(`   ⚠️  Batch.list: response niet herkend voor ${project.name}. Raw: ${JSON.stringify(respBody).slice(0, 500)}`);
+        return;
+    }
+
+    // Bestaande batch-ids ophalen
+    const { data: existing, error: existingErr } = await supabase
+        .from('batches')
+        .select('basicall_batch_id')
+        .eq('project_id', project.id);
+
+    if (existingErr) {
+        console.warn(`   ⚠️  Kon bestaande batches niet ophalen voor ${project.name}: ${existingErr.message}`);
+        return;
+    }
+
+    const existingIds = new Set((existing || []).map(r => r.basicall_batch_id));
+    const toInsert = discovered
+        .filter(b => !existingIds.has(b.basicall_batch_id))
+        .map(b => ({
+            project_id: project.id,
+            basicall_batch_id: b.basicall_batch_id,
+            name: b.name,
+            status: isNaN(b.status) ? null : b.status,
+        }));
+
+    if (toInsert.length === 0) {
+        console.log(`📦 ${project.name}: geen nieuwe batches (${discovered.length} bekend)`);
+        return;
+    }
+
+    const { error: insertErr } = await supabase.from('batches').insert(toInsert);
+    if (insertErr) {
+        console.error(`   ❌ Kon nieuwe batches niet toevoegen voor ${project.name}: ${insertErr.message}`);
+        return;
+    }
+
+    console.log(`📦 ${project.name}: ${toInsert.length} nieuwe batch(es) ontdekt`);
+    toInsert.forEach(b => console.log(`   + ${b.name} (id ${b.basicall_batch_id})`));
+}
+
 // --- SYNC BATCH TOTALS ---
 async function syncBatchTotals(project) {
     // Haal bekende batches op voor dit project
@@ -759,6 +842,7 @@ async function run() {
                 console.log(`\n📋 Job: ${project.name} (${job.start_date} - ${job.end_date})`);
                 await performSync(project, new Date(job.start_date), new Date(job.end_date), job.id);
                 await syncLoggedTimeRange(project, new Date(job.start_date), new Date(job.end_date));
+                await discoverBatches(project);
                 await syncBatchTotals(project);
             }
 
@@ -812,7 +896,8 @@ async function run() {
                 await performSync(p, yesterdayStart, yesterdayEnd);
                 await syncLoggedTimeSingleDay(p, yesterdayStart, yesterdayEnd);
             }
-            // Batch totals altijd updaten
+            // Batch discovery + totals altijd updaten
+            await discoverBatches(p);
             await syncBatchTotals(p);
         }
 

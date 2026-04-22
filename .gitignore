@@ -17,6 +17,9 @@ dist-ssr
 .env.*
 !.env.example
 
+# Local reference Excel templates / rapportages (not part of source)
+rapportages/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
