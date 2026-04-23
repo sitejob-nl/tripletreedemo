@@ -32,31 +32,47 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig }: UseKP
       
       // If we have date filtering, use direct query
       if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
-        let query = supabase
-          .from('call_records')
-          .select('gesprekstijd_sec, resultaat')
-          .eq('project_id', projectId);
+        // PostgREST caps unpaginated SELECTs at 1000 rows; a single week can exceed
+        // that, so we page through and aggregate across batches.
+        const allRecords: Array<{ gesprekstijd_sec: number | null; resultaat: string | null }> = [];
+        const batchSize = 1000;
+        let offset = 0;
+        let hasMore = true;
 
-        // Apply date filter
-        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null) {
-          query = query
-            .eq('week_number', dateFilter.weekNumber)
-            .gte('beldatum_date', dateFilter.startDate)
-            .lte('beldatum_date', dateFilter.endDate);
-        } else {
-          query = query
-            .gte('beldatum_date', dateFilter.startDate)
-            .lte('beldatum_date', dateFilter.endDate);
+        while (hasMore) {
+          let query = supabase
+            .from('call_records')
+            .select('gesprekstijd_sec, resultaat')
+            .eq('project_id', projectId)
+            .range(offset, offset + batchSize - 1);
+
+          if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null) {
+            query = query
+              .eq('week_number', dateFilter.weekNumber)
+              .gte('beldatum_date', dateFilter.startDate)
+              .lte('beldatum_date', dateFilter.endDate);
+          } else {
+            query = query
+              .gte('beldatum_date', dateFilter.startDate)
+              .lte('beldatum_date', dateFilter.endDate);
+          }
+
+          const { data, error } = await query;
+          if (error) throw error;
+
+          if (data && data.length > 0) {
+            allRecords.push(...data);
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+          } else {
+            hasMore = false;
+          }
         }
-        
-        const { data, error } = await query;
-        if (error) throw error;
-        
-        const records = data || [];
+
         return {
-          totalRecords: records.length,
-          totalSales: records.filter(r => saleResults.includes(r.resultaat || '')).length,
-          totalGesprekstijdSec: records.reduce((sum, r) => sum + (r.gesprekstijd_sec || 0), 0)
+          totalRecords: allRecords.length,
+          totalSales: allRecords.filter(r => saleResults.includes(r.resultaat || '')).length,
+          totalGesprekstijdSec: allRecords.reduce((sum, r) => sum + (r.gesprekstijd_sec || 0), 0)
         };
       }
       

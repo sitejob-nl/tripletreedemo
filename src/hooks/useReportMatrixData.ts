@@ -117,33 +117,50 @@ export const useReportMatrixData = (
     queryFn: async (): Promise<ProcessedDBCallRecordWithFreq[]> => {
       if (!project) return [];
 
-      let query = supabase
-        .from('call_records')
-        .select('*')
-        .eq('project_id', project.id)
-        .order('beldatum_date', { ascending: false, nullsFirst: false });
+      // PostgREST caps unpaginated SELECTs at 1000 rows. A single week can exceed
+      // that (STC giftgevers week 17: 1714 records), so we page through in chunks.
+      const allRecords: any[] = [];
+      const batchSize = 1000;
+      let offset = 0;
+      let hasMore = true;
 
-      // Apply date filter only when filtering is active; otherwise fetch all records for the project.
-      if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
-        if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null) {
-          query = query
-            .eq('week_number', dateFilter.weekNumber)
-            .gte('beldatum_date', dateFilter.startDate)
-            .lte('beldatum_date', dateFilter.endDate);
+      while (hasMore) {
+        let query = supabase
+          .from('call_records')
+          .select('*')
+          .eq('project_id', project.id)
+          .order('beldatum_date', { ascending: false, nullsFirst: false })
+          .range(offset, offset + batchSize - 1);
+
+        if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
+          if (dateFilter.filterType === 'week' && dateFilter.weekNumber !== null) {
+            query = query
+              .eq('week_number', dateFilter.weekNumber)
+              .gte('beldatum_date', dateFilter.startDate)
+              .lte('beldatum_date', dateFilter.endDate);
+          } else {
+            query = query
+              .gte('beldatum_date', dateFilter.startDate)
+              .lte('beldatum_date', dateFilter.endDate);
+          }
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          throw new Error(`Fout bij ophalen report matrix data: ${error.message}`);
+        }
+
+        if (data && data.length > 0) {
+          allRecords.push(...data);
+          offset += batchSize;
+          hasMore = data.length === batchSize;
         } else {
-          query = query
-            .gte('beldatum_date', dateFilter.startDate)
-            .lte('beldatum_date', dateFilter.endDate);
+          hasMore = false;
         }
       }
 
-      const { data, error } = await query;
-
-      if (error) {
-        throw new Error(`Fout bij ophalen report matrix data: ${error.message}`);
-      }
-
-      return (data || []).map((record): ProcessedDBCallRecordWithFreq => {
+      return allRecords.map((record): ProcessedDBCallRecordWithFreq => {
         const calculated = calculateValuesFromRaw(
           record.raw_data as Record<string, any> | null,
           record.resultaat,
