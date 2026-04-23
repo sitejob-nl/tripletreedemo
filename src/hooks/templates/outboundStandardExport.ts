@@ -4,6 +4,7 @@ import { MappingConfig } from '@/types/database';
 import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
+import { ceilHours } from '@/lib/hours';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -345,8 +346,9 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       }
       return hourlyRate;
     };
+    // Triple Tree regel: per cel naar boven afronden op hele uren.
     const getHours = (s: WeekStats): number =>
-      s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600;
+      ceilHours(s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600);
 
     // Totaal-tab
     const totaalSheet = buildTotaalSheet({

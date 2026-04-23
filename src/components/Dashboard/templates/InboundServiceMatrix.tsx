@@ -4,6 +4,7 @@ import { ServiceReportMatrix } from '../ServiceReportMatrix';
 import { ProcessedCallRecord } from '@/types/dashboard';
 import { MappingConfig } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
+import { ceilHours } from '@/lib/hours';
 
 interface InboundServiceMatrixProps {
   data: ProcessedCallRecord[];
@@ -82,9 +83,9 @@ export function InboundServiceMatrix({
       bereikbaarheid: decided > 0 ? handled / decided : 0,
       serviceLevel: totalCalls > 0 ? fastAnswered / totalCalls : 0,
       avgDurationMin: totalCalls > 0 ? totalDuration / totalCalls / 60 : 0,
-      toeslag17: sec17 / 3600,
-      toeslagZa: secZa / 3600,
-      toeslagZo: secZo / 3600,
+      toeslag17: ceilHours(sec17 / 3600),
+      toeslagZa: ceilHours(secZa / 3600),
+      toeslagZo: ceilHours(secZo / 3600),
     };
   }, [data, handledSet, notHandledSet, serviceLevelSec]);
 

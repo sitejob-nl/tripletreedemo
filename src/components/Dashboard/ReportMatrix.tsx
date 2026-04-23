@@ -12,6 +12,7 @@ import {
   FrequencyType
 } from '@/lib/statsHelpers';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
+import { ceilHours } from '@/lib/hours';
 
 interface ReportMatrixProps {
   data: ProcessedCallRecord[];
@@ -158,27 +159,22 @@ export const ReportMatrix = ({
     return Array.from(reasons).sort();
   }, [aggregated]);
 
-  // Calculation helpers
-  // For gesprekstijd-based calculations (calls per hour, etc.)
-  const calcGesprekstijdHours = (stats: DayStats) => stats.durationSec / 3600;
-  
-  // For investment calculations, prefer logged time if available
-  // Uses daily breakdown for individual days, total for the totals column
+  // Calculation helpers. Alle uren-gerelateerde cellen worden per cel naar boven
+  // afgerond (Willem-regel 2026-04-24): kosten = ceil(uren) × tarief.
+  const calcGesprekstijdHours = (stats: DayStats) => ceilHours(stats.durationSec / 3600);
+
   const calcHours = (stats: DayStats, isTotal = false, dayName?: string) => {
     if (isTotal) {
-      // Use total logged time if available
       if (loggedTimeHours !== undefined && loggedTimeHours > 0) {
-        return loggedTimeHours;
+        return ceilHours(loggedTimeHours);
       }
     } else if (dayName && dailyLoggedHours) {
-      // Use daily logged time for specific day if available
       const dailyHours = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
       if (dailyHours !== undefined && dailyHours > 0) {
-        return dailyHours;
+        return ceilHours(dailyHours);
       }
     }
-    // Fallback to gesprekstijd
-    return stats.durationSec / 3600;
+    return ceilHours(stats.durationSec / 3600);
   };
   
   const calcSalesPerHour = (stats: DayStats, isTotal = false, dayName?: string) => {

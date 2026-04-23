@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig } from '@/types/database';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
+import { ceilHours } from '@/lib/hours';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -246,8 +247,9 @@ export async function exportInboundServiceYear(args: ExportArgs): Promise<void> 
     // 4. Build workbook
     const wb = XLSX.utils.book_new();
 
+    // Triple Tree regel: per cel naar boven afronden op hele uren.
     const getHours = (s: ServiceStats) =>
-      s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600;
+      ceilHours(s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600);
 
     const totaalSheet = buildTotaalSheet({
       weeks,
@@ -321,7 +323,7 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   };
   const serviceLevel = (s: ServiceStats) => (s.calls > 0 ? s.fastAnswered / s.calls : 0);
   const avgDurationMin = (s: ServiceStats) => (s.calls > 0 ? s.durationSec / s.calls / 60 : 0);
-  const toeslag17 = (s: ServiceStats) => s.after17Sec / 3600;
+  const toeslag17 = (s: ServiceStats) => ceilHours(s.after17Sec / 3600);
   const toeslagZa = (d: DailyServiceStats) => getHours(d.perDay.zaterdag);
   const toeslagZo = (d: DailyServiceStats) => getHours(d.perDay.zondag);
 
@@ -430,7 +432,7 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   };
   const serviceLevel = (s: ServiceStats) => (s.calls > 0 ? s.fastAnswered / s.calls : 0);
   const avgDurationMin = (s: ServiceStats) => (s.calls > 0 ? s.durationSec / s.calls / 60 : 0);
-  const toeslag17 = (s: ServiceStats) => s.after17Sec / 3600;
+  const toeslag17 = (s: ServiceStats) => ceilHours(s.after17Sec / 3600);
 
   const row = (label: string, fn: (s: ServiceStats) => number, fmt: (n: number) => string = fmtNum, target?: string): (string | number)[] => [
     label,

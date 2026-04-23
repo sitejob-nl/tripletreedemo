@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { ProcessedCallRecord } from '@/types/dashboard';
 import { MappingConfig } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
+import { ceilHours } from '@/lib/hours';
 
 interface ServiceReportMatrixProps {
   data: ProcessedCallRecord[];
@@ -96,12 +97,13 @@ export const ServiceReportMatrix = ({
   };
 
   const calcHours = (stats: ServiceDayStats, isTotal = false, dayName?: string) => {
-    if (isTotal && loggedTimeHours !== undefined && loggedTimeHours > 0) return loggedTimeHours;
+    // Triple Tree regel: per cel naar boven afronden op hele uren.
+    if (isTotal && loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
     if (!isTotal && dayName && dailyLoggedHours) {
       const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
-      if (dh !== undefined && dh > 0) return dh;
+      if (dh !== undefined && dh > 0) return ceilHours(dh);
     }
-    return stats.durationSec / 3600;
+    return ceilHours(stats.durationSec / 3600);
   };
 
   const calcInvestment = (stats: ServiceDayStats, isTotal = false, dayName?: string) => {

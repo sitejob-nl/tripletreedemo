@@ -124,7 +124,7 @@ export function KPICardsSection({
         />
         <KPICard
           title="Inzet Uren"
-          value={`${totalHours.toFixed(1)} u`}
+          value={`${totalHours} u`}
           subtext="Totale beltijd"
           icon={Users}
           variant="cyan"
@@ -165,7 +165,7 @@ export function KPICardsSection({
         />
         <KPICard
           title="Inzet Uren"
-          value={`${totalHours.toFixed(1)} u`}
+          value={`${totalHours} u`}
           subtext="Totale beltijd"
           icon={Users}
           variant="cyan"
@@ -206,7 +206,7 @@ export function KPICardsSection({
         />
         <KPICard
           title="Inzet Uren"
-          value={`${totalHours.toFixed(1)} u`}
+          value={`${totalHours} u`}
           subtext="Totale beltijd"
           icon={Users}
           variant="cyan"

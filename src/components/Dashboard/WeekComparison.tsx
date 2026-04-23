@@ -14,6 +14,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { createEmptyStats } from '@/lib/statsHelpers';
+import { ceilHours } from '@/lib/hours';
 
 import { WeekYear } from '@/hooks/useCallRecords';
 
@@ -121,8 +122,8 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
       });
   }, [selectedWeeks, weekStats, sortDirection]);
 
-  // Calculation helpers
-  const calcHours = (stats: DayStats) => stats.durationSec / 3600;
+  // Calculation helpers — Triple Tree regel: per cel naar boven afronden op hele uren.
+  const calcHours = (stats: DayStats) => ceilHours(stats.durationSec / 3600);
   const calcSalesPerHour = (stats: DayStats) => {
     const hours = calcHours(stats);
     return hours > 0 ? stats.sales / hours : 0;

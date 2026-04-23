@@ -5,6 +5,7 @@ import { ProcessedCallRecord } from '@/types/dashboard';
 import { MappingConfig, ProjectType, ReportTemplate } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { categorizeInboundResult } from '@/lib/statsHelpers';
+import { ceilHours } from '@/lib/hours';
 import { exportOutboundStandardYear } from '@/hooks/templates/outboundStandardExport';
 import { exportFlatYear } from '@/hooks/templates/flatExport';
 import { exportInboundServiceYear } from '@/hooks/templates/inboundServiceExport';
@@ -99,17 +100,18 @@ export function useExcelExport({
       return hourlyRate;
     };
 
+    // Triple Tree regel: per cel naar boven afronden op hele uren.
     const getHoursForDay = (dayName: string, durationSec: number): number => {
       if (dailyLoggedHours) {
         const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
-        if (dh !== undefined && dh > 0) return dh;
+        if (dh !== undefined && dh > 0) return ceilHours(dh);
       }
-      return durationSec / 3600;
+      return ceilHours(durationSec / 3600);
     };
 
     const getTotalHours = (totalDurationSec: number): number => {
-      if (loggedTimeHours !== undefined && loggedTimeHours > 0) return loggedTimeHours;
-      return totalDurationSec / 3600;
+      if (loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
+      return ceilHours(totalDurationSec / 3600);
     };
 
     // ============================

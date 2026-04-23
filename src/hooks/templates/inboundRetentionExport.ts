@@ -4,6 +4,7 @@ import { MappingConfig } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
+import { ceilHours } from '@/lib/hours';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -270,8 +271,9 @@ export async function exportInboundRetentionYear(args: ExportArgs): Promise<void
 
     // 4. Build workbook
     const wb = XLSX.utils.book_new();
+    // Triple Tree regel: per cel naar boven afronden op hele uren.
     const getHours = (s: RetentionStats) =>
-      s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600;
+      ceilHours(s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600);
 
     const totaalSheet = buildTotaalSheet({
       weeks,

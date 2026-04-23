@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig } from '@/types/database';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
+import { ceilHours } from '@/lib/hours';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -236,7 +237,9 @@ function buildFlatSheet(bucket: WeekBucket, title: string): XLSX.WorkSheet {
   // Historical convention: Totaal afgehandeld = negatief + sale, excludes voicemail + NAWT.
   const totalAfgehandeld = totalNegatief + totalSale;
 
-  const hours = bucket.loggedSeconds / 3600;
+  // Triple Tree regel: uren per cel naar boven afronden, productiviteitsratios
+  // gebruiken de afgeronde uren.
+  const hours = ceilHours(bucket.loggedSeconds / 3600);
   const callsPerHour = hours > 0 ? totalAfgehandeld / hours : 0;
   const salesPerHour = hours > 0 ? totalSale / hours : 0;
   const conversie = totalAfgehandeld > 0 ? totalSale / totalAfgehandeld : 0;

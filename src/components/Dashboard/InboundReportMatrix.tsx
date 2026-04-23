@@ -11,6 +11,7 @@ import {
   calcRetentionRatio,
   calcSaveRate,
 } from '@/lib/statsHelpers';
+import { ceilHours } from '@/lib/hours';
 
 interface InboundReportMatrixProps {
   data: ProcessedCallRecord[];
@@ -141,14 +142,13 @@ export const InboundReportMatrix = ({
   };
   
   const calcHours = (stats: InboundStats, dayName?: string) => {
-    // Total (no dayName): prefer loggedTimeHours
-    if (!dayName && loggedTimeHours !== undefined && loggedTimeHours > 0) return loggedTimeHours;
-    // Per day: prefer dailyLoggedHours
+    // Triple Tree regel: per cel naar boven afronden op hele uren.
+    if (!dayName && loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
     if (dayName && dailyLoggedHours) {
       const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
-      if (dh !== undefined && dh > 0) return dh;
+      if (dh !== undefined && dh > 0) return ceilHours(dh);
     }
-    return stats.durationSec / 3600;
+    return ceilHours(stats.durationSec / 3600);
   };
   const calcCallsPerHour = (stats: InboundStats, dayName?: string) => {
     const hours = calcHours(stats, dayName);

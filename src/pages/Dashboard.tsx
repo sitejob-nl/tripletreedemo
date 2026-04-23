@@ -18,6 +18,7 @@ import { OnboardingTour } from '@/components/Dashboard/OnboardingTour';
 import { useOnboardingTour } from '@/hooks/useOnboardingTour';
 import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
 import { parseDutchFloat } from '@/lib/dataProcessing';
+import { ceilHours } from '@/lib/hours';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
@@ -259,9 +260,10 @@ const Index = () => {
   const hourlyRate = currentMapping.hourly_rate;
   
   // Prefer logged time (agent login hours) over gesprekstijd (call duration)
-  const totalHours = loggedTime?.hasData 
-    ? loggedTime.totalHours 
+  const rawTotalHours = loggedTime?.hasData
+    ? loggedTime.totalHours
     : (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
+  const totalHours = ceilHours(rawTotalHours);
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
 
