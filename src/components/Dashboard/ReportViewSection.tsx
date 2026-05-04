@@ -7,8 +7,9 @@ import { InboundServiceMatrix } from './templates/InboundServiceMatrix';
 import { InboundRetentionMatrix } from './templates/InboundRetentionMatrix';
 import { FlatReportMatrix } from './templates/FlatReportMatrix';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig, ProjectType, ReportTemplate } from '@/types/database';
+import { MappingConfig, ProjectType, ReportTemplate, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
+import { overrideHasExcelData } from '@/lib/reportageOverrideUtils';
 
 interface ReportViewSectionProps {
   projectId?: string;
@@ -21,6 +22,7 @@ interface ReportViewSectionProps {
   mappingConfig?: MappingConfig;
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
+  reportageOverrides?: ReportageWeeklyOverride[];
   isLoading: boolean;
   onExportToExcel: () => void;
   isAdmin?: boolean;
@@ -37,6 +39,7 @@ export function ReportViewSection({
   mappingConfig,
   loggedTimeHours,
   dailyLoggedHours,
+  reportageOverrides = [],
   isLoading,
   onExportToExcel,
   isAdmin = false,
@@ -62,6 +65,7 @@ export function ReportViewSection({
             mappingConfig={mappingConfig}
             loggedTimeHours={loggedTimeHours}
             dailyLoggedHours={dailyLoggedHours}
+            reportageOverrides={reportageOverrides}
           />
         );
       case 'flat':
@@ -71,6 +75,7 @@ export function ReportViewSection({
             mappingConfig={mappingConfig}
             selectedWeek={selectedWeek}
             loggedTimeHours={loggedTimeHours}
+            reportageOverrides={reportageOverrides}
           />
         );
       case 'inbound_service':
@@ -83,6 +88,7 @@ export function ReportViewSection({
             mappingConfig={mappingConfig}
             loggedTimeHours={loggedTimeHours}
             dailyLoggedHours={dailyLoggedHours}
+            reportageOverrides={reportageOverrides}
             showInvestment={isAdmin}
           />
         );
@@ -96,6 +102,7 @@ export function ReportViewSection({
             mappingConfig={mappingConfig}
             loggedTimeHours={loggedTimeHours}
             dailyLoggedHours={dailyLoggedHours}
+            reportageOverrides={reportageOverrides}
           />
         );
       default: {
@@ -135,6 +142,11 @@ export function ReportViewSection({
         <h3 className="font-bold text-foreground text-sm sm:text-lg truncate flex items-center gap-2">
           <span className="truncate">{getTitle()}</span>
           {typeBadge()}
+          {overrideHasExcelData(reportageOverrides) && (
+            <span className="hidden sm:inline-flex rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+              Excel-correctie actief t/m week 15
+            </span>
+          )}
         </h3>
         <button
           onClick={onExportToExcel}
@@ -156,6 +168,7 @@ export function ReportViewSection({
           mappingConfig={mappingConfig}
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
+          reportageOverrides={reportageOverrides}
           showInvestment={isAdmin}
         />
       ) : isInboundProject && mappingConfig ? (
@@ -168,6 +181,7 @@ export function ReportViewSection({
           amountCol={mappingConfig.amount_col}
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
+          reportageOverrides={reportageOverrides}
         />
       ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
@@ -185,6 +199,7 @@ export function ReportViewSection({
           mappingConfig={mappingConfig}
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
+          reportageOverrides={reportageOverrides}
         />
       )}
     </div>

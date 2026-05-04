@@ -41,7 +41,15 @@ export default function Auth() {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (user) {
+    // When Supabase redirects back with recovery/invite/signup tokens in the hash,
+    // skip the auto-dashboard redirect — AuthLinkRedirect will route to the right
+    // password page instead.
+    const hash = window.location.hash;
+    const isAuthLinkRedirect =
+      hash.includes('type=recovery') ||
+      hash.includes('type=invite') ||
+      hash.includes('type=signup');
+    if (user && !isAuthLinkRedirect) {
       navigate('/dashboard');
     }
   }, [user, navigate]);

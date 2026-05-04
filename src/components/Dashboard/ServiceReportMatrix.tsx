@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { ceilHours } from '@/lib/hours';
+import { metricNumber, rawRecordsWithoutOverrideWeeks, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
 
 interface ServiceReportMatrixProps {
   data: ProcessedCallRecord[];
@@ -12,6 +13,7 @@ interface ServiceReportMatrixProps {
   mappingConfig: MappingConfig;
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
+  reportageOverrides?: ReportageWeeklyOverride[];
   /** Show the Investering section (admin-only — klanten zien geen kostenberekening voor klantenservice) */
   showInvestment?: boolean;
 }
@@ -19,6 +21,7 @@ interface ServiceReportMatrixProps {
 interface ServiceDayStats {
   calls: number;
   durationSec: number;
+  loggedSeconds: number;
   handled: number;
   notHandled: number;
   other: number;
@@ -29,6 +32,7 @@ interface ServiceDayStats {
 const createEmptyServiceStats = (): ServiceDayStats => ({
   calls: 0,
   durationSec: 0,
+  loggedSeconds: 0,
   handled: 0,
   notHandled: 0,
   other: 0,
@@ -44,9 +48,10 @@ export const ServiceReportMatrix = ({
   mappingConfig,
   loggedTimeHours,
   dailyLoggedHours,
+  reportageOverrides = [],
   showInvestment = false,
 }: ServiceReportMatrixProps) => {
-  const days = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
+  const days = useMemo(() => ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'], []);
 
   const handledSet = useMemo(() => new Set(mappingConfig.handled_results || []), [mappingConfig]);
   const notHandledSet = useMemo(() => new Set(mappingConfig.not_handled_results || []), [mappingConfig]);
@@ -56,7 +61,7 @@ export const ServiceReportMatrix = ({
     days.forEach((d) => (result[d] = createEmptyServiceStats()));
     result.total = createEmptyServiceStats();
 
-    data.forEach((record) => {
+    rawRecordsWithoutOverrideWeeks(data, reportageOverrides).forEach((record) => {
       const day = record.day_name?.toLowerCase() || '';
       if (!result[day]) return;
 
@@ -84,8 +89,25 @@ export const ServiceReportMatrix = ({
       }
     });
 
+    const applyOverrideMetrics = (stats: ServiceDayStats, metrics: ReportageOverrideMetrics | undefined) => {
+      const answered = metricNumber(metrics, 'answered', 0);
+      const hours = metricNumber(metrics, 'hours', 0);
+      const avgCall = metricNumber(metrics, 'avgCall', 0);
+      stats.calls += answered;
+      stats.handled += answered;
+      stats.durationSec += avgCall > 0 ? avgCall * answered : 0;
+      stats.loggedSeconds += hours > 0 ? hours * 3600 : 0;
+    };
+
+    for (const override of reportageOverrides) {
+      applyOverrideMetrics(result.total, override.metrics);
+      for (const day of REPORTAGE_DAYS) {
+        applyOverrideMetrics(result[day], override.daily_metrics?.[day]);
+      }
+    }
+
     return result;
-  }, [data, handledSet, notHandledSet]);
+  }, [data, handledSet, notHandledSet, reportageOverrides, days]);
 
   // Calculation helpers
   const getHourlyRateForDay = (dayName?: string): number => {
@@ -98,7 +120,8 @@ export const ServiceReportMatrix = ({
 
   const calcHours = (stats: ServiceDayStats, isTotal = false, dayName?: string) => {
     // Triple Tree regel: per cel naar boven afronden op hele uren.
-    if (isTotal && loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
+    if (stats.loggedSeconds > 0) return ceilHours(stats.loggedSeconds / 3600);
+    if (reportageOverrides.length === 0 && isTotal && loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
     if (!isTotal && dayName && dailyLoggedHours) {
       const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
       if (dh !== undefined && dh > 0) return ceilHours(dh);
@@ -179,7 +202,7 @@ export const ServiceReportMatrix = ({
     </tr>
   );
 
-  if (data.length === 0) {
+  if (data.length === 0 && reportageOverrides.length === 0) {
     return (
       <div className="bg-card border border-border rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center shadow-sm">
         <p className="text-sm sm:text-base text-muted-foreground">

@@ -1,8 +1,10 @@
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { metricNumber, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
+import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -133,6 +135,7 @@ interface ExportArgs {
   projectName: string;
   mappingConfig?: MappingConfig;
   year?: number;
+  reportageOverrides?: ReportageWeeklyOverride[];
   onToast?: (msg: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void;
 }
 
@@ -142,6 +145,7 @@ export async function exportInboundServiceYear(args: ExportArgs): Promise<void> 
     projectName,
     mappingConfig,
     year = new Date().getFullYear(),
+    reportageOverrides = [],
     onToast,
   } = args;
 
@@ -243,6 +247,77 @@ export async function exportInboundServiceYear(args: ExportArgs): Promise<void> 
       yearTotal.perDay[dayKey].loggedSeconds += seconds;
       yearTotal.total.loggedSeconds += seconds;
     });
+
+    const yearOverrides = await fetchYearReportageOverrides(projectId, year, 'inbound_service', reportageOverrides);
+    const overrideWeeks = new Set(yearOverrides.map((override) => override.week_number));
+    if (overrideWeeks.size > 0) {
+      weeks.forEach((w) => (weekStats[w] = emptyWeek()));
+      Object.assign(yearTotal, emptyWeek());
+
+      records.forEach((record) => {
+        const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
+        if (!date || getISOWeekYear(date) !== year) return;
+        const week = record.week_number ?? null;
+        if (!week || overrideWeeks.has(week) || !weekStats[week]) return;
+        const dayKey = getDayKey(date);
+        if (!dayKey) return;
+        const resultName = record.resultaat ??
+          ((record.raw_data?.['bc_result_naam'] as string) ?? 'Onbekend');
+        const durationSec = Number(record.gesprekstijd_sec) || 0;
+        const isHandled = handledSet.has(resultName);
+        const isNotHandled = notHandledSet.has(resultName);
+        const beltijd = record.beltijd ?? (record.raw_data?.['bc_beltijd'] as string | undefined) ?? '';
+        const hourMatch = beltijd.match(/^(\d{1,2}):/);
+        const hour = hourMatch ? parseInt(hourMatch[1], 10) : NaN;
+        const isAfter17 = !isNaN(hour) && hour >= 17;
+        [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {
+          s.calls++;
+          s.durationSec += durationSec;
+          if (isHandled) s.handled++;
+          else if (isNotHandled) s.notHandled++;
+          if (durationSec > 0 && durationSec < serviceLevelSec) s.fastAnswered++;
+          if (isAfter17) s.after17Sec += durationSec;
+        });
+      });
+
+      (loggedRows ?? []).forEach((row) => {
+        const date = parseBasiCallDate(row.date);
+        if (!date || getISOWeekYear(date) !== year) return;
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        const yearStartUtc = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const week = Math.ceil(((d.getTime() - yearStartUtc.getTime()) / 86400000 + 1) / 7);
+        if (overrideWeeks.has(week) || !weekStats[week]) return;
+        const dayKey = getDayKey(date);
+        if (!dayKey) return;
+        const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
+        weekStats[week].perDay[dayKey].loggedSeconds += seconds;
+        weekStats[week].total.loggedSeconds += seconds;
+        yearTotal.perDay[dayKey].loggedSeconds += seconds;
+        yearTotal.total.loggedSeconds += seconds;
+      });
+
+      const applyOverrideMetrics = (stats: ServiceStats, metrics: ReportageOverrideMetrics | undefined) => {
+        const calls = metricNumber(metrics, 'answered', 0);
+        const hours = metricNumber(metrics, 'hours', 0);
+        const avgCall = metricNumber(metrics, 'avgCall', 0);
+        stats.calls += calls;
+        stats.handled += calls;
+        stats.fastAnswered += metricNumber(metrics, 'answeredUnder60', 0);
+        stats.durationSec += avgCall > 0 ? avgCall * calls : 0;
+        stats.loggedSeconds += hours > 0 ? hours * 3600 : 0;
+      };
+
+      for (const override of yearOverrides) {
+        if (!weekStats[override.week_number]) continue;
+        applyOverrideMetrics(weekStats[override.week_number].total, override.metrics);
+        applyOverrideMetrics(yearTotal.total, override.metrics);
+        for (const day of REPORTAGE_DAYS) {
+          applyOverrideMetrics(weekStats[override.week_number].perDay[day], override.daily_metrics?.[day]);
+          applyOverrideMetrics(yearTotal.perDay[day], override.daily_metrics?.[day]);
+        }
+      }
+    }
 
     // 4. Build workbook
     const wb = XLSX.utils.book_new();

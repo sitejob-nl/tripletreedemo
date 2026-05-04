@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ProcessedCallRecord, DayStats } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import {
   createEmptyStats,
@@ -13,6 +13,13 @@ import {
 } from '@/lib/statsHelpers';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { ceilHours } from '@/lib/hours';
+import {
+  deriveCalls,
+  deriveUnreachable,
+  metricNumber,
+  rawRecordsWithoutOverrideWeeks,
+  REPORTAGE_DAYS,
+} from '@/lib/reportageOverrideUtils';
 
 interface ReportMatrixProps {
   data: ProcessedCallRecord[];
@@ -26,6 +33,7 @@ interface ReportMatrixProps {
   loggedTimeHours?: number;
   /** Daily breakdown of logged hours per weekday */
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
+  reportageOverrides?: ReportageWeeklyOverride[];
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -44,12 +52,13 @@ export const ReportMatrix = ({
   freqCol = 'frequentie',
   mappingConfig,
   loggedTimeHours,
-  dailyLoggedHours
+  dailyLoggedHours,
+  reportageOverrides = []
 }: ReportMatrixProps) => {
   const [showNegativeArgumented, setShowNegativeArgumented] = useState(false);
   const [showNegativeNotArgumented, setShowNegativeNotArgumented] = useState(false);
 
-  const days = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
+  const days = useMemo(() => ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'], []);
 
   // Aggregate data by day
   const aggregated = useMemo(() => {
@@ -57,7 +66,7 @@ export const ReportMatrix = ({
     days.forEach((d) => (result[d] = createEmptyStats()));
     result.total = createEmptyStats();
 
-    data.forEach((record) => {
+    rawRecordsWithoutOverrideWeeks(data, reportageOverrides).forEach((record) => {
       const day = record.day_name?.toLowerCase() || '';
       if (!result[day]) return;
 
@@ -139,8 +148,46 @@ export const ReportMatrix = ({
       }
     });
 
+    const applyOverrideMetrics = (stats: DayStats, metrics: ReportageOverrideMetrics | undefined) => {
+      const sales = metricNumber(metrics, 'sales', 0);
+      const recurring = metricNumber(metrics, 'recurring', 0);
+      const oneoff = metricNumber(metrics, 'oneoff', 0);
+      const annualValue = metricNumber(metrics, 'annualValue', 0);
+      const annualValueRecurring = metricNumber(metrics, 'annualValueRecurring', 0);
+      const hours = metricNumber(metrics, 'hours', 0);
+      const calls = deriveCalls(metrics);
+      const unreachable = deriveUnreachable(metrics);
+      const annualValueOneoff = Math.max(0, annualValue - annualValueRecurring);
+      const negative = Math.max(0, calls - sales - unreachable);
+
+      stats.calls += calls;
+      stats.sales += sales;
+      stats.recurring += recurring;
+      stats.oneoff += oneoff;
+      stats.annualValue += annualValue;
+      stats.annualValueRecurring += annualValueRecurring;
+      stats.annualValueOneoff += annualValueOneoff;
+      stats.durationSec += hours > 0 ? hours * 3600 : 0;
+      stats.totalAttempts += calls;
+      stats.totalAmount += sales > 0 ? annualValue / sales : 0;
+      stats.unreachableCount += unreachable;
+      stats.negativeCount += negative;
+      stats.negativeNotArgumentedCount += negative;
+      stats.freqBreakdown.yearly.count += recurring;
+      stats.freqBreakdown.yearly.annualValue += annualValueRecurring;
+      stats.freqBreakdown.oneoff.count += oneoff;
+      stats.freqBreakdown.oneoff.annualValue += annualValueOneoff;
+    };
+
+    for (const override of reportageOverrides) {
+      applyOverrideMetrics(result.total, override.metrics);
+      for (const day of REPORTAGE_DAYS) {
+        applyOverrideMetrics(result[day], override.daily_metrics?.[day]);
+      }
+    }
+
     return result;
-  }, [data, amountCol, freqCol]);
+  }, [data, amountCol, freqCol, mappingConfig, reportageOverrides, days]);
 
   // Get all unique negative reasons per category
   const allNegativeArgumentedReasons = useMemo(() => {
@@ -165,10 +212,10 @@ export const ReportMatrix = ({
 
   const calcHours = (stats: DayStats, isTotal = false, dayName?: string) => {
     if (isTotal) {
-      if (loggedTimeHours !== undefined && loggedTimeHours > 0) {
+      if (reportageOverrides.length === 0 && loggedTimeHours !== undefined && loggedTimeHours > 0) {
         return ceilHours(loggedTimeHours);
       }
-    } else if (dayName && dailyLoggedHours) {
+    } else if (reportageOverrides.length === 0 && dayName && dailyLoggedHours) {
       const dailyHours = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
       if (dailyHours !== undefined && dailyHours > 0) {
         return ceilHours(dailyHours);
@@ -342,7 +389,7 @@ export const ReportMatrix = ({
     </tr>
   );
 
-  if (data.length === 0) {
+  if (data.length === 0 && reportageOverrides.length === 0) {
     return (
       <div className="bg-card border border-border rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center shadow-sm">
         <p className="text-sm sm:text-base text-muted-foreground">

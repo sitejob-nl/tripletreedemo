@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
+import { metricNumber, rawRecordsWithoutOverrideWeeks } from '@/lib/reportageOverrideUtils';
 
 interface FlatReportMatrixProps {
   data: ProcessedCallRecord[];
   mappingConfig?: MappingConfig;
   selectedWeek: string | number;
   loggedTimeHours?: number;
+  reportageOverrides?: ReportageWeeklyOverride[];
 }
 
 type RowType = 'sale' | 'negatief' | 'voicemail' | 'nawt';
@@ -30,14 +32,15 @@ export function FlatReportMatrix({
   mappingConfig,
   selectedWeek,
   loggedTimeHours,
+  reportageOverrides = [],
 }: FlatReportMatrixProps) {
-  const { rows, totalNegatief, totalSale, totalVoicemail, totalNawt, totalAfgehandeld } = useMemo(() => {
+  const { rows, totalNegatief, totalSale, totalVoicemail, totalNawt, totalAfgehandeld, overrideHours } = useMemo(() => {
     const counts = new Map<string, { count: number; type: RowType }>();
     const saleSet = new Set(mappingConfig?.sale_results ?? []);
     const voicemailSet = new Set(mappingConfig?.flat_voicemail_results ?? []);
     const nawtSet = new Set(mappingConfig?.flat_nawt_results ?? []);
 
-    for (const record of data) {
+    for (const record of rawRecordsWithoutOverrideWeeks(data, reportageOverrides)) {
       const rawData = (record as unknown as { raw_data?: Record<string, unknown> }).raw_data ?? {};
       const resultName =
         (rawData['bc_result_naam'] as string) ??
@@ -55,6 +58,37 @@ export function FlatReportMatrix({
         existing.count++;
       } else {
         counts.set(resultName, { count: 1, type });
+      }
+    }
+
+    let overrideHoursTotal = 0;
+    for (const override of reportageOverrides) {
+      overrideHoursTotal += metricNumber(override.metrics, 'hours', 0);
+      for (const row of override.result_rows ?? []) {
+        const typeKey = row.type.toLowerCase();
+        let type: RowType;
+        if (typeKey.includes('sale') || typeKey.includes('positief')) type = 'sale';
+        else if (row.label.toLowerCase().includes('voicemail')) type = 'voicemail';
+        else if (row.label.toLowerCase().includes('nawt')) type = 'nawt';
+        else type = 'negatief';
+        const existing = counts.get(row.label);
+        if (existing) {
+          existing.count += row.count;
+        } else {
+          counts.set(row.label, { count: row.count, type });
+        }
+      }
+      const voicemail = metricNumber(override.metrics, 'voicemail', 0);
+      if (voicemail > 0) {
+        const existing = counts.get('Max voicemail');
+        if (existing) existing.count += voicemail;
+        else counts.set('Max voicemail', { count: voicemail, type: 'voicemail' });
+      }
+      const nawt = metricNumber(override.metrics, 'nawt', 0);
+      if (nawt > 0) {
+        const existing = counts.get('NAWT fout');
+        if (existing) existing.count += nawt;
+        else counts.set('NAWT fout', { count: nawt, type: 'nawt' });
       }
     }
 
@@ -81,10 +115,11 @@ export function FlatReportMatrix({
       totalNawt: nawt,
       // Historical convention: Totaal afgehandeld = negatief + sale, excluding voicemail and NAWT.
       totalAfgehandeld: negatief + sale,
+      overrideHours: overrideHoursTotal > 0 ? overrideHoursTotal : null,
     };
-  }, [data, mappingConfig]);
+  }, [data, mappingConfig, reportageOverrides]);
 
-  if (data.length === 0) {
+  if (data.length === 0 && reportageOverrides.length === 0) {
     return (
       <div className="bg-card border border-border rounded-xl p-8 text-center shadow-sm">
         <p className="text-sm text-muted-foreground">
@@ -94,7 +129,7 @@ export function FlatReportMatrix({
     );
   }
 
-  const hours = loggedTimeHours ?? 0;
+  const hours = overrideHours ?? loggedTimeHours ?? 0;
   const callsPerHour = hours > 0 ? totalAfgehandeld / hours : 0;
   const salesPerHour = hours > 0 ? totalSale / hours : 0;
   const conversie = totalAfgehandeld > 0 ? totalSale / totalAfgehandeld : 0;

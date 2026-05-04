@@ -1,10 +1,12 @@
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
 import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { deriveCalls, deriveUnreachable, metricNumber, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
+import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -166,6 +168,7 @@ interface ExportArgs {
   vatRate: number;
   mappingConfig?: MappingConfig;
   year?: number;
+  reportageOverrides?: ReportageWeeklyOverride[];
   onToast?: (msg: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void;
 }
 
@@ -177,6 +180,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
     vatRate,
     mappingConfig,
     year = new Date().getFullYear(),
+    reportageOverrides = [],
     onToast,
   } = args;
 
@@ -301,6 +305,97 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       yearTotal.perDay[dayKey].loggedSeconds += seconds;
       yearTotal.total.loggedSeconds += seconds;
     });
+
+    const yearOverrides = await fetchYearReportageOverrides(projectId, year, 'outbound_standard', reportageOverrides);
+    const overrideWeeks = new Set(yearOverrides.map((override) => override.week_number));
+    if (overrideWeeks.size > 0) {
+      weeks.forEach((week) => {
+        weekStats[week] = emptyWeek();
+      });
+      Object.assign(yearTotal, emptyWeek());
+
+      const applyOverrideMetrics = (stats: WeekStats, metrics: ReportageOverrideMetrics | undefined) => {
+        const sales = metricNumber(metrics, 'sales', 0);
+        const recurring = metricNumber(metrics, 'recurring', 0);
+        const oneoff = metricNumber(metrics, 'oneoff', 0);
+        const annualValue = metricNumber(metrics, 'annualValue', 0);
+        const annualValueRecurring = metricNumber(metrics, 'annualValueRecurring', 0);
+        const hours = metricNumber(metrics, 'hours', 0);
+        const calls = deriveCalls(metrics);
+        stats.calls += calls;
+        stats.sales += sales;
+        stats.recurring += recurring;
+        stats.oneoff += oneoff;
+        stats.annualValue += annualValue;
+        stats.annualValueRecurring += annualValueRecurring;
+        stats.durationSec += hours > 0 ? hours * 3600 : 0;
+        stats.loggedSeconds += hours > 0 ? hours * 3600 : 0;
+        stats.unreachable += deriveUnreachable(metrics);
+        stats.freqCounts.yearly += recurring;
+        stats.freqCounts.oneoff += oneoff;
+      };
+
+      records.forEach((record) => {
+        const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
+        if (!date || getISOWeekYear(date) !== year) return;
+        const week = record.week_number ?? null;
+        if (!week || overrideWeeks.has(week) || !weekStats[week]) return;
+        const dayKey = getDayKey(date);
+        if (!dayKey) return;
+        const rawData = record.raw_data ?? {};
+        const resultName = record.resultaat ?? (rawData['bc_result_naam'] as string) ?? 'Onbekend';
+        const isSale = mappingConfig?.sale_results?.includes(resultName) ?? false;
+        const isUnreachable = mappingConfig?.unreachable_results?.includes(resultName) ?? false;
+        const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequentie'] ?? rawData['Frequentie'];
+        const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
+        const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
+        const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
+        const annualValue = isSale ? amount * freq.multiplier : 0;
+        [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {
+          s.calls++;
+          s.durationSec += Number(record.gesprekstijd_sec) || 0;
+          if (isUnreachable) s.unreachable++;
+          if (isSale) {
+            s.sales++;
+            s.annualValue += annualValue;
+            s.freqCounts[freq.type]++;
+            if (freq.isOneOff) s.oneoff++;
+            else {
+              s.recurring++;
+              s.annualValueRecurring += annualValue;
+            }
+          }
+        });
+      });
+
+      (loggedRows ?? []).forEach((row) => {
+        const date = parseBasiCallDate(row.date);
+        if (!date || getISOWeekYear(date) !== year) return;
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        const yearStartUtc = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const week = Math.ceil(((d.getTime() - yearStartUtc.getTime()) / 86400000 + 1) / 7);
+        if (overrideWeeks.has(week) || !weekStats[week]) return;
+        const dayKey = getDayKey(date);
+        if (!dayKey) return;
+        const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
+        weekStats[week].perDay[dayKey].loggedSeconds += seconds;
+        weekStats[week].total.loggedSeconds += seconds;
+        yearTotal.perDay[dayKey].loggedSeconds += seconds;
+        yearTotal.total.loggedSeconds += seconds;
+      });
+
+      for (const override of yearOverrides) {
+        if (!weekStats[override.week_number]) continue;
+        applyOverrideMetrics(weekStats[override.week_number].total, override.metrics);
+        applyOverrideMetrics(yearTotal.total, override.metrics);
+        for (const day of REPORTAGE_DAYS) {
+          const dailyMetrics = override.daily_metrics?.[day];
+          applyOverrideMetrics(weekStats[override.week_number].perDay[day], dailyMetrics);
+          applyOverrideMetrics(yearTotal.perDay[day], dailyMetrics);
+        }
+      }
+    }
 
     // 6. Build per-week voorraad snapshots.
     // We don't persist weekly snapshots of batches.handled in DB, so approximate:

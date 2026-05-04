@@ -2,9 +2,10 @@ import { useMemo } from 'react';
 import { Target, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { ServiceReportMatrix } from '../ServiceReportMatrix';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { ceilHours } from '@/lib/hours';
+import { metricNumber } from '@/lib/reportageOverrideUtils';
 
 interface InboundServiceMatrixProps {
   data: ProcessedCallRecord[];
@@ -15,6 +16,7 @@ interface InboundServiceMatrixProps {
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
   showInvestment?: boolean;
+  reportageOverrides?: ReportageWeeklyOverride[];
 }
 
 // Variant 3 of the historical rapportages (Sligro Tintelingen, NL Tour Rides,
@@ -38,6 +40,7 @@ export function InboundServiceMatrix({
   loggedTimeHours,
   dailyLoggedHours,
   showInvestment = false,
+  reportageOverrides = [],
 }: InboundServiceMatrixProps) {
   const targets = mappingConfig?.service_targets;
   const targetBereikbaarheid = targets?.bereikbaarheid ?? 0.95;
@@ -48,6 +51,28 @@ export function InboundServiceMatrix({
   const notHandledSet = useMemo(() => new Set(mappingConfig?.not_handled_results ?? []), [mappingConfig]);
 
   const { bereikbaarheid, serviceLevel, avgDurationMin, toeslag17, toeslagZa, toeslagZo } = useMemo(() => {
+    if (reportageOverrides.length > 0) {
+      const totals = reportageOverrides.reduce(
+        (acc, override) => {
+          acc.answered += metricNumber(override.metrics, 'answered', 0);
+          acc.offered += metricNumber(override.metrics, 'offered', 0);
+          acc.fast += metricNumber(override.metrics, 'answeredUnder60', 0);
+          acc.durationWeighted += metricNumber(override.metrics, 'avgCall', 0) * metricNumber(override.metrics, 'answered', 0);
+          acc.hours += metricNumber(override.metrics, 'hours', 0);
+          return acc;
+        },
+        { answered: 0, offered: 0, fast: 0, durationWeighted: 0, hours: 0 },
+      );
+      return {
+        bereikbaarheid: totals.offered > 0 ? totals.answered / totals.offered : 0,
+        serviceLevel: totals.answered > 0 ? totals.fast / totals.answered : 0,
+        avgDurationMin: totals.answered > 0 ? totals.durationWeighted / totals.answered / 60 : 0,
+        toeslag17: 0,
+        toeslagZa: 0,
+        toeslagZo: 0,
+      };
+    }
+
     let handled = 0;
     let notHandled = 0;
     let totalCalls = 0;
@@ -87,7 +112,7 @@ export function InboundServiceMatrix({
       toeslagZa: ceilHours(secZa / 3600),
       toeslagZo: ceilHours(secZo / 3600),
     };
-  }, [data, handledSet, notHandledSet, serviceLevelSec]);
+  }, [data, handledSet, notHandledSet, serviceLevelSec, reportageOverrides]);
 
   return (
     <div className="space-y-4">
@@ -100,6 +125,7 @@ export function InboundServiceMatrix({
           mappingConfig={mappingConfig}
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
+          reportageOverrides={reportageOverrides}
           showInvestment={showInvestment}
         />
       )}

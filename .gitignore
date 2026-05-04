@@ -17,6 +17,9 @@ dist-ssr
 .env.*
 !.env.example
 
+# Supabase CLI local link/cache metadata
+supabase/.temp/
+
 # Local reference Excel templates / rapportages (not part of source)
 rapportages/
 

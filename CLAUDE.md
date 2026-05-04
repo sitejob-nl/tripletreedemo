@@ -14,7 +14,7 @@
 - **Export**: xlsx-js-style (Excel-weekrapportage per project_type)
 - **Hosting frontend**: Vercel, CNAME `app.ttcallcenters.nl` → Vercel (DNS bij Meetwerk ICT)
 - **DB**: Supabase project `tvsdbztjqksxybxjwtrf` (Frankfurt eu-central-2, Postgres 17.6)
-- **Sync**: Node.js script op VPS Hetzner `85.10.132.126` (user `sitejob-tt`), **niet in deze repo** — `/opt/basicall-sync/sync.js`, cron nachtelijks (zie §Status)
+- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`, cron nachtelijks (zie §Status)
 - **Origin**: project is extern gescaffold, eerste live-schema wijzigingen belandden daardoor niet allemaal in `supabase/migrations/`. Altijd live schema checken via MCP voor je lokale migrations baseert op wat er in de repo staat.
 
 ## Architectuur
@@ -112,7 +112,16 @@ cd /opt/basicall-sync
 tail -n 200 /var/log/basicall-sync.log   # pad verifiëren
 ```
 
-**Script staat niet in GitHub.** Alle wijzigingen aan sync-logica gebeuren rechtstreeks op de VPS. Overweeg handmatige backup/mirror naar repo na overhandiging.
+**Scriptbron staat nu in GitHub** onder `scripts/basicall-sync/sync.js`; productie blijft draaien vanaf `/opt/basicall-sync/sync.js` op de VPS. Wijzig sync-logica eerst in de repo, deploy daarna naar de VPS en houd noodwijzigingen op de VPS direct gespiegeld terug naar GitHub.
+
+Repo-side deploy:
+
+```bash
+cd scripts/basicall-sync
+./deploy.sh              # dry-run
+./deploy.sh --apply      # rsync + npm install --omit=dev op VPS
+./deploy.sh --restart    # --apply + handmatige node sync.js test
+```
 
 ## Contactpersonen
 
@@ -164,7 +173,7 @@ Zie [AUDIT-2026-04-16.md](./AUDIT-2026-04-16.md) + [AUDIT-VPS-SYNC-2026-04-16.md
 3. ~~**Mapping-configs met silent €0**~~ — **vandaag gefixt**: migration `20260416120000_fix_mapping_configs.sql` + `mapping_issues`-view + guardrail in `MappingTool.tsx`.
 4. **`Project.getIngelogdeTijden` 500-errors** blijven — BasiCall-side, gebeurt op dagen zonder logged agents. Retry-logic vangt op; geoptimaliseerd kan via no-retry-op-500.
 5. **Silent token-failure in nachtsync** — VPS-script schrijft geen `sync_logs` als token invalideert tijdens nachtsync (alleen bij handmatige sync_jobs). Fix = 6 regels; zie AUDIT-VPS-SYNC §B.2.
-6. **VPS-script staat niet in Git** — wijziging verloren bij server-crash. Zie AUDIT-VPS-SYNC §B.7.
+6. **VPS/repo sync-discipline** — bron staat nu in `scripts/basicall-sync/sync.js`; houd `/opt/basicall-sync/sync.js` en de repo-copy gelijk na elke deploy of noodwijziging. Zie AUDIT-VPS-SYNC §B.7.
 7. **Geen tests** in frontend.
 8. **Mapping-tool zelfstandig** — niet formeel getest met een gloednieuw project. Amazone kinderen + Omroep MAX zijn de eerste echte casus.
 

@@ -32,9 +32,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 import { useExcelExport } from '@/hooks/useExcelExport';
+import { useReportageOverrides } from '@/hooks/useReportageOverrides';
 import { Navigate } from 'react-router-dom';
 import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { errorLogger } from '@/lib/errorLogger';
+
+const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis'];
 
 const Index = () => {
   const [selectedProjectKey, setSelectedProjectKeyState] = useState<string>('');
@@ -97,9 +100,6 @@ const Index = () => {
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
 
-  // Project-data query keys that should be invalidated on project switch
-  const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis'];
-
   // Atomic project switch: cancel in-flight, remove cache, reset UI state, refetch
   const setSelectedProjectKey = useCallback((newProjectKey: string) => {
     if (newProjectKey === selectedProjectKey) {
@@ -152,7 +152,7 @@ const Index = () => {
         setSelectedWeek(availableWeeks[0].value);
       }
     }
-  }, [availableWeeks, dateFilterType]);
+  }, [availableWeeks, dateFilterType, selectedWeek]);
 
   // Fetch KPI aggregates (totals over ALL records, not paginated)
   const { data: kpiAggregates, isLoading: kpiLoading } = useKPIAggregates({
@@ -173,6 +173,15 @@ const Index = () => {
     data: reportMatrixData = [], 
     isLoading: reportMatrixLoading 
   } = useReportMatrixData(currentProject, dateFilter);
+
+  const {
+    data: reportageOverrides = [],
+    isLoading: reportageOverridesLoading,
+  } = useReportageOverrides({
+    projectId: currentProject?.id,
+    selectedWeek,
+    dateFilterType,
+  });
 
   // Fetch ALL records for analysis views
   const { 
@@ -344,6 +353,7 @@ const Index = () => {
     projectType,
     projectId: currentProject?.id,
     reportTemplate: currentProject?.report_template ?? null,
+    reportageOverrides,
   });
 
   const handleSaveMapping = async (projectId: string, hourlyRate: number, mappingConfig: MappingConfig, projectType: ProjectType, hoursFactor?: number) => {
@@ -569,7 +579,8 @@ const Index = () => {
                       mappingConfig={currentProject?.mapping_config}
                       loggedTimeHours={loggedTime?.hasData ? loggedTime.totalHours : undefined}
                       dailyLoggedHours={loggedTime?.dailyHours}
-                      isLoading={reportMatrixLoading}
+                      reportageOverrides={reportageOverrides}
+                      isLoading={reportMatrixLoading || reportageOverridesLoading}
                       onExportToExcel={handleExportToExcel}
                       isAdmin={isDbAdmin}
                     />

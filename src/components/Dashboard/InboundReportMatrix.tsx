@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ProcessedCallRecord, InboundStats } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import {
@@ -12,6 +12,7 @@ import {
   calcSaveRate,
 } from '@/lib/statsHelpers';
 import { ceilHours } from '@/lib/hours';
+import { metricNumber, rawRecordsWithoutOverrideWeeks, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
 
 interface InboundReportMatrixProps {
   data: ProcessedCallRecord[];
@@ -22,6 +23,7 @@ interface InboundReportMatrixProps {
   amountCol?: string;
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
+  reportageOverrides?: ReportageWeeklyOverride[];
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -40,11 +42,12 @@ export const InboundReportMatrix = ({
   amountCol = 'termijnbedrag',
   loggedTimeHours,
   dailyLoggedHours,
+  reportageOverrides = [],
 }: InboundReportMatrixProps) => {
   const [showLostReasons, setShowLostReasons] = useState(false);
   const [showRetainedReasons, setShowRetainedReasons] = useState(false);
 
-  const days = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
+  const days = useMemo(() => ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'], []);
 
   // Aggregate data by day for inbound
   const aggregated = useMemo(() => {
@@ -52,7 +55,7 @@ export const InboundReportMatrix = ({
     days.forEach((d) => (result[d] = createEmptyInboundStats()));
     result.total = createEmptyInboundStats();
 
-    data.forEach((record) => {
+    rawRecordsWithoutOverrideWeeks(data, reportageOverrides).forEach((record) => {
       const day = record.day_name?.toLowerCase() || '';
       if (!result[day]) return;
 
@@ -111,8 +114,31 @@ export const InboundReportMatrix = ({
       }
     });
 
+    const applyOverrideMetrics = (stats: InboundStats, metrics: ReportageOverrideMetrics | undefined) => {
+      const calls = metricNumber(metrics, 'answered', 0);
+      const retained = metricNumber(metrics, 'retained', 0) + metricNumber(metrics, 'retainedOther', 0);
+      const partial = metricNumber(metrics, 'retainedPartial', 0);
+      const retainedValue = metricNumber(metrics, 'retainedValue', 0);
+      const hours = metricNumber(metrics, 'hours', 0);
+      stats.calls += calls;
+      stats.retained += retained;
+      stats.partialSuccess += partial;
+      stats.retainedValue += retainedValue;
+      stats.partialSuccessValue += 0;
+      stats.pending += Math.max(0, calls - retained - partial);
+      stats.durationSec += hours > 0 ? hours * 3600 : 0;
+      if (retained > 0) stats.retainedReasons['Excel: behouden'] = (stats.retainedReasons['Excel: behouden'] || 0) + retained;
+    };
+
+    for (const override of reportageOverrides) {
+      applyOverrideMetrics(result.total, override.metrics);
+      for (const day of REPORTAGE_DAYS) {
+        applyOverrideMetrics(result[day], override.daily_metrics?.[day]);
+      }
+    }
+
     return result;
-  }, [data, amountCol, mappingConfig]);
+  }, [data, amountCol, mappingConfig, reportageOverrides, days]);
 
   // Get all unique reasons
   const allLostReasons = useMemo(() => {
@@ -143,8 +169,8 @@ export const InboundReportMatrix = ({
   
   const calcHours = (stats: InboundStats, dayName?: string) => {
     // Triple Tree regel: per cel naar boven afronden op hele uren.
-    if (!dayName && loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
-    if (dayName && dailyLoggedHours) {
+    if (reportageOverrides.length === 0 && !dayName && loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
+    if (reportageOverrides.length === 0 && dayName && dailyLoggedHours) {
       const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
       if (dh !== undefined && dh > 0) return ceilHours(dh);
     }
@@ -266,7 +292,7 @@ export const InboundReportMatrix = ({
     </tr>
   );
 
-  if (data.length === 0) {
+  if (data.length === 0 && reportageOverrides.length === 0) {
     return (
       <div className="bg-card border border-border rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center shadow-sm">
         <p className="text-sm sm:text-base text-muted-foreground">

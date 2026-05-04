@@ -1,8 +1,10 @@
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { metricNumber } from '@/lib/reportageOverrideUtils';
+import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
 
 type RawRecord = {
   basicall_record_id: number;
@@ -77,6 +79,7 @@ interface ExportArgs {
   projectName: string;
   mappingConfig?: MappingConfig;
   year?: number;
+  reportageOverrides?: ReportageWeeklyOverride[];
   onToast?: (msg: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void;
 }
 
@@ -86,6 +89,7 @@ export async function exportFlatYear(args: ExportArgs): Promise<void> {
     projectName,
     mappingConfig,
     year = new Date().getFullYear(),
+    reportageOverrides = [],
     onToast,
   } = args;
 
@@ -170,6 +174,61 @@ export async function exportFlatYear(args: ExportArgs): Promise<void> {
       const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
       weekBuckets[week].loggedSeconds += seconds;
     });
+
+    const yearOverrides = await fetchYearReportageOverrides(projectId, year, 'flat', reportageOverrides);
+    const overrideWeeks = new Set(yearOverrides.map((override) => override.week_number));
+    if (overrideWeeks.size > 0) {
+      weeks.forEach((w) => (weekBuckets[w] = { results: new Map(), loggedSeconds: 0 }));
+
+      records.forEach((record) => {
+        const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
+        if (!date || getISOWeekYear(date) !== year) return;
+        const week = record.week_number ?? null;
+        if (!week || overrideWeeks.has(week) || !weekBuckets[week]) return;
+        const rawData = record.raw_data ?? {};
+        const resultName =
+          record.resultaat ??
+          (rawData['bc_result_naam'] as string) ??
+          'Onbekend';
+        const kind = classify(resultName);
+        const existing = weekBuckets[week].results.get(resultName);
+        if (existing) existing.count++;
+        else weekBuckets[week].results.set(resultName, { count: 1, kind });
+      });
+
+      (loggedRows ?? []).forEach((row) => {
+        const date = parseBasiCallDate(row.date);
+        if (!date || getISOWeekYear(date) !== year) return;
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        const yearStartUtc = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const week = Math.ceil(((d.getTime() - yearStartUtc.getTime()) / 86400000 + 1) / 7);
+        if (overrideWeeks.has(week) || !weekBuckets[week]) return;
+        const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
+        weekBuckets[week].loggedSeconds += seconds;
+      });
+
+      for (const override of yearOverrides) {
+        const bucket = weekBuckets[override.week_number];
+        if (!bucket) continue;
+        for (const row of override.result_rows ?? []) {
+          const typeKey = row.type.toLowerCase();
+          let kind: ResultKind;
+          if (typeKey.includes('sale') || typeKey.includes('positief')) kind = 'sale';
+          else if (row.label.toLowerCase().includes('voicemail')) kind = 'voicemail';
+          else if (row.label.toLowerCase().includes('nawt')) kind = 'nawt';
+          else kind = 'negatief';
+          const existing = bucket.results.get(row.label);
+          if (existing) existing.count += row.count;
+          else bucket.results.set(row.label, { count: row.count, kind });
+        }
+        const voicemail = metricNumber(override.metrics, 'voicemail', 0);
+        if (voicemail > 0) bucket.results.set('Max voicemail', { count: voicemail, kind: 'voicemail' });
+        const nawt = metricNumber(override.metrics, 'nawt', 0);
+        if (nawt > 0) bucket.results.set('NAWT fout', { count: nawt, kind: 'nawt' });
+        bucket.loggedSeconds = metricNumber(override.metrics, 'hours', 0) * 3600;
+      }
+    }
 
     // 4. Build workbook: Totaal first, then a sheet per non-empty week
     const wb = XLSX.utils.book_new();

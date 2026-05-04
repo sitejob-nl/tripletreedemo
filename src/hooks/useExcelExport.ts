@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import * as XLSX from 'xlsx-js-style';
 import { useToast } from '@/hooks/use-toast';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig, ProjectType, ReportTemplate } from '@/types/database';
+import { MappingConfig, ProjectType, ReportTemplate, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { categorizeInboundResult } from '@/lib/statsHelpers';
 import { ceilHours } from '@/lib/hours';
@@ -23,6 +23,7 @@ interface UseExcelExportParams {
   projectType?: ProjectType;
   projectId?: string;
   reportTemplate?: ReportTemplate | null;
+  reportageOverrides?: ReportageWeeklyOverride[];
 }
 
 export function useExcelExport({
@@ -31,6 +32,7 @@ export function useExcelExport({
   projectType = 'outbound',
   projectId,
   reportTemplate,
+  reportageOverrides = [],
 }: UseExcelExportParams) {
   const { toast } = useToast();
 
@@ -46,6 +48,7 @@ export function useExcelExport({
         hourlyRate,
         vatRate,
         mappingConfig,
+        reportageOverrides,
         onToast: (msg) => toast(msg),
       });
       return;
@@ -56,6 +59,7 @@ export function useExcelExport({
         projectId,
         projectName,
         mappingConfig,
+        reportageOverrides,
         onToast: (msg) => toast(msg),
       });
       return;
@@ -66,6 +70,7 @@ export function useExcelExport({
         projectId,
         projectName,
         mappingConfig,
+        reportageOverrides,
         onToast: (msg) => toast(msg),
       });
       return;
@@ -76,6 +81,7 @@ export function useExcelExport({
         projectId,
         projectName,
         mappingConfig,
+        reportageOverrides,
         onToast: (msg) => toast(msg),
       });
       return;
@@ -393,7 +399,7 @@ export function useExcelExport({
         });
       }
     }
-  }, [data, hourlyRate, selectedWeek, projectName, toast, mappingConfig, vatRate, loggedTimeHours, dailyLoggedHours, projectType, projectId, reportTemplate]);
+  }, [data, hourlyRate, selectedWeek, projectName, toast, mappingConfig, vatRate, loggedTimeHours, dailyLoggedHours, projectType, projectId, reportTemplate, reportageOverrides]);
 
   return { handleExportToExcel };
 }

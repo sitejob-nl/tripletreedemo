@@ -10,6 +10,42 @@ export type ReportTemplate =
   | 'inbound_service'
   | 'flat';
 
+export type ReportageDayKey =
+  | 'maandag'
+  | 'dinsdag'
+  | 'woensdag'
+  | 'donderdag'
+  | 'vrijdag'
+  | 'zaterdag'
+  | 'zondag';
+
+export interface ReportageOverrideMetrics {
+  [key: string]: string | number | boolean | null | undefined;
+}
+
+export interface ReportageOverrideResultRow {
+  label: string;
+  type: string;
+  count: number;
+  percentage?: number | null;
+}
+
+export interface ReportageWeeklyOverride {
+  id: string;
+  project_id: string;
+  year: number;
+  week_number: number;
+  template: ReportTemplate;
+  source_file: string;
+  source_sheet: string;
+  metrics: ReportageOverrideMetrics;
+  daily_metrics: Partial<Record<ReportageDayKey, ReportageOverrideMetrics>>;
+  result_rows: ReportageOverrideResultRow[];
+  source_hash: string;
+  imported_at: string;
+  imported_by: string | null;
+}
+
 export interface MappingConfig {
   amount_col: string;
   freq_col: string;

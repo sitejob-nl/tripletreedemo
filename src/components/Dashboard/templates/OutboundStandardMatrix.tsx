@@ -1,7 +1,7 @@
 import { ReportMatrix } from '../ReportMatrix';
 import { StockHeader } from './StockHeader';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 
 interface OutboundStandardMatrixProps {
@@ -13,6 +13,7 @@ interface OutboundStandardMatrixProps {
   mappingConfig?: MappingConfig;
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
+  reportageOverrides?: ReportageWeeklyOverride[];
 }
 
 // Variant 1 of the historical rapportages (17/24 legacy files: STC, Proefdiervrij,
@@ -31,6 +32,7 @@ export function OutboundStandardMatrix({
   mappingConfig,
   loggedTimeHours,
   dailyLoggedHours,
+  reportageOverrides,
 }: OutboundStandardMatrixProps) {
   return (
     <>
@@ -45,6 +47,7 @@ export function OutboundStandardMatrix({
         mappingConfig={mappingConfig}
         loggedTimeHours={loggedTimeHours}
         dailyLoggedHours={dailyLoggedHours}
+        reportageOverrides={reportageOverrides}
       />
     </>
   );

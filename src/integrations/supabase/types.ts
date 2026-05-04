@@ -329,6 +329,7 @@ export type Database = {
           name: string
           project_key: string
           project_type: string | null
+          report_template: string | null
           total_to_call: number | null
           updated_at: string | null
           vat_rate: number | null
@@ -344,6 +345,7 @@ export type Database = {
           name: string
           project_key: string
           project_type?: string | null
+          report_template?: string | null
           total_to_call?: number | null
           updated_at?: string | null
           vat_rate?: number | null
@@ -359,11 +361,75 @@ export type Database = {
           name?: string
           project_key?: string
           project_type?: string | null
+          report_template?: string | null
           total_to_call?: number | null
           updated_at?: string | null
           vat_rate?: number | null
         }
         Relationships: []
+      }
+      reportage_weekly_overrides: {
+        Row: {
+          daily_metrics: Json
+          id: string
+          imported_at: string
+          imported_by: string | null
+          metrics: Json
+          project_id: string
+          result_rows: Json
+          source_file: string
+          source_hash: string
+          source_sheet: string
+          template: string
+          week_number: number
+          year: number
+        }
+        Insert: {
+          daily_metrics?: Json
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          metrics?: Json
+          project_id: string
+          result_rows?: Json
+          source_file: string
+          source_hash: string
+          source_sheet: string
+          template: string
+          week_number: number
+          year: number
+        }
+        Update: {
+          daily_metrics?: Json
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          metrics?: Json
+          project_id?: string
+          result_rows?: Json
+          source_file?: string
+          source_hash?: string
+          source_sheet?: string
+          template?: string
+          week_number?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reportage_weekly_overrides_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reportage_weekly_overrides_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sync_jobs: {
         Row: {
@@ -520,6 +586,7 @@ export type Database = {
           name: string | null
           project_key: string | null
           project_type: string | null
+          report_template: string | null
           total_to_call: number | null
           updated_at: string | null
         }
@@ -532,6 +599,7 @@ export type Database = {
           name?: string | null
           project_key?: string | null
           project_type?: string | null
+          report_template?: string | null
           total_to_call?: number | null
           updated_at?: string | null
         }
@@ -544,6 +612,7 @@ export type Database = {
           name?: string | null
           project_key?: string | null
           project_type?: string | null
+          report_template?: string | null
           total_to_call?: number | null
           updated_at?: string | null
         }

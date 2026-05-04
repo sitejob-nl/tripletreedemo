@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ListTree } from 'lucide-react';
 import { InboundReportMatrix } from '../InboundReportMatrix';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 
 interface InboundRetentionMatrixProps {
@@ -13,6 +13,7 @@ interface InboundRetentionMatrixProps {
   mappingConfig?: MappingConfig;
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
+  reportageOverrides?: ReportageWeeklyOverride[];
 }
 
 // Variant 2 of the historical rapportages (Hersenstichting Retentie). Wraps
@@ -33,6 +34,7 @@ export function InboundRetentionMatrix({
   mappingConfig,
   loggedTimeHours,
   dailyLoggedHours,
+  reportageOverrides = [],
 }: InboundRetentionMatrixProps) {
   const reasonCategories = mappingConfig?.reason_categories;
 
@@ -71,6 +73,7 @@ export function InboundRetentionMatrix({
           amountCol={mappingConfig.amount_col}
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
+          reportageOverrides={reportageOverrides}
         />
       )}
 

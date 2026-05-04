@@ -307,7 +307,10 @@ async function syncLoggedTimeRange(project, start, end) {
     let totalSeconds = 0;
     let errorDays = 0;
     let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 3;
+    // Veel projecten hebben hele weken zonder agent-activiteit (vakantie, tussen campagnes).
+    // BasiCall geeft dan 500 op getIngelogdeTijden — kunnen we niet onderscheiden van een
+    // echt kapot endpoint, dus drempel hoog houden om false positives te voorkomen.
+    const MAX_CONSECUTIVE_ERRORS = 30;
 
     while (currentDate <= end) {
         const dateStr = formatLocalDate(currentDate);
@@ -316,9 +319,8 @@ async function syncLoggedTimeRange(project, start, end) {
         if (seconds === null) {
             errorDays++;
             consecutiveErrors++;
-            // Als eerste 3 dagen achter elkaar falen, skip de rest
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                console.log(`   ⏭️  ${MAX_CONSECUTIVE_ERRORS}x achter elkaar mislukt — project ondersteunt waarschijnlijk geen inlogtijd. Overslaan.`);
+                console.log(`   ⏭️  ${MAX_CONSECUTIVE_ERRORS} opeenvolgende dagen zonder inlogtijd-data — overslaan (kan ook token-issue zijn).`);
                 break;
             }
         } else {
