@@ -32,6 +32,14 @@ VITE_SUPABASE_URL=https://tvsdbztjqksxybxjwtrf.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
 ```
 
+Uitnodigingsmails lopen via de Supabase edge function `create-customer` en worden verstuurd met Resend. Zet hiervoor server-side Supabase secrets:
+
+```
+RESEND_API_KEY=<resend api key>
+RESEND_FROM_EMAIL=tripletree@sitejob.nl  # optioneel, default
+RESEND_FROM_NAME=Triple Tree             # optioneel, default
+```
+
 ## Deploy
 
 Merges naar `main` op GitHub `sitejob-nl/tripletreedemo` → Vercel auto-deploy naar `app.ttcallcenters.nl`.

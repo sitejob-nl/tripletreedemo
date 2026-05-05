@@ -10,6 +10,11 @@ import { Loader2, CheckCircle, Eye, EyeOff, KeyRound } from "lucide-react";
 import tripleTreeLogo from "@/assets/triple-tree-logo.png";
 import { errorLogger } from "@/lib/errorLogger";
 
+type ActivationLinkType = "invite" | "signup";
+
+const isActivationLinkType = (type: string | null): type is ActivationLinkType =>
+  type === "invite" || type === "signup";
+
 export default function SetPassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,17 +26,56 @@ export default function SetPassword() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user has a valid session from the magic link
+    let isMounted = true;
+
+    const showInvalidLinkToast = () => {
+      toast({
+        title: "Ongeldige link",
+        description: "De activatielink is verlopen of ongeldig. Vraag een nieuwe uitnodiging aan.",
+        variant: "destructive"
+      });
+    };
+
+    // Check if user has a valid session from the magic link. Branded Resend
+    // links use token_hash in the query string, so app.ttcallcenters.nl stays
+    // visible instead of the Supabase Auth verify URL.
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const params = new URLSearchParams(window.location.search);
+      const tokenHash = params.get("token_hash");
+      const type = params.get("type");
+
+      if (tokenHash && isActivationLinkType(type)) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type,
+        });
+
+        if (!isMounted) return;
+
+        if (error) {
+          errorLogger.logApiError("verify_activation_link", error);
+          setIsSessionValid(false);
+          showInvalidLinkToast();
+          return;
+        }
+
+        setIsSessionValid(true);
+        navigate("/set-password", { replace: true });
+        return;
+      }
+
+      const { data: { session }, error } = await supabase.auth.getSession();
+
+      if (!isMounted) return;
+
+      if (error) {
+        errorLogger.logApiError("get_activation_session", error);
+      }
+
       setIsSessionValid(!!session);
       
       if (!session) {
-        toast({
-          title: "Ongeldige link",
-          description: "De activatielink is verlopen of ongeldig. Vraag een nieuwe uitnodiging aan.",
-          variant: "destructive"
-        });
+        showInvalidLinkToast();
       }
     };
 
@@ -44,8 +88,11 @@ export default function SetPassword() {
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [toast]);
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate, toast]);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,11 +135,11 @@ export default function SetPassword() {
       setTimeout(() => {
         navigate('/welcome');
       }, 1500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       errorLogger.logApiError('set_password', error);
       toast({
         title: "Fout",
-        description: error.message || "Kon wachtwoord niet instellen.",
+        description: error instanceof Error ? error.message : "Kon wachtwoord niet instellen.",
         variant: "destructive"
       });
     } finally {

@@ -2,8 +2,10 @@
 <!--
   Triple Tree — Invite e-mail template.
 
-  Zet deze HTML in Supabase Dashboard -> Authentication -> Email Templates -> "Invite user".
-  Variabelen {{ .ConfirmationURL }} en {{ .Email }} worden door Supabase ingevuld.
+  Historische Supabase Auth-template. De live uitnodigingsflow loopt via
+  supabase/functions/create-customer en verstuurt dezelfde inhoud via Resend,
+  met een app.ttcallcenters.nl token_hash-link in plaats van de Supabase verify-link.
+  Variabelen {{ .ConfirmationURL }} en {{ .Email }} werden door Supabase ingevuld.
 
   Tokens die Supabase beschikbaar stelt:
     {{ .ConfirmationURL }}  - link met auth-token, redirect naar /set-password (configureer via

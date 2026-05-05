@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseFunctionErrorMessage } from '@/lib/functionErrors';
 
 interface PendingInvitation {
   id: string;
@@ -13,18 +14,20 @@ export function usePendingInvitations() {
   return useQuery({
     queryKey: ['pending-invitations'],
     queryFn: async (): Promise<PendingInvitation[]> => {
-      // Cast to any since pending_invitations isn't in generated types yet
-      const { data, error } = await (supabase
-        .from('pending_invitations' as any)
+      const { data, error } = await supabase
+        .from('pending_invitations')
         .select('*')
-        .order('created_at', { ascending: false })) as { data: PendingInvitation[] | null; error: any };
+        .order('created_at', { ascending: false });
       
       if (error) {
         console.error('Error fetching pending invitations:', error);
         throw error;
       }
       
-      return data || [];
+      return (data || []).map((invitation) => ({
+        ...invitation,
+        project_ids: invitation.project_ids || [],
+      }));
     },
   });
 }
@@ -38,7 +41,7 @@ export function useResendInvitation() {
         body: { email, projectIds }
       });
       
-      if (error) throw error;
+      if (error) throw new Error(await getSupabaseFunctionErrorMessage(error));
       if (data.error) throw new Error(data.error);
       
       return data;
@@ -54,10 +57,10 @@ export function useDeletePendingInvitation() {
 
   return useMutation({
     mutationFn: async (invitationId: string) => {
-      const { error } = await (supabase
-        .from('pending_invitations' as any)
+      const { error } = await supabase
+        .from('pending_invitations')
         .delete()
-        .eq('id', invitationId)) as { error: any };
+        .eq('id', invitationId);
       
       if (error) throw error;
     },

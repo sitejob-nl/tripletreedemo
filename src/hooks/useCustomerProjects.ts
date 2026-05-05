@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseFunctionErrorMessage } from '@/lib/functionErrors';
 
 interface CustomerProject {
   id: string;
@@ -67,10 +68,9 @@ export function useCustomersWithProjects() {
       }
 
       // Get all projects for names - use public view (no token needed)
-      // Cast response to expected type since view isn't in generated types yet
       const { data: projects, error: projError } = await supabase
-        .from('projects_public' as any)
-        .select('id, name, project_key') as { data: Array<{ id: string; name: string; project_key: string }> | null; error: any };
+        .from('projects_public')
+        .select('id, name, project_key');
       
       if (projError) {
         console.error('Error fetching projects:', projError);
@@ -177,7 +177,7 @@ export function useCreateCustomer() {
         body: { email, projectIds }
       });
       
-      if (error) throw error;
+      if (error) throw new Error(await getSupabaseFunctionErrorMessage(error));
       if (data.error) throw new Error(data.error);
       
       return data;
