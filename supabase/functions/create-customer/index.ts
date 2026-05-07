@@ -5,6 +5,7 @@ const RESEND_API_URL = 'https://api.resend.com/emails';
 const DEFAULT_SITE_URL = 'https://app.ttcallcenters.nl';
 const DEFAULT_FROM_EMAIL = 'tripletree@sitejob.nl';
 const DEFAULT_FROM_NAME = 'Triple Tree';
+const DEFAULT_REPLY_TO_EMAIL = 'info@ttcallcenters.nl';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -124,12 +125,14 @@ const sendInvitationEmail = async ({
   apiKey,
   fromEmail,
   fromName,
+  replyToEmail,
   toEmail,
   activationUrl,
 }: {
   apiKey: string;
   fromEmail: string;
   fromName: string;
+  replyToEmail: string;
   toEmail: string;
   activationUrl: string;
 }) => {
@@ -142,7 +145,7 @@ const sendInvitationEmail = async ({
     body: JSON.stringify({
       from: `${fromName} <${fromEmail}>`,
       to: [toEmail],
-      reply_to: fromEmail,
+      reply_to: replyToEmail,
       subject: 'Welkom bij het Triple Tree dashboard',
       html: buildInvitationEmailHtml(toEmail, activationUrl),
       text: buildInvitationEmailText(toEmail, activationUrl),
@@ -206,6 +209,7 @@ serve(async (req) => {
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     const resendFromEmail = Deno.env.get('RESEND_FROM_EMAIL') || DEFAULT_FROM_EMAIL;
     const resendFromName = Deno.env.get('RESEND_FROM_NAME') || DEFAULT_FROM_NAME;
+    const resendReplyToEmail = Deno.env.get('RESEND_REPLY_TO_EMAIL') || DEFAULT_REPLY_TO_EMAIL;
     
     // Create admin client for user creation
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -373,6 +377,7 @@ serve(async (req) => {
       apiKey: resendApiKey,
       fromEmail: resendFromEmail,
       fromName: resendFromName,
+      replyToEmail: resendReplyToEmail,
       toEmail: normalizedEmail,
       activationUrl,
     });
@@ -402,6 +407,7 @@ serve(async (req) => {
         },
         emailProvider: 'resend',
         from: resendFromEmail,
+        replyTo: resendReplyToEmail,
       },
       200
     );

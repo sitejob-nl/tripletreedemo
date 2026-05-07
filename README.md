@@ -38,6 +38,7 @@ Uitnodigingsmails lopen via de Supabase edge function `create-customer` en worde
 RESEND_API_KEY=<resend api key>
 RESEND_FROM_EMAIL=tripletree@sitejob.nl  # optioneel, default
 RESEND_FROM_NAME=Triple Tree             # optioneel, default
+RESEND_REPLY_TO_EMAIL=info@ttcallcenters.nl  # optioneel, default
 ```
 
 ## Deploy
