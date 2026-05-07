@@ -13,7 +13,6 @@ const BASICALL_URL = 'https://S06.basicall.nl/BasiCall/bc_WebApi/v2.0/';
 
 const CONFIG = {
     BATCH_UPSERT_SIZE: 50,
-    BATCH_DB_CHECK_SIZE: 1000,
     PARALLEL_FETCH_SIZE: 5,        // concurrent Record.get calls
     DELAY_BETWEEN_RECORDS_MS: 50,  // rate limit per record
     DELAY_BETWEEN_DAYS_MS: 100,    // rate limit per dag (inlogtijd)
@@ -302,42 +301,56 @@ async function saveLoggedTime(projectId, dateStr, totalSeconds) {
 // --- SYNC INGELOGDE TIJD: PERIODE ---
 async function syncLoggedTimeRange(project, start, end) {
     console.log(`\n⏱️  Inlogtijd ophalen: ${project.name}`);
+
+    // Pre-filter: only ask BasiCall for inlogtijd op dagen waarvan we records hebben.
+    // BasiCall geeft 500 op dagen zonder agent-activiteit (weekend/feestdag/inactief), wat de
+    // logs vervuilt en de retry-loop laat draaien. De call-records sync is hiervoor gerund,
+    // dus DB heeft nu de werkelijke beldata.
+    const startStr = formatLocalDate(start);
+    const endStr = formatLocalDate(end);
+    const { data: activeDays } = await supabase
+        .from('call_records')
+        .select('beldatum_date')
+        .eq('project_id', project.id)
+        .gte('beldatum_date', startStr)
+        .lte('beldatum_date', endStr);
+    const activeDaySet = new Set((activeDays || []).map(r => r.beldatum_date));
+
     let currentDate = new Date(start);
     let totalSaved = 0;
     let totalSeconds = 0;
     let errorDays = 0;
-    let consecutiveErrors = 0;
-    // Veel projecten hebben hele weken zonder agent-activiteit (vakantie, tussen campagnes).
-    // BasiCall geeft dan 500 op getIngelogdeTijden — kunnen we niet onderscheiden van een
-    // echt kapot endpoint, dus drempel hoog houden om false positives te voorkomen.
-    const MAX_CONSECUTIVE_ERRORS = 30;
+    let skippedDays = 0;
 
     while (currentDate <= end) {
         const dateStr = formatLocalDate(currentDate);
+
+        if (!activeDaySet.has(dateStr)) {
+            skippedDays++;
+            currentDate.setDate(currentDate.getDate() + 1);
+            continue;
+        }
+
         const seconds = await syncLoggedTimeDay(project, currentDate);
 
         if (seconds === null) {
             errorDays++;
-            consecutiveErrors++;
-            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                console.log(`   ⏭️  ${MAX_CONSECUTIVE_ERRORS} opeenvolgende dagen zonder inlogtijd-data — overslaan (kan ook token-issue zijn).`);
-                break;
-            }
-        } else {
-            consecutiveErrors = 0; // reset bij succes
-            if (seconds > 0) {
-                const saved = await saveLoggedTime(project.id, dateStr, seconds);
-                if (saved) {
-                    totalSaved++;
-                    totalSeconds += seconds;
-                    const hours = Math.round(seconds / 36) / 100;
-                    console.log(`   ${dateStr}: ${hours}u ✓`);
-                }
+        } else if (seconds > 0) {
+            const saved = await saveLoggedTime(project.id, dateStr, seconds);
+            if (saved) {
+                totalSaved++;
+                totalSeconds += seconds;
+                const hours = Math.round(seconds / 36) / 100;
+                console.log(`   ${dateStr}: ${hours}u ✓`);
             }
         }
 
         currentDate.setDate(currentDate.getDate() + 1);
         await sleep(CONFIG.DELAY_BETWEEN_DAYS_MS);
+    }
+
+    if (skippedDays > 0) {
+        console.log(`   ⏭️  ${skippedDays} dagen overgeslagen (geen records).`);
     }
 
     const totalHours = Math.round(totalSeconds / 36) / 100;
@@ -479,7 +492,7 @@ async function upsertBatch(records) {
 
     const { error } = await supabase
         .from('call_records')
-        .upsert(records, { onConflict: 'basicall_record_id,project_id' });
+        .upsert(records, { onConflict: 'basicall_record_id,project_id,beldatum_date' });
 
     if (error) {
         console.error(`   ❌ Upsert error (${records.length} records):`, error.message);
@@ -553,33 +566,11 @@ async function performSync(project, start, end, jobId = null) {
         ids = [...new Set(ids)];
         console.log(`   🔎 ${ids.length} ID's gevonden.`);
 
-        // 4. Check welke al in DB zitten
-        const existingIds = new Set();
-        for (let i = 0; i < ids.length; i += CONFIG.BATCH_DB_CHECK_SIZE) {
-            const batch = ids.slice(i, i + CONFIG.BATCH_DB_CHECK_SIZE);
-            const { data: existing } = await supabase
-                .from('call_records')
-                .select('basicall_record_id')
-                .in('basicall_record_id', batch)
-                .eq('project_id', project.id);
-            if (existing) existing.forEach(r => existingIds.add(String(r.basicall_record_id)));
-        }
-
-        const idsToFetch = ids.filter(id => !existingIds.has(String(id)));
-        console.log(`      ♻️ ${ids.length - idsToFetch.length} al in DB. 📥 ${idsToFetch.length} nieuw.`);
-
-        if (idsToFetch.length === 0) {
-            if (jobId) {
-                await supabase.from('sync_jobs').update({
-                    status: 'completed',
-                    records_synced: ids.length,
-                    log_message: 'Alle records al gesynchroniseerd.',
-                    completed_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                }).eq('id', jobId);
-            }
-            return;
-        }
+        // basicall_record_id is not unique per call — it identifies a prospect/badge.
+        // Same prospect called Mon (Terugbelafspraak) + Wed (Sale) returns same ID twice.
+        // Re-fetch every ID; composite unique on (id, project, beldatum_date) keeps separate rows.
+        const idsToFetch = ids;
+        console.log(`   📥 ${idsToFetch.length} records ophalen...`);
 
         // 5. Fetch record details (parallel in batches)
         const { results: fetchedRecords, errorCount } = await fetchRecordsBatch(idsToFetch, project);
