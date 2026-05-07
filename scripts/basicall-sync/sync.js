@@ -501,19 +501,21 @@ async function performSync(project, start, end, jobId = null) {
     }
 
     try {
-        // 1. Token check
+        // Pre-flight uses the same endpoint as the actual sync below. On failure, log a
+        // warning and continue — the catch at the bottom handles real failures. Hard-skipping
+        // here previously caused projects to silently miss whole days when the API hiccupped.
         const tokenValid = await validateToken(project);
         if (!tokenValid) {
-            const msg = `Token ongeldig voor project ${project.name}`;
-            if (jobId) {
-                await supabase.from('sync_jobs').update({
-                    status: 'failed',
-                    log_message: msg,
-                    completed_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                }).eq('id', jobId);
-            }
-            return;
+            const msg = `Pre-flight token check faalde voor project ${project.name} — sync wordt alsnog geprobeerd`;
+            console.warn(`   ⚠️  ${msg}`);
+            await supabase.from('sync_logs').insert({
+                project_id: project.id,
+                status: 'warning',
+                records_synced: 0,
+                sync_from: start.toISOString(),
+                sync_to: end.toISOString(),
+                error_message: msg,
+            });
         }
 
         // 2. Haal afgehandelde record IDs op
