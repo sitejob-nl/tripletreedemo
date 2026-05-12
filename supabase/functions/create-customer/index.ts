@@ -217,18 +217,18 @@ serve(async (req) => {
     // Verify the requesting user is an admin
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return jsonResponse({ error: 'Missing authorization header' }, 401);
+      return jsonResponse({ error: 'Je sessie is verlopen. Log opnieuw in.' }, 401);
     }
 
     // Create client with user's token to verify their role
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
-    
+
     const { data: { user: requestingUser }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !requestingUser) {
       console.error('Auth error:', userError);
-      return jsonResponse({ error: 'Unauthorized' }, 401);
+      return jsonResponse({ error: 'Je sessie is verlopen. Log opnieuw in.' }, 401);
     }
 
     // Check if requesting user is admin or superadmin
@@ -240,21 +240,21 @@ serve(async (req) => {
 
     if (roleError || !roleData || (roleData.role !== 'admin' && roleData.role !== 'superadmin')) {
       console.error('Role check failed:', roleError, roleData);
-      return jsonResponse({ error: 'Only admins can invite customers' }, 403);
+      return jsonResponse({ error: 'Alleen beheerders kunnen klanten uitnodigen.' }, 403);
     }
 
     // Parse request body
     const { email, projectIds } = await req.json();
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
     const invitationProjectIds = Array.isArray(projectIds) ? projectIds : [];
-    
+
     if (!normalizedEmail) {
-      return jsonResponse({ error: 'Email is required' }, 400);
+      return jsonResponse({ error: 'Vul een e-mailadres in.' }, 400);
     }
 
     if (!resendApiKey) {
       return jsonResponse(
-        { error: 'RESEND_API_KEY ontbreekt in de Supabase secrets. Configureer Resend voordat je uitnodigingen verstuurt.' },
+        { error: 'De e-mailservice is nog niet ingesteld. Neem contact op met Kas (info@sitejob.nl).' },
         500
       );
     }
@@ -270,7 +270,7 @@ serve(async (req) => {
     if (existingPendingError) {
       console.error('Pending invitation lookup error:', existingPendingError);
       return jsonResponse(
-        { error: `Kon bestaande uitnodiging niet controleren: ${existingPendingError.message}. Probeer opnieuw.` },
+        { error: 'Kon de uitnodiging niet voorbereiden. Probeer het zo opnieuw.' },
         500
       );
     }
@@ -293,9 +293,7 @@ serve(async (req) => {
     if (pendingError) {
       console.error('Pending invitation error:', pendingError);
       return jsonResponse(
-        {
-          error: `Kon uitnodiging niet voorbereiden: ${pendingError.message}. Probeer opnieuw.`,
-        },
+        { error: 'Kon de uitnodiging niet opslaan. Probeer het zo opnieuw.' },
         500
       );
     }
@@ -353,7 +351,10 @@ serve(async (req) => {
         .delete()
         .eq('email', normalizedEmail);
 
-      return jsonResponse({ error: inviteError.message }, 400);
+      return jsonResponse(
+        { error: 'Kon de uitnodiging niet aanmaken. Controleer het e-mailadres en probeer opnieuw.' },
+        400
+      );
     }
 
     const tokenHash = inviteData?.properties?.hashed_token;
@@ -390,7 +391,7 @@ serve(async (req) => {
       }
 
       return jsonResponse(
-        { error: 'Uitnodiging is aangemaakt, maar Resend kon de e-mail niet versturen. Probeer opnieuw.' },
+        { error: 'De uitnodigingsmail kon niet verstuurd worden. Probeer het zo opnieuw.' },
         502
       );
     }
@@ -414,6 +415,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Unexpected error:', error);
-    return jsonResponse({ error: 'Internal server error' }, 500);
+    return jsonResponse(
+      { error: 'Er ging iets mis aan onze kant. Probeer het opnieuw of neem contact op met Kas (info@sitejob.nl).' },
+      500
+    );
   }
 });

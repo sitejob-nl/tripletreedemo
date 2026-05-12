@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyError } from "@/lib/friendlyError";
 import { RefreshCw, Clock, CheckCircle, XCircle, Loader2, Play, Search } from "lucide-react";
 
 type PresetPeriod = "2024" | "2025" | "this-quarter" | "last-quarter" | "last-month" | "custom";
@@ -143,11 +144,11 @@ export function SyncManager() {
           description: "De VPS pakt deze opdracht binnenkort op."
         });
       }
-    } catch (error: any) {
+    } catch (error) {
       setIsCreatingMultiple(false);
       toast({
-        title: "Fout bij aanmaken job",
-        description: error.message || "Er is iets misgegaan.",
+        title: "Er ging iets mis",
+        description: friendlyError(error, "De sync-opdracht kon niet aangemaakt worden. Probeer het opnieuw."),
         variant: "destructive"
       });
     }

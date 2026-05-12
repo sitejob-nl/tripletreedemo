@@ -38,14 +38,14 @@ serve(async (req) => {
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json(401, { error: "Missing authorization header" });
+    if (!authHeader) return json(401, { error: "Je sessie is verlopen. Log opnieuw in." });
 
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) return json(401, { error: "Unauthorized" });
+    if (userError || !user) return json(401, { error: "Je sessie is verlopen. Log opnieuw in." });
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -56,7 +56,7 @@ serve(async (req) => {
       .single();
 
     if (!roleData || (roleData.role !== "admin" && roleData.role !== "superadmin")) {
-      return json(403, { error: "Admin-rol vereist" });
+      return json(403, { error: "Alleen beheerders kunnen API-tokens beheren." });
     }
 
     const url = new URL(req.url);
@@ -65,19 +65,22 @@ serve(async (req) => {
       const body = await req.json().catch(() => null) as { project_id?: string; token?: string } | null;
       const projectId = body?.project_id;
       const token = body?.token?.trim();
-      if (!projectId || !token) return json(400, { error: "project_id en token zijn verplicht" });
+      if (!projectId || !token) return json(400, { error: "Vul zowel een project als een token in." });
 
       const { error } = await supabaseAdmin
         .from("project_secrets")
         .upsert({ project_id: projectId, basicall_token: token }, { onConflict: "project_id" });
 
-      if (error) return json(500, { error: error.message });
+      if (error) {
+        console.error("project-secret upsert error:", error);
+        return json(500, { error: "Kon het token niet opslaan. Probeer het opnieuw." });
+      }
       return json(200, { success: true, hasToken: true });
     }
 
     if (req.method === "GET") {
       const projectId = url.searchParams.get("project_id");
-      if (!projectId) return json(400, { error: "project_id query-param vereist" });
+      if (!projectId) return json(400, { error: "Geen project geselecteerd." });
 
       const { data, error } = await supabaseAdmin
         .from("project_secrets")
@@ -85,26 +88,32 @@ serve(async (req) => {
         .eq("project_id", projectId)
         .maybeSingle();
 
-      if (error) return json(500, { error: error.message });
+      if (error) {
+        console.error("project-secret select error:", error);
+        return json(500, { error: "Kon de tokenstatus niet ophalen. Probeer het opnieuw." });
+      }
       return json(200, { hasToken: !!data });
     }
 
     if (req.method === "DELETE") {
       const projectId = url.searchParams.get("project_id");
-      if (!projectId) return json(400, { error: "project_id query-param vereist" });
+      if (!projectId) return json(400, { error: "Geen project geselecteerd." });
 
       const { error } = await supabaseAdmin
         .from("project_secrets")
         .delete()
         .eq("project_id", projectId);
 
-      if (error) return json(500, { error: error.message });
+      if (error) {
+        console.error("project-secret delete error:", error);
+        return json(500, { error: "Kon het token niet verwijderen. Probeer het opnieuw." });
+      }
       return json(200, { success: true, hasToken: false });
     }
 
-    return json(405, { error: "Method not allowed" });
+    return json(405, { error: "Deze actie wordt niet ondersteund." });
   } catch (err) {
     console.error("project-secret unexpected error:", err);
-    return json(500, { error: "Internal server error" });
+    return json(500, { error: "Er ging iets mis aan onze kant. Probeer het opnieuw." });
   }
 });

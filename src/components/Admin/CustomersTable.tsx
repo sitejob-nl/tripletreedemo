@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyError } from "@/lib/friendlyError";
 import { Plus, Search, Link as LinkIcon, Unlink, UserPlus, Loader2, Mail, Clock, RefreshCw, Trash2 } from "lucide-react";
 
 interface CustomersTableProps {
@@ -60,8 +61,8 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
   const handleInviteCustomer = async () => {
     if (!newEmail) {
       toast({
-        title: "Validatie fout",
-        description: "Vul een e-mailadres in.",
+        title: "Vul een e-mailadres in",
+        description: "Zonder e-mailadres kunnen we geen uitnodiging versturen.",
         variant: "destructive"
       });
       return;
@@ -82,10 +83,10 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
       setIsAddDialogOpen(false);
       setNewEmail("");
       setSelectedProjectIds([]);
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message || "Kon uitnodiging niet versturen.",
+        title: "Er ging iets mis",
+        description: friendlyError(error, "De uitnodiging kon niet verstuurd worden. Probeer het opnieuw."),
         variant: "destructive"
       });
     }
@@ -103,10 +104,10 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
         title: "Uitnodiging opnieuw verstuurd",
         description: `Een nieuwe activatielink is verstuurd naar ${email}.`
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message || "Kon uitnodiging niet opnieuw versturen.",
+        title: "Er ging iets mis",
+        description: friendlyError(error, "De uitnodiging kon niet opnieuw verstuurd worden. Probeer het zo opnieuw."),
         variant: "destructive"
       });
     }
@@ -119,10 +120,10 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
         title: "Uitnodiging verwijderd",
         description: "De openstaande uitnodiging is verwijderd."
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message || "Kon uitnodiging niet verwijderen.",
+        title: "Er ging iets mis",
+        description: friendlyError(error, "De uitnodiging kon niet verwijderd worden."),
         variant: "destructive"
       });
     }
@@ -139,13 +140,13 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
 
       toast({
         title: "Project gekoppeld",
-        description: "Project is succesvol aan de klant gekoppeld."
+        description: "Het project is aan de klant gekoppeld."
       });
       setIsLinkDialogOpen(false);
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message || "Kon project niet koppelen.",
+        title: "Er ging iets mis",
+        description: friendlyError(error, "Het project kon niet aan de klant gekoppeld worden."),
         variant: "destructive"
       });
     }
@@ -156,12 +157,12 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
       await unlinkProject.mutateAsync(linkId);
       toast({
         title: "Project ontkoppeld",
-        description: "Project is succesvol ontkoppeld."
+        description: "Het project is van de klant ontkoppeld."
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message,
+        title: "Er ging iets mis",
+        description: friendlyError(error, "Het project kon niet ontkoppeld worden."),
         variant: "destructive"
       });
     }

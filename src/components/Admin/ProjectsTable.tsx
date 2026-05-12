@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyError } from "@/lib/friendlyError";
 import { Plus, Search, Settings, Trash2 } from "lucide-react";
 import type { DBProject } from "@/types/database";
 
@@ -54,10 +55,10 @@ export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
         title: project.is_active ? "Project gedeactiveerd" : "Project geactiveerd",
         description: `${project.name} is nu ${project.is_active ? "inactief" : "actief"}.`
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message,
+        title: "Er ging iets mis",
+        description: friendlyError(error, "Kon het project niet activeren of deactiveren."),
         variant: "destructive"
       });
     }
@@ -76,14 +77,14 @@ export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
 
       toast({
         title: "Project verwijderd",
-        description: `${project.name} is succesvol verwijderd.`
+        description: `${project.name} is verwijderd.`
       });
 
       queryClient.invalidateQueries({ queryKey: ["projects"] });
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message,
+        title: "Er ging iets mis",
+        description: friendlyError(error, "Het project kon niet verwijderd worden. Er zijn mogelijk nog gegevens aan gekoppeld."),
         variant: "destructive"
       });
     }

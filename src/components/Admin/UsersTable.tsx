@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { friendlyError } from "@/lib/friendlyError";
 import { Plus, Search, Trash2, Users, Shield, UserCog } from "lucide-react";
 
 type AppRole = 'admin' | 'user' | 'superadmin';
@@ -64,12 +65,12 @@ export function UsersTable() {
       await updateRole.mutateAsync({ userId, role: newRole, existingRoleId });
       toast({
         title: "Rol bijgewerkt",
-        description: `Gebruikersrol is gewijzigd naar ${roleLabels[newRole]}.`
+        description: `De gebruiker is nu ${roleLabels[newRole]}.`
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message || "Kon rol niet bijwerken.",
+        title: "Er ging iets mis",
+        description: friendlyError(error, "De rol kon niet bijgewerkt worden. Probeer het opnieuw."),
         variant: "destructive"
       });
     }
@@ -78,7 +79,7 @@ export function UsersTable() {
   const handleDeleteRole = async (roleId: string, userId: string) => {
     if (userId === currentUser?.id) {
       toast({
-        title: "Niet toegestaan",
+        title: "Dat kan niet",
         description: "Je kunt je eigen rol niet verwijderen.",
         variant: "destructive"
       });
@@ -93,10 +94,10 @@ export function UsersTable() {
         title: "Rol verwijderd",
         description: "De gebruikersrol is verwijderd."
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message || "Kon rol niet verwijderen.",
+        title: "Er ging iets mis",
+        description: friendlyError(error, "De rol kon niet verwijderd worden. Probeer het opnieuw."),
         variant: "destructive"
       });
     }
@@ -105,8 +106,8 @@ export function UsersTable() {
   const handleAddRole = async () => {
     if (!newUserId.trim()) {
       toast({
-        title: "Validatie fout",
-        description: "Vul een user ID in.",
+        title: "Vul een user ID in",
+        description: "Zonder ID weten we niet aan welke gebruiker we de rol moeten geven.",
         variant: "destructive"
       });
       return;
@@ -116,15 +117,15 @@ export function UsersTable() {
       await addRole.mutateAsync({ userId: newUserId, role: newUserRole });
       toast({
         title: "Rol toegevoegd",
-        description: `Nieuwe ${roleLabels[newUserRole]} rol is toegevoegd.`
+        description: `De gebruiker heeft nu de rol ${roleLabels[newUserRole]}.`
       });
       setIsAddDialogOpen(false);
       setNewUserId('');
       setNewUserRole('user');
-    } catch (error: any) {
+    } catch (error) {
       toast({
-        title: "Fout",
-        description: error.message || "Kon rol niet toevoegen.",
+        title: "Er ging iets mis",
+        description: friendlyError(error, "De rol kon niet toegevoegd worden. Controleer de user ID."),
         variant: "destructive"
       });
     }

@@ -26,7 +26,7 @@ serve(async (req) => {
     // Verify caller is admin
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+      return new Response(JSON.stringify({ error: 'Je sessie is verlopen. Log opnieuw in.' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -36,7 +36,7 @@ serve(async (req) => {
     });
     const { data: { user: requestingUser }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !requestingUser) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Je sessie is verlopen. Log opnieuw in.' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -47,14 +47,14 @@ serve(async (req) => {
       .eq('user_id', requestingUser.id)
       .single();
     if (roleError || !roleData || (roleData.role !== 'admin' && roleData.role !== 'superadmin')) {
-      return new Response(JSON.stringify({ error: 'Only admins can list customer emails' }), {
+      return new Response(JSON.stringify({ error: 'Alleen beheerders kunnen klantgegevens bekijken.' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     const { userIds } = await req.json();
     if (!Array.isArray(userIds)) {
-      return new Response(JSON.stringify({ error: 'userIds must be an array' }), {
+      return new Response(JSON.stringify({ error: 'Ongeldige aanvraag. Probeer de pagina te verversen.' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -88,7 +88,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Unexpected error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    return new Response(JSON.stringify({ error: 'Er ging iets mis aan onze kant. Probeer het opnieuw.' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

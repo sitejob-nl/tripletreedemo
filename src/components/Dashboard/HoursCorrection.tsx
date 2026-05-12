@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Loader2, Save, RotateCcw, Clock, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyError } from '@/lib/friendlyError';
 import {
   Table,
   TableBody,
@@ -70,7 +71,7 @@ export const HoursCorrection = ({ projectId, startDate, endDate }: HoursCorrecti
       toast.success('Uren correctie opgeslagen');
     },
     onError: (error) => {
-      toast.error(`Fout bij opslaan: ${error.message}`);
+      toast.error(friendlyError(error, 'De urencorrectie kon niet opgeslagen worden.'));
     },
   });
 
