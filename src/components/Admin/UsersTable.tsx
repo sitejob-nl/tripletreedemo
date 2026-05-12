@@ -41,8 +41,11 @@ export function UsersTable() {
   const [newUserRole, setNewUserRole] = useState<AppRole>('user');
 
   const filteredUsers = useMemo(() => {
+    const q = search.toLowerCase();
     return users?.filter(user => {
-      const matchesSearch = user.user_id.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch =
+        user.email.toLowerCase().includes(q) ||
+        user.user_id.toLowerCase().includes(q);
       const matchesRole = filterRole === "all" || user.role === filterRole;
       return matchesSearch && matchesRole;
     }) || [];
@@ -173,7 +176,7 @@ export function UsersTable() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Zoek op user ID..."
+                placeholder="Zoek op naam of user ID..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10"
@@ -204,17 +207,21 @@ export function UsersTable() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User ID</TableHead>
+                    <TableHead>Gebruiker</TableHead>
                     <TableHead>Rol</TableHead>
                     <TableHead className="hidden md:table-cell">Aangemaakt</TableHead>
                     <TableHead className="text-right">Acties</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
+                  {filteredUsers.map((user) => {
+                    const hasEmail = user.email !== user.user_id;
+                    return (
                     <TableRow key={user.role_id}>
-                      <TableCell className="font-mono text-sm max-w-[200px] truncate">
-                        {user.user_id}
+                      <TableCell className="max-w-[280px] truncate">
+                        <span className={hasEmail ? "text-sm" : "font-mono text-sm"}>
+                          {user.email}
+                        </span>
                         {user.user_id === currentUser?.id && (
                           <Badge variant="outline" className="ml-2">Jij</Badge>
                         )}
@@ -250,7 +257,8 @@ export function UsersTable() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

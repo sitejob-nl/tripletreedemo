@@ -15,27 +15,38 @@ export function useUsers() {
   return useQuery({
     queryKey: ['users-with-roles'],
     queryFn: async (): Promise<UserWithRole[]> => {
-      // First get all user roles
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('*');
-      
+
       if (rolesError) {
         console.error('Error fetching user roles:', rolesError);
         throw rolesError;
       }
 
-      // Map the user roles to UserWithRole format
-      // Note: We can't access auth.users directly, so we'll use the user_id from roles
-      const usersWithRoles: UserWithRole[] = (userRoles || []).map(role => ({
+      // Resolve UUID → email via admin-gated edge function; auth.users is
+      // service-role-only. Falls back to UUID display on failure.
+      const userIds = (userRoles || []).map(r => r.user_id);
+      let emailsMap: Record<string, string | null> = {};
+      if (userIds.length > 0) {
+        const { data: emailsData, error: emailsError } = await supabase.functions.invoke(
+          'get-customer-emails',
+          { body: { userIds } }
+        );
+        if (emailsError) {
+          console.warn('Kon gebruiker-emails niet ophalen:', emailsError.message);
+        } else if (emailsData?.emails) {
+          emailsMap = emailsData.emails;
+        }
+      }
+
+      return (userRoles || []).map(role => ({
         user_id: role.user_id,
-        email: role.user_id, // We'll show user_id as fallback since we can't access auth.users
+        email: emailsMap[role.user_id] || role.user_id,
         role: role.role as AppRole,
         role_id: role.id,
         created_at: role.created_at || new Date().toISOString()
       }));
-
-      return usersWithRoles;
     },
   });
 }
