@@ -3,7 +3,7 @@ import { ProjectType, MappingConfig } from '@/types/database';
 
 // ============= FREQUENCY DETECTION (CENTRALIZED) =============
 
-export type FrequencyType = 'monthly' | 'quarterly' | 'halfYearly' | 'yearly' | 'oneoff';
+export type FrequencyType = 'monthly' | 'biMonthly' | 'quarterly' | 'halfYearly' | 'yearly' | 'oneoff';
 
 export interface FrequencyDetectionResult {
   type: FrequencyType;
@@ -46,19 +46,36 @@ export const detectFrequencyFromConfig = (
     };
   }
 
-  // Try to match against freq_map. Project-specific configs sometimes use
-  // numeric string keys (e.g. Proefdiervrij {"1":12,"3":4}) where "1"=per maand,
-  // so this MUST run before the generic numeric-string fallback below.
-  for (const [mapKey, mapValue] of Object.entries(freqMap)) {
+  // Match against freq_map with priority (mirrors get_project_annual_value RPC):
+  //  0. Exact match
+  //  1. Value contains key, longest key wins (so "maandelijks" beats "maand"
+  //     and "2 maandlijks" beats "maandelijks" for value "2 maandlijks")
+  //  2. Key contains value, longest key wins (only for short value abbrevs like "m")
+  // The earlier bidirectional OR let value "Maandelijks" match key "2 maandlijks"
+  // via group 2, giving ×6 for ordinary monthly machtigingen on Trombose 761.
+  // Project-specific numeric keys (e.g. Proefdiervrij {"1":12}) still match via
+  // group 0 (exact) — so this MUST run before the generic numeric-string fallback.
+  const entries = Object.entries(freqMap);
+  const candidates: Array<{ key: string; value: number; priority: number }> = [];
+  for (const [mapKey, mapValue] of entries) {
     const lowerMapKey = mapKey.toLowerCase();
-    if (freqStr.includes(lowerMapKey) || lowerMapKey.includes(freqStr)) {
-      return {
-        type: mapMultiplierToType(mapValue),
-        multiplier: mapValue,
-        matchedKey: mapKey,
-        isOneOff: mapValue === 1 && !freqStr.includes('jaar'),
-      };
+    if (freqStr === lowerMapKey) {
+      candidates.push({ key: mapKey, value: mapValue, priority: 0 });
+    } else if (freqStr.includes(lowerMapKey)) {
+      candidates.push({ key: mapKey, value: mapValue, priority: 1 });
+    } else if (lowerMapKey.includes(freqStr)) {
+      candidates.push({ key: mapKey, value: mapValue, priority: 2 });
     }
+  }
+  if (candidates.length) {
+    candidates.sort((a, b) => a.priority - b.priority || b.key.length - a.key.length);
+    const best = candidates[0];
+    return {
+      type: mapMultiplierToType(best.value),
+      multiplier: best.value,
+      matchedKey: best.key,
+      isOneOff: best.value === 1 && !freqStr.includes('jaar'),
+    };
   }
 
   // Numeric fallback: only when freq_map didn't match. Treat the raw value
@@ -73,7 +90,16 @@ export const detectFrequencyFromConfig = (
     };
   }
 
-  // Fallback: use pattern matching for common terms
+  // Fallback: use pattern matching for common terms. Bimaandelijks MUST come
+  // before the generic 'maand' check — "2-maandelijks" contains "maand" too.
+  if (
+    freqStr.includes('2-maand') ||
+    freqStr.includes('2 maand') ||
+    freqStr.includes('tweemaand') ||
+    freqStr.includes('bimaand')
+  ) {
+    return { type: 'biMonthly', multiplier: 6, matchedKey: '(patroon: 2-maandelijks)', isOneOff: false };
+  }
   if (freqStr.includes('maand') || freqStr.includes('mnd') || freqStr === 'm') {
     return { type: 'monthly', multiplier: 12, matchedKey: '(patroon: maand)', isOneOff: false };
   }
@@ -90,6 +116,14 @@ export const detectFrequencyFromConfig = (
   // Fallback: try to detect frequency from resultaat name
   if (resultaat) {
     const resultLower = resultaat.toLowerCase();
+    if (
+      resultLower.includes('2-maand') ||
+      resultLower.includes('2 maand') ||
+      resultLower.includes('tweemaand') ||
+      resultLower.includes('bimaand')
+    ) {
+      return { type: 'biMonthly', multiplier: 6, matchedKey: '(resultaat: 2-maandelijks)', isOneOff: false };
+    }
     if (resultLower.includes('per maand') || resultLower.includes('maandelijks')) {
       return { type: 'monthly', multiplier: 12, matchedKey: '(resultaat: maand)', isOneOff: false };
     }
@@ -116,6 +150,7 @@ export const detectFrequencyFromConfig = (
 const mapMultiplierToType = (multiplier: number): FrequencyType => {
   switch (multiplier) {
     case 12: return 'monthly';
+    case 6: return 'biMonthly';
     case 4: return 'quarterly';
     case 2: return 'halfYearly';
     case 1: return 'yearly';
@@ -145,6 +180,7 @@ export const createEmptyStats = (): DayStats => ({
   negativeCount: 0,
   freqBreakdown: {
     monthly: createEmptyFreqBreakdown(),
+    biMonthly: createEmptyFreqBreakdown(),
     quarterly: createEmptyFreqBreakdown(),
     halfYearly: createEmptyFreqBreakdown(),
     yearly: createEmptyFreqBreakdown(),
@@ -292,6 +328,7 @@ export const detectFrequency = (freq: unknown): FrequencyType => {
 export const getFrequencyLabel = (type: FrequencyType): string => {
   switch (type) {
     case 'monthly': return 'Per Maand';
+    case 'biMonthly': return 'Per 2 Maanden';
     case 'quarterly': return 'Per Kwartaal';
     case 'halfYearly': return 'Per Half jaar';
     case 'yearly': return 'Per Jaar';

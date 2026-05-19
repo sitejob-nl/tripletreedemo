@@ -5,6 +5,7 @@ import { ProjectType } from '@/types/database';
 
 export interface AnnualValueBreakdown {
   monthly: { count: number; value: number; totalAmount: number };
+  biMonthly: { count: number; value: number; totalAmount: number };
   quarterly: { count: number; value: number; totalAmount: number };
   halfYearly: { count: number; value: number; totalAmount: number };
   yearly: { count: number; value: number; totalAmount: number };
@@ -52,6 +53,7 @@ export function KPICardsSection({
 
   const freqLabels: Record<string, { label: string; multiplier: number }> = {
     monthly: { label: 'Maandelijks', multiplier: 12 },
+    biMonthly: { label: 'Per 2 maanden', multiplier: 6 },
     quarterly: { label: 'Per kwartaal', multiplier: 4 },
     halfYearly: { label: 'Halfjaarlijks', multiplier: 2 },
     yearly: { label: 'Jaarlijks', multiplier: 1 },
@@ -62,7 +64,7 @@ export function KPICardsSection({
     <div className="space-y-3 min-w-[280px]">
       <h4 className="font-semibold text-sm text-foreground">Opbouw Jaarwaarde</h4>
       <div className="space-y-3">
-        {(['monthly', 'quarterly', 'halfYearly', 'yearly', 'oneoff'] as const).map((key) => {
+        {(['monthly', 'biMonthly', 'quarterly', 'halfYearly', 'yearly', 'oneoff'] as const).map((key) => {
           const item = annualValueBreakdown[key];
           if (item.count === 0) return null;
           const { label, multiplier } = freqLabels[key];

@@ -59,7 +59,7 @@ const emptyStats = (): WeekStats => ({
   annualValueRecurring: 0,
   durationSec: 0,
   loggedSeconds: 0,
-  freqCounts: { monthly: 0, quarterly: 0, halfYearly: 0, yearly: 0, oneoff: 0 },
+  freqCounts: { monthly: 0, biMonthly: 0, quarterly: 0, halfYearly: 0, yearly: 0, oneoff: 0 },
   unreachable: 0,
   upgradeSales: 0,
 });
@@ -606,6 +606,7 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   rows.push([]);
   rows.push(['POSITIEF PER FREQUENTIE']);
   rows.push(row('Machtiging per Maand', (s) => s.freqCounts.monthly));
+  rows.push(row('Machtiging per 2 Maanden', (s) => s.freqCounts.biMonthly));
   rows.push(row('Machtiging per Kwartaal', (s) => s.freqCounts.quarterly));
   rows.push(row('Machtiging per Half jaar', (s) => s.freqCounts.halfYearly));
   rows.push(row('Machtiging per Jaar', (s) => s.freqCounts.yearly));
@@ -750,6 +751,7 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   rows.push([]);
   rows.push(['POSITIEF PER FREQUENTIE']);
   rows.push(row('Machtiging per Maand', (s) => s.freqCounts.monthly));
+  rows.push(row('Machtiging per 2 Maanden', (s) => s.freqCounts.biMonthly));
   rows.push(row('Machtiging per Kwartaal', (s) => s.freqCounts.quarterly));
   rows.push(row('Machtiging per Half jaar', (s) => s.freqCounts.halfYearly));
   rows.push(row('Machtiging per Jaar', (s) => s.freqCounts.yearly));

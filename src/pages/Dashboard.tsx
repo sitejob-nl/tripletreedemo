@@ -304,6 +304,7 @@ const Index = () => {
     const amountCol = currentProject.mapping_config.amount_col;
     const breakdown: AnnualValueBreakdown = {
       monthly: { count: 0, value: 0, totalAmount: 0 },
+      biMonthly: { count: 0, value: 0, totalAmount: 0 },
       quarterly: { count: 0, value: 0, totalAmount: 0 },
       halfYearly: { count: 0, value: 0, totalAmount: 0 },
       yearly: { count: 0, value: 0, totalAmount: 0 },

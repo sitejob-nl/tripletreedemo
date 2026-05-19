@@ -54,6 +54,7 @@ export interface DayStats {
   // Frequency breakdown
   freqBreakdown: {
     monthly: FreqBreakdown;
+    biMonthly: FreqBreakdown;
     quarterly: FreqBreakdown;
     halfYearly: FreqBreakdown;
     yearly: FreqBreakdown;

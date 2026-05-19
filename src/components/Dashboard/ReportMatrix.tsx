@@ -434,6 +434,7 @@ export const ReportMatrix = ({
           {/* POSITIEF - FREQUENTIE BREAKDOWN */}
           {renderSectionHeader('Positief per Frequentie', 'bg-kpi-blue', 'text-kpi-blue-text')}
           {renderFreqRow(getFrequencyLabel('monthly'), 'monthly', 'count')}
+          {renderFreqRow(getFrequencyLabel('biMonthly'), 'biMonthly', 'count')}
           {renderFreqRow(getFrequencyLabel('quarterly'), 'quarterly', 'count')}
           {renderFreqRow(getFrequencyLabel('halfYearly'), 'halfYearly', 'count')}
           {renderFreqRow(getFrequencyLabel('yearly'), 'yearly', 'count')}
@@ -443,6 +444,7 @@ export const ReportMatrix = ({
           {/* OPBRENGST PER FREQUENTIE */}
           {renderSectionHeader('Opbrengst per Frequentie (jaarwaarde)', 'bg-kpi-purple', 'text-kpi-purple-text')}
           {renderFreqRow(getFrequencyLabel('monthly'), 'monthly', 'annualValue')}
+          {renderFreqRow(getFrequencyLabel('biMonthly'), 'biMonthly', 'annualValue')}
           {renderFreqRow(getFrequencyLabel('quarterly'), 'quarterly', 'annualValue')}
           {renderFreqRow(getFrequencyLabel('halfYearly'), 'halfYearly', 'annualValue')}
           {renderFreqRow(getFrequencyLabel('yearly'), 'yearly', 'annualValue')}

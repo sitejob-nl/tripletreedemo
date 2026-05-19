@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban } from 'lucide-react';
 import { DBProjectBase, MappingConfig, ProjectType } from '@/types/database';
-import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED } from '@/lib/statsHelpers';
+import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType } from '@/lib/statsHelpers';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -906,16 +906,18 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             </div>
           </AccordionTrigger>
           <AccordionContent className="space-y-4 pt-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-start justify-between mb-4 gap-4">
               <p className="text-xs text-muted-foreground">
-                Toont hoe de huidige configuratie de eerste 5 sales records berekent.
+                Hieronder zie je hoe wij een paar voorbeeld-sales vertalen naar een jaarwaarde.
+                Klopt de kolom <strong>"Wij lezen dit als"</strong>? Dan klopt de jaarwaarde-KPI in het dashboard ook.
+                Klopt iets niet → pas de <strong>Frequentie Mapping</strong> hierboven aan.
               </p>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => refetchPreview()}
                 disabled={previewLoading}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 flex-shrink-0"
               >
                 <RefreshCw size={14} className={previewLoading ? 'animate-spin' : ''} />
                 Ververs
@@ -927,54 +929,62 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                 <Loader2 size={24} className="animate-spin text-muted-foreground" />
               </div>
             ) : previewRecords && previewRecords.length > 0 ? (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-20">Record</TableHead>
-                      <TableHead>Resultaat</TableHead>
-                      <TableHead className="text-right">Bedrag</TableHead>
-                      <TableHead>Freq. Input</TableHead>
-                      <TableHead>Match</TableHead>
-                      <TableHead className="text-right">Mult.</TableHead>
-                      <TableHead className="text-right">Jaarwaarde</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewRecords.map((record) => (
-                      <TableRow key={record.recordId}>
-                        <TableCell className="font-mono text-xs">#{record.recordId}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-xs">{record.resultaat}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {record.amountRaw ?? '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {record.freqRaw ?? <span className="text-muted-foreground">-</span>}
-                        </TableCell>
-                        <TableCell>
-                          {record.matchedKey ? (
-                            <Badge variant="outline" className="text-xs">
-                              {record.matchedKey}
-                            </Badge>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs">
-                              Geen match
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {record.multiplier}x
-                        </TableCell>
-                        <TableCell className="text-right font-bold">
-                          €{record.annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
-                        </TableCell>
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Resultaat</TableHead>
+                        <TableHead className="text-right">Bedrag</TableHead>
+                        <TableHead>Frequentie uit BasiCall</TableHead>
+                        <TableHead>Wij lezen dit als</TableHead>
+                        <TableHead className="text-right">Per jaar</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                    </TableHeader>
+                    <TableBody>
+                      {previewRecords.map((record) => {
+                        const amount = typeof record.amountRaw === 'number'
+                          ? record.amountRaw
+                          : record.amountRaw
+                            ? parseFloat(String(record.amountRaw).replace(',', '.').replace(/[^0-9.\-]/g, '')) || 0
+                            : 0;
+                        return (
+                          <TableRow key={record.recordId}>
+                            <TableCell>
+                              <Badge variant="secondary" className="text-xs">{record.resultaat}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-mono">
+                              {amount > 0 ? `€ ${amount.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-muted-foreground">—</span>}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {record.freqRaw ? `"${record.freqRaw}"` : <span className="text-muted-foreground">—</span>}
+                            </TableCell>
+                            <TableCell>
+                              {record.matchedKey ? (
+                                <span className="text-xs">
+                                  <strong>{getFrequencyLabel(record.frequencyType as FrequencyType)}</strong>
+                                  <span className="text-muted-foreground"> (×{record.multiplier})</span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-destructive flex items-center gap-1">
+                                  <AlertTriangle size={12} /> Niet herkend → ×1
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-bold">
+                              €{record.annualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2 })}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="text-xs text-right pt-2 border-t border-border">
+                  <strong>Totaal voorbeeld: €{previewRecords.reduce((s, r) => s + r.annualValue, 0).toLocaleString('nl-NL', { minimumFractionDigits: 2 })} per jaar</strong>
+                  <span className="text-muted-foreground"> uit {previewRecords.length} sample {previewRecords.length === 1 ? 'sale' : 'sales'}</span>
+                </div>
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                 <AlertTriangle size={24} className="mb-2" />
@@ -983,17 +993,30 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
               </div>
             )}
 
-            {previewRecords && previewRecords.some(r => !r.matchedKey) && (
-              <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs text-amber-500">
-                    <strong>Waarschuwing:</strong> Sommige records hebben geen frequentie match. 
-                    Voeg de ontbrekende frequenties toe aan de Frequentie Mapping om accurate jaarwaarden te berekenen.
+            {previewRecords && previewRecords.some(r => !r.matchedKey) && (() => {
+              const unmatched = Array.from(new Set(
+                previewRecords.filter(r => !r.matchedKey).map(r => r.freqRaw).filter(Boolean)
+              ));
+              return (
+                <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                    <div className="text-xs text-amber-700 dark:text-amber-200">
+                      <strong>Waarschuwing:</strong> {unmatched.length === 1 ? 'Deze frequentie-waarde is' : 'Deze frequentie-waarden zijn'} niet herkend:{' '}
+                      {unmatched.map((v, i) => (
+                        <span key={String(v)}>
+                          <code className="bg-amber-500/20 px-1 rounded">{String(v)}</code>
+                          {i < unmatched.length - 1 ? ', ' : ''}
+                        </span>
+                      ))}.
+                      Voeg {unmatched.length === 1 ? 'die' : 'ze'} toe aan de <strong>Frequentie Mapping</strong> hierboven met de juiste vermenigvuldiger
+                      (per maand = 12, per 2 maanden = 6, per kwartaal = 4, per half jaar = 2, per jaar = 1, eenmalig = 1).
+                      Zonder match wordt elke record gerekend als ×1.
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
