@@ -1,15 +1,10 @@
 import { useCallback } from 'react';
-import * as XLSX from 'xlsx-js-style';
 import { useToast } from '@/hooks/use-toast';
 import { ProcessedCallRecord } from '@/types/dashboard';
 import { MappingConfig, ProjectType, ReportTemplate, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { categorizeInboundResult } from '@/lib/statsHelpers';
 import { ceilHours } from '@/lib/hours';
-import { exportOutboundStandardYear } from '@/hooks/templates/outboundStandardExport';
-import { exportFlatYear } from '@/hooks/templates/flatExport';
-import { exportInboundServiceYear } from '@/hooks/templates/inboundServiceExport';
-import { exportInboundRetentionYear } from '@/hooks/templates/inboundRetentionExport';
 
 interface UseExcelExportParams {
   data: ProcessedCallRecord[];
@@ -36,12 +31,14 @@ export function useExcelExport({
 }: UseExcelExportParams) {
   const { toast } = useToast();
 
-  const handleExportToExcel = useCallback(() => {
+  const handleExportToExcel = useCallback(async () => {
     // Template-specific year export: when a report_template is set, route to its builder.
     // Each template writes its own multi-sheet workbook (Totaal + weektabs) matching the
     // historical rapportage layout. Falls through to legacy single-week export when the
     // template has no builder yet.
+    // Templates are dynamically imported so xlsx-js-style (~900 KB) stays out of the initial bundle.
     if (reportTemplate === 'outbound_standard' && projectId) {
+      const { exportOutboundStandardYear } = await import('@/hooks/templates/outboundStandardExport');
       void exportOutboundStandardYear({
         projectId,
         projectName,
@@ -55,6 +52,7 @@ export function useExcelExport({
     }
 
     if (reportTemplate === 'flat' && projectId) {
+      const { exportFlatYear } = await import('@/hooks/templates/flatExport');
       void exportFlatYear({
         projectId,
         projectName,
@@ -66,6 +64,7 @@ export function useExcelExport({
     }
 
     if (reportTemplate === 'inbound_service' && projectId) {
+      const { exportInboundServiceYear } = await import('@/hooks/templates/inboundServiceExport');
       void exportInboundServiceYear({
         projectId,
         projectName,
@@ -77,6 +76,7 @@ export function useExcelExport({
     }
 
     if (reportTemplate === 'inbound_retention' && projectId) {
+      const { exportInboundRetentionYear } = await import('@/hooks/templates/inboundRetentionExport');
       void exportInboundRetentionYear({
         projectId,
         projectName,
@@ -95,6 +95,10 @@ export function useExcelExport({
       });
       return;
     }
+
+    // xlsx-js-style is CommonJS; some bundlers wrap it under .default on dynamic import.
+    const XLSXModule = await import('xlsx-js-style');
+    const XLSX = ('utils' in XLSXModule ? XLSXModule : (XLSXModule as { default: typeof XLSXModule }).default);
 
     const days = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
 

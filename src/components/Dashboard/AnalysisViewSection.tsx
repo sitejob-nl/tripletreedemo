@@ -1,12 +1,17 @@
+import { lazy, Suspense } from 'react';
 import { Loader2, GitCompare, MapPin, Phone, PieChart } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { WeekComparison } from './WeekComparison';
-import { GeographicAnalysis } from './GeographicAnalysis';
 import { CallAttemptsAnalysis } from './CallAttemptsAnalysis';
 import { ResultsBreakdown } from './ResultsBreakdown';
 import { ProcessedCallRecord } from '@/types/dashboard';
 import { MappingConfig } from '@/types/database';
 import { WeekYear } from '@/hooks/useCallRecords';
+
+// Lazy-load the geographic tab — mapbox-gl is ~1.7 MB and only used here.
+const GeographicAnalysis = lazy(() =>
+  import('./GeographicAnalysis').then((m) => ({ default: m.GeographicAnalysis }))
+);
 
 interface AnalysisViewSectionProps {
   data: ProcessedCallRecord[];
@@ -74,7 +79,16 @@ export function AnalysisViewSection({
         </TabsContent>
         
         <TabsContent value="geographic" className="mt-0">
-          <GeographicAnalysis data={data} locationCol={mappingConfig?.location_col} />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center py-12 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                Kaart laden...
+              </div>
+            }
+          >
+            <GeographicAnalysis data={data} locationCol={mappingConfig?.location_col} />
+          </Suspense>
         </TabsContent>
         
         <TabsContent value="attempts" className="mt-0">
