@@ -98,10 +98,13 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       : DEFAULT_REASON_CATEGORIES
   );
 
-  // Negative categorization state (outbound)
-  const [unreachableResults, setUnreachableResults] = useState<string[]>(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
-  const [negativeArgumentated, setNegativeArgumentated] = useState<string[]>(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
-  const [negativeNotArgumentated, setNegativeNotArgumentated] = useState<string[]>(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
+  // Negative categorization state (outbound). Default empty: auto-suggest
+  // below picks project-specific matches once availableResults loads. The
+  // hardcoded constants stay as runtime fallback in isUnreachable() /
+  // categorizeNegativeResult() for projects without explicit config.
+  const [unreachableResults, setUnreachableResults] = useState<string[]>(project.mapping_config.unreachable_results ?? []);
+  const [negativeArgumentated, setNegativeArgumentated] = useState<string[]>(project.mapping_config.negative_argumentated ?? []);
+  const [negativeNotArgumentated, setNegativeNotArgumentated] = useState<string[]>(project.mapping_config.negative_not_argumentated ?? []);
 
   // Per-result exclusions from ratio denominators
   const [excludeFromNet, setExcludeFromNet] = useState<string[]>(project.mapping_config.exclude_from_net || []);
@@ -116,6 +119,38 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [hoursFactor, setHoursFactor] = useState<number>(project.hours_factor ?? 1.0);
 
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
+
+  // Projects that never saved unreachable/negative configs use the runtime
+  // fallback in isUnreachable() / categorizeNegativeResult(). For the admin UI
+  // we surface project-specific suggestions: substring-match the generic
+  // patterns against the actual resultaat values for this project. Only fires
+  // when the field is undefined (never saved) — saved [] stays empty.
+  const unreachableNeverSaved = project.mapping_config.unreachable_results === undefined;
+  const negArgNeverSaved = project.mapping_config.negative_argumentated === undefined;
+  const negNotArgNeverSaved = project.mapping_config.negative_not_argumentated === undefined;
+
+  useEffect(() => {
+    if (availableResults.length === 0) return;
+
+    const suggest = (patterns: string[]): string[] =>
+      availableResults.filter((r) =>
+        patterns.some((p) => r.toLowerCase().includes(p.toLowerCase())),
+      );
+
+    if (unreachableNeverSaved && unreachableResults.length === 0) {
+      const s = suggest(UNREACHABLE_RESULTS);
+      if (s.length) setUnreachableResults(s);
+    }
+    if (negArgNeverSaved && negativeArgumentated.length === 0) {
+      const s = suggest(NEGATIVE_ARGUMENTATED);
+      if (s.length) setNegativeArgumentated(s);
+    }
+    if (negNotArgNeverSaved && negativeNotArgumentated.length === 0) {
+      const s = suggest(NEGATIVE_NOT_ARGUMENTATED);
+      if (s.length) setNegativeNotArgumentated(s);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only re-runs when availableResults changes for this project
+  }, [availableResults, project.id]);
 
   // Field-existence checks: does the chosen column actually occur in raw_data of this project?
   // Only meaningful once availableFields has loaded (non-empty); during load we suppress.
@@ -194,9 +229,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         ? { ...DEFAULT_REASON_CATEGORIES, ...project.mapping_config.reason_categories }
         : DEFAULT_REASON_CATEGORIES
     );
-    setUnreachableResults(project.mapping_config.unreachable_results || UNREACHABLE_RESULTS);
-    setNegativeArgumentated(project.mapping_config.negative_argumentated || NEGATIVE_ARGUMENTATED);
-    setNegativeNotArgumentated(project.mapping_config.negative_not_argumentated || NEGATIVE_NOT_ARGUMENTATED);
+    setUnreachableResults(project.mapping_config.unreachable_results ?? []);
+    setNegativeArgumentated(project.mapping_config.negative_argumentated ?? []);
+    setNegativeNotArgumentated(project.mapping_config.negative_not_argumentated ?? []);
     setExcludeFromNet(project.mapping_config.exclude_from_net || []);
     setExcludeFromRetention(project.mapping_config.exclude_from_retention || []);
     setWeekdayRates(project.mapping_config.weekday_rates || {});
@@ -366,6 +401,16 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     );
   };
 
+  const renderAutoSuggestHint = (neverSaved: boolean, currentLength: number) =>
+    neverSaved && currentLength > 0 ? (
+      <div className="text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 rounded-md px-3 py-2 flex items-start gap-2">
+        <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+        <span>
+          Automatisch voorgesteld op basis van resultaten in dit project. Pas aan en klik op <strong>Opslaan</strong> om je keuze vast te leggen.
+        </span>
+      </div>
+    ) : null;
+
   const renderResultSelect = (onAdd: (r: string) => void, source: string[] = availableResultsFiltered) => (
     source.length > 0 && (
       <Select onValueChange={onAdd} value="">
@@ -466,6 +511,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
                 <p className="text-xs text-muted-foreground">Contacten die nooit bereikt zijn (geen gehoor, voicemail, foutief nummer). Deze worden automatisch uit de netto-conversie-noemer gehaald.</p>
+                {renderAutoSuggestHint(unreachableNeverSaved, unreachableResults.length)}
                 {renderResultBadges(unreachableResults, (r) => setUnreachableResults(unreachableResults.filter(x => x !== r)))}
                 {renderResultSelect((r) => setUnreachableResults([...unreachableResults, r]))}
                 <Input
@@ -487,6 +533,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
                 <p className="text-xs text-muted-foreground">💬 Bewuste weigering door de prospect zelf (bv. "geen geld", "geen interesse", "te oud"). Klik op <Ban size={10} className="inline" /> per code om uit netto-conversie te halen.</p>
+                {renderAutoSuggestHint(negArgNeverSaved, negativeArgumentated.length)}
                 {renderResultBadges(
                   negativeArgumentated,
                   (r) => setNegativeArgumentated(negativeArgumentated.filter((x) => x !== r)),
@@ -512,6 +559,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
               </AccordionTrigger>
               <AccordionContent className="space-y-4 pt-4">
                 <p className="text-xs text-muted-foreground">🛡️ Externe factor waar de agent niets aan kon doen (bv. "overleden", "onjuiste NAW", "fax", "verhuisd"). Klik op <Ban size={10} className="inline" /> per code om uit netto-conversie te halen.</p>
+                {renderAutoSuggestHint(negNotArgNeverSaved, negativeNotArgumentated.length)}
                 {renderResultBadges(
                   negativeNotArgumentated,
                   (r) => setNegativeNotArgumentated(negativeNotArgumentated.filter((x) => x !== r)),
