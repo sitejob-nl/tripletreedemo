@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ProjectType } from '@/types/database';
 import { ResolvedDateFilter } from './useDateFilter';
 
 interface KPIAggregates {
@@ -14,19 +14,36 @@ interface UseKPIAggregatesOptions {
   projectId?: string;
   dateFilter?: ResolvedDateFilter;
   mappingConfig?: MappingConfig;
+  projectType?: ProjectType;
 }
 
 // Default sale results if not configured
 const DEFAULT_SALE_RESULTS = ['Sale', 'Donateur', 'Toezegging', 'Afspraak', 'Positief', 'Verkoop', 'Ja', 'Akkoord'];
 
-export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig }: UseKPIAggregatesOptions) => {
-  const saleResults = mappingConfig?.sale_results?.length 
-    ? mappingConfig.sale_results 
-    : DEFAULT_SALE_RESULTS;
+export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, projectType }: UseKPIAggregatesOptions) => {
+  // For inbound retention projects the top KPI counts "behouden" records
+  // (retention_results ∪ partial_success_results), not sales. Without this the
+  // top card showed 0 while the detail matrix categorized the same record as
+  // retained — divergence reported for Hersenstichting inbound week 20.
+  const positiveResults = (() => {
+    if (projectType === 'inbound') {
+      const retention = mappingConfig?.retention_results ?? [];
+      const partial = mappingConfig?.partial_success_results ?? [];
+      const combined = [...retention, ...partial];
+      if (combined.length) return combined;
+    }
+    return mappingConfig?.sale_results?.length
+      ? mappingConfig.sale_results
+      : DEFAULT_SALE_RESULTS;
+  })();
+  // Substring-matching for inbound retention mirrors categorizeInboundResult.
+  // Outbound keeps exact equality so 'Sale' doesn't accidentally match 'Sale niet doorgezet'.
+  const useSubstring = projectType === 'inbound';
+  const positiveResultsLower = useSubstring ? positiveResults.map(r => r.toLowerCase()) : positiveResults;
 
   // Query 1: Get basic aggregates
   const basicAggregatesQuery = useQuery({
-    queryKey: ['kpi_basic_aggregates', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, saleResults],
+    queryKey: ['kpi_basic_aggregates', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, projectType, positiveResults],
     queryFn: async () => {
       if (!projectId) return null;
       
@@ -69,19 +86,59 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig }: UseKP
           }
         }
 
+        const matchesPositive = (resultaat: string | null) => {
+          const raw = (resultaat || '').toLowerCase();
+          if (!raw) return false;
+          if (useSubstring) {
+            return (positiveResultsLower as string[]).some(p => raw.includes(p));
+          }
+          return positiveResults.includes(resultaat || '');
+        };
+
         return {
           totalRecords: allRecords.length,
-          totalSales: allRecords.filter(r => saleResults.includes(r.resultaat || '')).length,
+          totalSales: allRecords.filter(r => matchesPositive(r.resultaat)).length,
           totalGesprekstijdSec: allRecords.reduce((sum, r) => sum + (r.gesprekstijd_sec || 0), 0)
         };
       }
-      
-      // For 'all' (no filtering), use the RPC
+
+      // For 'all' (no filtering), use the RPC. The RPC matches exactly, so for
+      // inbound substring-matching we fall back to a paginated client-side count.
+      if (useSubstring) {
+        const allRecords: Array<{ gesprekstijd_sec: number | null; resultaat: string | null }> = [];
+        const batchSize = 1000;
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('call_records')
+            .select('gesprekstijd_sec, resultaat')
+            .eq('project_id', projectId)
+            .range(offset, offset + batchSize - 1);
+          if (error) throw error;
+          if (data && data.length > 0) {
+            allRecords.push(...data);
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+          } else {
+            hasMore = false;
+          }
+        }
+        return {
+          totalRecords: allRecords.length,
+          totalSales: allRecords.filter(r => {
+            const raw = (r.resultaat || '').toLowerCase();
+            return raw && (positiveResultsLower as string[]).some(p => raw.includes(p));
+          }).length,
+          totalGesprekstijdSec: allRecords.reduce((sum, r) => sum + (r.gesprekstijd_sec || 0), 0)
+        };
+      }
+
       const { data, error } = await supabase
         .rpc('get_project_kpi_totals', {
           p_project_id: projectId,
           p_week_number: null,
-          p_sale_results: saleResults
+          p_sale_results: positiveResults
         });
       
       if (error) throw error;

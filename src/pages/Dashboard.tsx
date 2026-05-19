@@ -156,7 +156,8 @@ const Index = () => {
   const { data: kpiAggregates, isLoading: kpiLoading } = useKPIAggregates({
     projectId: currentProject?.id,
     dateFilter,
-    mappingConfig: currentProject?.mapping_config
+    mappingConfig: currentProject?.mapping_config,
+    projectType: currentProject?.project_type as ProjectType | undefined
   });
 
   // Fetch logged time for accurate cost calculation

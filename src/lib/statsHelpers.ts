@@ -35,18 +35,6 @@ export const detectFrequencyFromConfig = (
   if (!freqRaw) return defaultResult;
 
   const freqStr = String(freqRaw).toLowerCase().trim();
-  
-  // Check if it's a numeric value first
-  const freqNum = parseInt(freqStr, 10);
-  if (!isNaN(freqNum) && freqNum > 0 && freqStr === String(freqNum)) {
-    // It's a pure number (e.g., "12", "4", "1")
-    return {
-      type: mapMultiplierToType(freqNum),
-      multiplier: freqNum,
-      matchedKey: `(numeriek: ${freqNum})`,
-      isOneOff: freqNum === 1,
-    };
-  }
 
   // Check one-off patterns first (highest priority)
   if (freqStr.includes('eenmalig') || freqStr === '0' || freqStr === 'e') {
@@ -58,7 +46,9 @@ export const detectFrequencyFromConfig = (
     };
   }
 
-  // Try to match against freq_map using substring matching
+  // Try to match against freq_map. Project-specific configs sometimes use
+  // numeric string keys (e.g. Proefdiervrij {"1":12,"3":4}) where "1"=per maand,
+  // so this MUST run before the generic numeric-string fallback below.
   for (const [mapKey, mapValue] of Object.entries(freqMap)) {
     const lowerMapKey = mapKey.toLowerCase();
     if (freqStr.includes(lowerMapKey) || lowerMapKey.includes(freqStr)) {
@@ -69,6 +59,18 @@ export const detectFrequencyFromConfig = (
         isOneOff: mapValue === 1 && !freqStr.includes('jaar'),
       };
     }
+  }
+
+  // Numeric fallback: only when freq_map didn't match. Treat the raw value
+  // as a literal multiplier (e.g. "12" → monthly without any freq_map present).
+  const freqNum = parseInt(freqStr, 10);
+  if (!isNaN(freqNum) && freqNum > 0 && freqStr === String(freqNum)) {
+    return {
+      type: mapMultiplierToType(freqNum),
+      multiplier: freqNum,
+      matchedKey: `(numeriek: ${freqNum})`,
+      isOneOff: freqNum === 1,
+    };
   }
 
   // Fallback: use pattern matching for common terms
