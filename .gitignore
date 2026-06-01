@@ -23,6 +23,9 @@ supabase/.temp/
 # Local reference Excel templates / rapportages (not part of source)
 rapportages/
 
+# Local BasiCall API reference docs (PDFs, not part of source)
+API/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
