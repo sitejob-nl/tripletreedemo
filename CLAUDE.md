@@ -14,7 +14,7 @@
 - **Export**: xlsx-js-style (Excel-weekrapportage per project_type)
 - **Hosting frontend**: Vercel, CNAME `app.ttcallcenters.nl` → Vercel (DNS bij Meetwerk ICT)
 - **DB**: Supabase project `tvsdbztjqksxybxjwtrf` (Frankfurt eu-central-2, Postgres 17.6)
-- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`, cron nachtelijks (zie §Status)
+- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`, cron **04:00 Europe/Amsterdam** in de `sitejob-tt` crontab (sinds 2026-06-01 draait de sync als `sitejob-tt`, niet meer als root; zie §Status)
 - **Origin**: project is extern gescaffold, eerste live-schema wijzigingen belandden daardoor niet allemaal in `supabase/migrations/`. Altijd live schema checken via MCP voor je lokale migrations baseert op wat er in de repo staat.
 
 ## Architectuur
@@ -106,10 +106,10 @@ Mapbox public token hardcoded in [src/config/mapbox.ts](src/config/mapbox.ts).
 ## VPS-toegang (Kas)
 
 ```bash
-ssh sitejob-tt@85.10.132.126
-cd /opt/basicall-sync
-# sync.js + logs. Cron: crontab -l (of /etc/cron.d/)
-tail -n 200 /var/log/basicall-sync.log   # pad verifiëren
+ssh tt-vps                 # alias in ~/.ssh/config → sitejob-tt@85.10.132.126 (key ~/.ssh/tt_vps)
+cd /opt/basicall-sync      # sinds 2026-06-01 eigendom van sitejob-tt → deployen kan zonder sudo
+crontab -l                 # nachtsync staat in sitejob-tt's EIGEN crontab (04:00), niet meer root/cron.d
+tail -n 200 /var/log/basicall.log   # actueel logpad — LET OP: NIET basicall-sync.log
 ```
 
 **Scriptbron staat nu in GitHub** onder `scripts/basicall-sync/sync.js`; productie blijft draaien vanaf `/opt/basicall-sync/sync.js` op de VPS. Wijzig sync-logica eerst in de repo, deploy daarna naar de VPS en houd noodwijzigingen op de VPS direct gespiegeld terug naar GitHub.
@@ -171,8 +171,9 @@ Zie [AUDIT-2026-04-16.md](./AUDIT-2026-04-16.md) + [AUDIT-VPS-SYNC-2026-04-16.md
 1. ~~**19 van 31 projecten syncen nooit**~~ — **vandaag opgelost**: 3 projecten hadden records in de afgelopen 2 weken (ANBO 734: 75 records, Proefdiervrij winback 759: 128, Trombosestichting 761: 83). De overige 14 zijn slapend (geen afgehandelde records in BasiCall), niet kapot. Root-cause was een silent-token-failure in `performSync` — zie audit.
 2. ~~**Voorraad-KPI leeg**~~ — sync-script gebruikt `Batch.getHandled`/`getTotal` al; `batches` vult zodra admin per project batches koppelt via `BatchManager.tsx`.
 3. ~~**Mapping-configs met silent €0**~~ — **vandaag gefixt**: migration `20260416120000_fix_mapping_configs.sql` + `mapping_issues`-view + guardrail in `MappingTool.tsx`.
-4. **`Project.getIngelogdeTijden` 500-errors** blijven — BasiCall-side, gebeurt op dagen zonder logged agents. Retry-logic vangt op; geoptimaliseerd kan via no-retry-op-500.
-5. **Silent token-failure in nachtsync** — VPS-script schrijft geen `sync_logs` als token invalideert tijdens nachtsync (alleen bij handmatige sync_jobs). Fix = 6 regels; zie AUDIT-VPS-SYNC §B.2.
+4. ~~**`Project.getIngelogdeTijden` 500-errors**~~ — **gemitigeerd 2026-06-01 (B.5)**: 500's op dagen zonder logged agents worden nu als "geen data" herkend en niet meer geretryd (scheelt ~12s/lege dag + log-ruis). De 500's zelf blijven BasiCall-side. Daarnaast HTTP-timeout 30s→60s tegen chronische timeouts op grote projecten (734/827/888/924/695).
+5. ~~**Silent token-failure in nachtsync**~~ — **opgelost 2026-06-01**: de redundante pre-flight token-check is verwijderd. Die schreef een `warning`-rij die meetelde in `getMissedDays()` en zo de wekelijkse maandag-gap maskeerde (→ dataverlies). De echte sync logt nu zelf `failed` met `[Mogelijk token-/auth-probleem]`-prefix via de catch; de maandag-gap herstelt vanzelf via de missed-days-backfill.
+9. **Wekelijkse maandag-uitval** — elke maandag ~04:00 geeft BasiCall HTTP 500 op alle projecten (vermoedelijk onderhoudsvenster aan hun kant); 0 records die nacht, herstelt zichzelf de dinsdag erna via de backfill. Nog na te vragen bij BasiCall. Geen brand — niet als storing escaleren.
 6. **VPS/repo sync-discipline** — bron staat nu in `scripts/basicall-sync/sync.js`; houd `/opt/basicall-sync/sync.js` en de repo-copy gelijk na elke deploy of noodwijziging. Zie AUDIT-VPS-SYNC §B.7.
 7. **Geen tests** in frontend.
 8. **Mapping-tool zelfstandig** — niet formeel getest met een gloednieuw project. Amazone kinderen + Omroep MAX zijn de eerste echte casus.
