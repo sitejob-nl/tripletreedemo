@@ -18,6 +18,9 @@ const CONFIG = {
     DELAY_BETWEEN_DAYS_MS: 100,    // rate limit per dag (inlogtijd)
     MAX_RETRIES: 3,
     RETRY_DELAY_MS: 2000,
+    HTTP_TIMEOUT_MS: 60000,        // was 30000 hardcoded. Verhoogd: grote outbound-projecten
+                                   // (734/827/888/924/695) liepen structureel tegen "timeout of
+                                   // 30000ms" aan terwijl BasiCall traag-maar-wel antwoordt.
     MAX_RECORD_ID_LENGTH: 20,
     TIMEZONE: 'Europe/Amsterdam',
 };
@@ -201,6 +204,9 @@ async function withRetry(fn, label, maxRetries = CONFIG.MAX_RETRIES) {
         try {
             return await fn();
         } catch (err) {
+            // "Geen data" (BasiCall geeft HTTP 500 op een dag zonder agent-activiteit) is geen
+            // tijdelijke fout — meteen doorgeven zonder de retry-backoff te verbranden. Zie §B.5.
+            if (err.isNoData) throw err;
             const isLast = attempt === maxRetries;
             if (isLast) {
                 console.error(`   ❌ ${label}: Alle ${maxRetries} pogingen mislukt. Laatste error: ${err.message}`);
@@ -217,25 +223,38 @@ async function withRetry(fn, label, maxRetries = CONFIG.MAX_RETRIES) {
 async function soapCall(method, body, token, projectId) {
     const xml = buildSoapRequest(method, body, token, projectId);
     return withRetry(async () => {
-        const { data: xmlData } = await axios.post(BASICALL_URL, xml, {
-            headers: { 'Content-Type': 'text/xml; charset=utf-8' },
-            timeout: 30000,
-        });
-        const parsed = await parser.parseStringPromise(xmlData);
-        const respBody = parsed.Envelope?.Body || parsed['SOAP-ENV:Envelope']?.['SOAP-ENV:Body'];
+        try {
+            const { data: xmlData } = await axios.post(BASICALL_URL, xml, {
+                headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+                timeout: CONFIG.HTTP_TIMEOUT_MS,
+            });
+            const parsed = await parser.parseStringPromise(xmlData);
+            const respBody = parsed.Envelope?.Body || parsed['SOAP-ENV:Envelope']?.['SOAP-ENV:Body'];
 
-        // Check voor SOAP Fault
-        const fault = respBody?.Fault || respBody?.['SOAP-ENV:Fault'];
-        if (fault) {
-            const faultMsg = fault.faultstring || fault.detail || JSON.stringify(fault);
-            throw new Error(`SOAP Fault: ${faultMsg}`);
+            // Check voor SOAP Fault
+            const fault = respBody?.Fault || respBody?.['SOAP-ENV:Fault'];
+            if (fault) {
+                const faultMsg = fault.faultstring || fault.detail || JSON.stringify(fault);
+                throw new Error(`SOAP Fault: ${faultMsg}`);
+            }
+
+            return respBody;
+        } catch (err) {
+            // BasiCall geeft HTTP 500 op getIngelogdeTijden voor dagen zonder agent-activiteit
+            // (weekend/feestdag/inactief). Dat is "geen data", niet retry-waardig. Zie §B.5.
+            if (err.response?.status === 500 && method === 'Project.getIngelogdeTijden') {
+                const noDataErr = new Error('Geen inlogtijd-data voor deze dag (HTTP 500)');
+                noDataErr.isNoData = true;
+                throw noDataErr;
+            }
+            throw err;
         }
-
-        return respBody;
     }, `SOAP ${method}`);
 }
 
 // --- TOKEN VALIDATIE ---
+// NB: niet meer aangeroepen in de nachtronde (zie performSync). Bewaard voor een expliciete
+// "test token"-actie (bv. vanuit de admin-UI of een los script).
 async function validateToken(project) {
     try {
         const body = `<datum_van xsi:type="xsd:dateTime">${formatDateISO(new Date())}</datum_van><datum_tot xsi:type="xsd:dateTime">${formatDateISO(new Date())}</datum_tot>`;
@@ -274,8 +293,11 @@ async function syncLoggedTimeDay(project, dayDate) {
 
         return totalSeconds;
     } catch (e) {
-        // Return null bij error zodat we onderscheid kunnen maken met 0 seconden
-        console.error(`      ⚠️  Inlogtijd fout ${formatLocalDate(dayDate)}: ${e.message}`);
+        // Return null bij error zodat we onderscheid kunnen maken met 0 seconden.
+        // "Geen data"-500's (lege dag) niet als fout loggen — dat is verwacht, geen storing.
+        if (!e.isNoData) {
+            console.error(`      ⚠️  Inlogtijd fout ${formatLocalDate(dayDate)}: ${e.message}`);
+        }
         return null;
     }
 }
@@ -401,7 +423,7 @@ async function syncLoggedTimeSingleDay(project, start, end) {
             if (saved) console.log('   💾 Opgeslagen.');
         }
     } catch (e) {
-        console.error(`   ❌ Error inlogtijd:`, e.message);
+        if (!e.isNoData) console.error(`   ❌ Error inlogtijd:`, e.message);
     }
 }
 
@@ -514,22 +536,16 @@ async function performSync(project, start, end, jobId = null) {
     }
 
     try {
-        // Pre-flight uses the same endpoint as the actual sync below. On failure, log a
-        // warning and continue — the catch at the bottom handles real failures. Hard-skipping
-        // here previously caused projects to silently miss whole days when the API hiccupped.
-        const tokenValid = await validateToken(project);
-        if (!tokenValid) {
-            const msg = `Pre-flight token check faalde voor project ${project.name} — sync wordt alsnog geprobeerd`;
-            console.warn(`   ⚠️  ${msg}`);
-            await supabase.from('sync_logs').insert({
-                project_id: project.id,
-                status: 'warning',
-                records_synced: 0,
-                sync_from: start.toISOString(),
-                sync_to: end.toISOString(),
-                error_message: msg,
-            });
-        }
+        // GEEN aparte pre-flight token-check meer. Die deed exact dezelfde call als de echte sync
+        // hieronder (Record.getAfgehandeldIds) en schreef bij elke API-hik een 'warning'-rij weg.
+        // Twee problemen:
+        //   1) Dataverlies: die 'warning'-rij telt mee in getMissedDays() (status in success|warning).
+        //      Bij de wekelijkse maandag-500's van BasiCall maskeerde de warning de gemiste dag,
+        //      waardoor de missed-days-backfill de nacht erna NIET triggerde → de dag bleef leeg.
+        //   2) Dubbele kosten/ruis: de doublure-call verdubbelde de timeout-tijd en de logregels.
+        // De echte sync hieronder faalt vanzelf zichtbaar via de catch (status 'failed'); dat dekt
+        // de B.2-zichtbaarheid af zonder de bijwerkingen. validateToken() blijft bestaan voor een
+        // eventuele expliciete "test token"-actie, maar draait niet meer in de nachtronde.
 
         // 2. Haal afgehandelde record IDs op
         const idsBody = `<datum_van xsi:type="xsd:dateTime">${formatDateISO(start)}</datum_van><datum_tot xsi:type="xsd:dateTime">${formatDateISO(end)}</datum_tot>`;
@@ -607,13 +623,20 @@ async function performSync(project, start, end, jobId = null) {
     } catch (e) {
         console.error(`      ❌ Fatal error:`, e.message);
 
+        // B.2: maak token-/auth-problemen herkenbaar in de log. Een SOAP Fault of 401/403 wijst op
+        // een ongeldig token; een 500/timeout is doorgaans een tijdelijke BasiCall-storing (bv. de
+        // maandag-onderhoudswindow). Onderscheid helpt bij triage: token-issues vragen actie, een
+        // 500-storing herstelt vanzelf via de missed-days-backfill de volgende nacht.
+        const looksLikeToken = /\btoken\b|\bauth\b|fault|401|403/i.test(e.message || '');
+        const errorMessage = looksLikeToken ? `[Mogelijk token-/auth-probleem] ${e.message}` : e.message;
+
         await supabase.from('sync_logs').insert({
             project_id: project.id,
             status: 'failed',
             records_synced: 0,
             sync_from: start.toISOString(),
             sync_to: end.toISOString(),
-            error_message: e.message,
+            error_message: errorMessage,
         });
 
         if (jobId) {
