@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Deploy basicall-sync naar VPS Hetzner (85.10.132.126 / user sitejob-tt)
 #
-# Voorwaarde: ssh-key gekoppeld, alias "sitejob-tt" in ~/.ssh/config OF directe user@host.
+# Voorwaarde: ssh-key gekoppeld (bijv. ~/.ssh/tt_vps + Host 85.10.132.126 / alias tt-vps in ~/.ssh/config).
+# Sinds 2026-06-01 is /opt/basicall-sync eigendom van sitejob-tt -> rsync/deploy werkt ZONDER sudo.
+# Sync draait als sitejob-tt (cron 04:00), logt naar /var/log/basicall.log.
 # Bij eerste run op VPS: `cd /opt/basicall-sync && npm install` + `.env` invullen.
 #
 # Gebruik:
