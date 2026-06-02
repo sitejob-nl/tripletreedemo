@@ -1011,17 +1011,23 @@ async function run() {
 
             // 2. Losse gemiste dagen (ook midden-gaten) elk GEÏSOLEERD inhalen, zodat één
             //    falende dag de rest niet meesleurt en gaten zelfgenezend worden.
-            const missingDays = await getMissedDays(p);
-            if (missingDays.length > 0) {
-                console.log(`\n⚠️  ${p.name}: ${missingDays.length} losse gemiste dag(en) inhalen`);
-                for (const day of missingDays) {
-                    const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
-                    const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999);
-                    console.log(`   ↩️  inhalen ${formatLocalDate(day)}`);
-                    await performSync(p, dayStart, dayEnd);
-                    await syncLoggedTimeSingleDay(p, dayStart, dayEnd);
-                    await sleep(CONFIG.DELAY_BETWEEN_DAYS_MS);
+            //    Defensief in try/catch: een fout in de backfill-detectie mag NOOIT de
+            //    normale nachtronde (stap 1) of de overige projecten afbreken.
+            try {
+                const missingDays = await getMissedDays(p);
+                if (missingDays.length > 0) {
+                    console.log(`\n⚠️  ${p.name}: ${missingDays.length} losse gemiste dag(en) inhalen`);
+                    for (const day of missingDays) {
+                        const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
+                        const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999);
+                        console.log(`   ↩️  inhalen ${formatLocalDate(day)}`);
+                        await performSync(p, dayStart, dayEnd);
+                        await syncLoggedTimeSingleDay(p, dayStart, dayEnd);
+                        await sleep(CONFIG.DELAY_BETWEEN_DAYS_MS);
+                    }
                 }
+            } catch (backfillErr) {
+                console.warn(`   ⚠️  Backfill-check overgeslagen voor ${p.name}: ${backfillErr.message}`);
             }
 
             // 3. Batch discovery + totals altijd updaten
