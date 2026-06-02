@@ -25,6 +25,16 @@ const CONFIG = {
     TIMEZONE: 'Europe/Amsterdam',
 };
 
+// --- BACKFILL / ALERTING ---
+// Per-dag missed-days-backfill: detecteer ook MIDDEN-gaten (een dag die faalde terwijl een
+// latere dag wél slaagde, bijv. STC giftgevers wo-27-mei timeout). Begrensd venster + cap
+// per nacht voorkomen dat een dood project (ANBO BasiCall-500) eindeloos blijft hameren.
+const BACKFILL_LOOKBACK_DAYS = 10;
+const BACKFILL_MAX_DAYS_PER_RUN = 5;
+// Persistent-failure alert: na N opeenvolgende mislukte nachten 1× een error_logs-rij wegschrijven
+// (daarna 1×/week), zodat een chronische uitval (ANBO 734/827) niet maandenlang stil blijft.
+const ALERT_AFTER_FAILED_NIGHTS = 3;
+
 // --- TOKEN HELPER ---
 // Tokens staan in project_secrets (onbereikbaar via API, alleen service key)
 async function enrichProjectsWithTokens(projects) {
@@ -382,6 +392,7 @@ async function syncLoggedTimeRange(project, start, end) {
     await supabase.from('sync_logs').insert({
         project_id: project.id,
         status: errorDays > 0 ? 'warning' : 'success',
+        kind: 'logged_time',
         records_synced: totalSaved,
         sync_from: start.toISOString(),
         sync_to: end.toISOString(),
@@ -558,6 +569,19 @@ async function performSync(project, start, end, jobId = null) {
 
         if (!rawItems || rawItems.length === 0) {
             console.log('   ✅ Geen records.');
+            // Schrijf ook bij 0 records een 'success'-rij weg. Zonder deze rij is een
+            // legitiem-lege dag (feestdag/weekend) niet te onderscheiden van een
+            // nooit-verwerkte dag, waardoor de per-dag missed-days-backfill hem eeuwig
+            // als 'gemist' zou blijven zien en elke nacht opnieuw zou proberen.
+            await supabase.from('sync_logs').insert({
+                project_id: project.id,
+                status: 'success',
+                kind: 'records',
+                records_synced: 0,
+                sync_from: start.toISOString(),
+                sync_to: end.toISOString(),
+                error_message: null,
+            });
             if (jobId) {
                 await supabase.from('sync_jobs').update({
                     status: 'completed',
@@ -603,6 +627,7 @@ async function performSync(project, start, end, jobId = null) {
         await supabase.from('sync_logs').insert({
             project_id: project.id,
             status: errorCount > 0 ? 'warning' : 'success',
+            kind: 'records',
             records_synced: fetchedRecords.length,
             sync_from: start.toISOString(),
             sync_to: end.toISOString(),
@@ -633,6 +658,7 @@ async function performSync(project, start, end, jobId = null) {
         await supabase.from('sync_logs').insert({
             project_id: project.id,
             status: 'failed',
+            kind: 'records',
             records_synced: 0,
             sync_from: start.toISOString(),
             sync_to: end.toISOString(),
@@ -786,34 +812,110 @@ async function syncBatchTotals(project) {
 }
 
 // --- MISSED DAYS CHECK ---
+// Geeft een ARRAY van losse gemiste lokale dagen terug binnen een begrensd venster.
+// Anders dan de oude versie (die alleen het staart-gat als één blok zag) detecteert dit
+// ook MIDDEN-gaten: een dag die faalde terwijl een latere dag wél slaagde — precies de
+// STC-giftgevers-casus (wo-27-mei timeout, do/vr erna geslaagd → wo-27 bleef permanent leeg).
+// Coverage wordt bepaald uit records-sync-rijen (kind='records'); legacy NULL-rijen tellen
+// mee als records zodat er bij de eerste deploy geen backfill-storm op historische data komt.
 async function getMissedDays(project) {
-    // Check wanneer de laatste succesvolle sync was per project
-    const { data: lastSync } = await supabase
+    const now = getNowAmsterdam();
+    const windowStart = new Date(now);
+    windowStart.setDate(now.getDate() - BACKFILL_LOOKBACK_DAYS);
+    windowStart.setHours(0, 0, 0, 0);
+
+    // Eerste records-sync ooit? Niet vóór de projectstart terugvullen.
+    const { data: firstRow } = await supabase
         .from('sync_logs')
         .select('sync_to')
         .eq('project_id', project.id)
         .in('status', ['success', 'warning'])
-        .order('sync_to', { ascending: false })
+        .or('kind.eq.records,kind.is.null')
+        .order('sync_to', { ascending: true })
         .limit(1)
-        .single();
+        .maybeSingle();
+    if (!firstRow?.sync_to) return [];
+    const firstSync = new Date(firstRow.sync_to);
+    const firstSyncMidnight = new Date(firstSync.getFullYear(), firstSync.getMonth(), firstSync.getDate());
 
-    if (!lastSync?.sync_to) return null;
+    // Welke lokale dagen zijn al gedekt door een geslaagde records-sync binnen het venster?
+    const { data: rows } = await supabase
+        .from('sync_logs')
+        .select('sync_from, sync_to, status')
+        .eq('project_id', project.id)
+        .in('status', ['success', 'warning'])
+        .or('kind.eq.records,kind.is.null')
+        .gte('sync_to', windowStart.toISOString());
 
-    const lastSyncDate = new Date(lastSync.sync_to);
-    const now = getNowAmsterdam();
+    const covered = new Set();
+    (rows || []).forEach((r) => {
+        if (!r.sync_from || !r.sync_to) return;
+        const from = new Date(r.sync_from);
+        const to = new Date(r.sync_to);
+        // Markeer elke lokale kalenderdag tussen sync_from en sync_to (inclusief).
+        for (let d = new Date(from.getFullYear(), from.getMonth(), from.getDate()); d <= to; d.setDate(d.getDate() + 1)) {
+            covered.add(formatLocalDate(d));
+        }
+    });
+
+    // Yesterday wordt altijd door de normale nachtsync gedaan → niet hier meenemen.
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
 
-    // Als laatste sync meer dan 1 dag geleden is → er zijn gemiste dagen
-    const daysDiff = Math.floor((yesterday - lastSyncDate) / 86400000);
-    if (daysDiff > 1) {
-        const missedStart = new Date(lastSyncDate);
-        missedStart.setDate(missedStart.getDate() + 1);
-        missedStart.setHours(0, 0, 0, 0);
-        return { start: missedStart, days: daysDiff - 1 };
+    const missing = [];
+    for (let d = new Date(windowStart); d < yesterday; d.setDate(d.getDate() + 1)) {
+        if (d < firstSyncMidnight) continue; // vóór projectstart
+        if (!covered.has(formatLocalDate(d))) missing.push(new Date(d));
     }
+    // Cap per nacht: voorkom dat een chronisch falend project (BasiCall-500) tientallen
+    // dagen tegelijk blijft proberen. De rest wordt de volgende nachten alsnog opgepakt.
+    return missing.slice(0, BACKFILL_MAX_DAYS_PER_RUN);
+}
 
-    return null;
+// --- PERSISTENT FAILURE ALERT ---
+// Telt opeenvolgende mislukte records-sync-nachten (sinds de laatste geslaagde records-sync)
+// en schrijft bij overschrijding van de drempel een error_logs-rij (die de admin-UI toont).
+// Throttle: alleen op de drempel-nacht en daarna 1×/week, om dagelijkse ruis te voorkomen.
+async function maybeAlertPersistentFailure(project) {
+    try {
+        const { data: recent } = await supabase
+            .from('sync_logs')
+            .select('status, sync_to, error_message')
+            .eq('project_id', project.id)
+            .or('kind.eq.records,kind.is.null')
+            .order('sync_to', { ascending: false })
+            .limit(60);
+
+        const failedDays = new Set();
+        let lastErr = '';
+        for (const row of (recent || [])) {
+            if (row.status === 'success' || row.status === 'warning') break; // streak eindigt
+            if (row.status === 'failed') {
+                failedDays.add(formatLocalDate(new Date(row.sync_to)));
+                if (!lastErr) lastErr = row.error_message || '';
+            }
+        }
+        const streak = failedDays.size;
+        if (streak < ALERT_AFTER_FAILED_NIGHTS) return;
+        if (streak !== ALERT_AFTER_FAILED_NIGHTS && (streak - ALERT_AFTER_FAILED_NIGHTS) % 7 !== 0) return;
+
+        await supabase.from('error_logs').insert({
+            error_type: 'sync_persistent_failure',
+            error_message: `Project "${project.name}" (BasiCall ${project.basicall_project_id}) `
+                + `synct al ${streak} nachten niet. Laatste fout: ${lastErr}. `
+                + `Controleer of de campagne bij BasiCall nog actief is en of het token geldig is.`,
+            component_name: 'sync-basicall',
+            metadata: {
+                project_id: project.id,
+                basicall_project_id: project.basicall_project_id,
+                consecutive_failed_nights: streak,
+            },
+        });
+        console.warn(`   🚨 Alert: ${project.name} ${streak} nachten op rij gefaald → error_logs`);
+    } catch (_) {
+        // Een falende alert mag de sync nooit breken.
+    }
 }
 
 // --- MAIN ---
@@ -903,20 +1005,31 @@ async function run() {
         console.log(`   ${enrichedProjects.length} actieve projecten.\n`);
 
         for (const p of enrichedProjects) {
-            // Check op gemiste dagen
-            const missed = await getMissedDays(p);
-            if (missed) {
-                console.log(`\n⚠️  ${p.name}: ${missed.days} gemiste dag(en) gevonden, inhalen vanaf ${formatLocalDate(missed.start)}`);
-                await performSync(p, missed.start, yesterdayEnd);
-                await syncLoggedTimeRange(p, missed.start, yesterdayEnd);
-            } else {
-                // Normale sync van gisteren
-                await performSync(p, yesterdayStart, yesterdayEnd);
-                await syncLoggedTimeSingleDay(p, yesterdayStart, yesterdayEnd);
+            // 1. Normale sync van gisteren
+            await performSync(p, yesterdayStart, yesterdayEnd);
+            await syncLoggedTimeSingleDay(p, yesterdayStart, yesterdayEnd);
+
+            // 2. Losse gemiste dagen (ook midden-gaten) elk GEÏSOLEERD inhalen, zodat één
+            //    falende dag de rest niet meesleurt en gaten zelfgenezend worden.
+            const missingDays = await getMissedDays(p);
+            if (missingDays.length > 0) {
+                console.log(`\n⚠️  ${p.name}: ${missingDays.length} losse gemiste dag(en) inhalen`);
+                for (const day of missingDays) {
+                    const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
+                    const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999);
+                    console.log(`   ↩️  inhalen ${formatLocalDate(day)}`);
+                    await performSync(p, dayStart, dayEnd);
+                    await syncLoggedTimeSingleDay(p, dayStart, dayEnd);
+                    await sleep(CONFIG.DELAY_BETWEEN_DAYS_MS);
+                }
             }
-            // Batch discovery + totals altijd updaten
+
+            // 3. Batch discovery + totals altijd updaten
             await discoverBatches(p);
             await syncBatchTotals(p);
+
+            // 4. Alert bij chronische uitval (bv. ANBO BasiCall-500) — niet meer stil.
+            await maybeAlertPersistentFailure(p);
         }
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
