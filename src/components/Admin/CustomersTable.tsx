@@ -113,6 +113,30 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
     }
   };
 
+  // Re-send a login link to an already-active customer (expired link / forgotten
+  // password). The create-customer function detects the existing account and
+  // sends a fresh recovery link via Resend, keeping the customer's project links.
+  const handleSendLoginLink = async (email: string, projectIds: string[]) => {
+    try {
+      await createCustomer.mutateAsync({
+        email,
+        password: '',
+        projectIds
+      });
+
+      toast({
+        title: "Nieuwe inloglink verstuurd",
+        description: `${email} ontvangt een mail om opnieuw in te loggen.`
+      });
+    } catch (error) {
+      toast({
+        title: "Er ging iets mis",
+        description: friendlyError(error, "De inloglink kon niet verstuurd worden. Probeer het zo opnieuw."),
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleDeleteInvitation = async (invitationId: string) => {
     try {
       await deletePendingInvitation.mutateAsync(invitationId);
@@ -286,15 +310,30 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
                             {new Date(customer.created_at).toLocaleDateString('nl-NL')}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openLinkDialog(customer.user_id)}
-                              className="gap-1"
-                            >
-                              <LinkIcon className="h-4 w-4" />
-                              <span className="hidden sm:inline">Koppelen</span>
-                            </Button>
+                            <div className="flex justify-end gap-1">
+                              {!isUuid && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleSendLoginLink(customer.email, customer.projects.map((p) => p.project_id))}
+                                  disabled={createCustomer.isPending}
+                                  className="gap-1"
+                                  title="Nieuwe inloglink sturen"
+                                >
+                                  <Mail className="h-4 w-4" />
+                                  <span className="hidden sm:inline">Inloglink</span>
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openLinkDialog(customer.user_id)}
+                                className="gap-1"
+                              >
+                                <LinkIcon className="h-4 w-4" />
+                                <span className="hidden sm:inline">Koppelen</span>
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
