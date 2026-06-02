@@ -184,6 +184,9 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
     onToast,
   } = args;
 
+  // Vast bedrag per sale (bv. ANBO: €37,08/sale) — heeft voorrang op bedrag×frequentie.
+  const flatSaleValue = Number(mappingConfig?.flat_sale_value) || 0;
+
   try {
     // 1. Fetch year records (paged 1000)
     const yearStart = `${year}-01-01`;
@@ -256,7 +259,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
 
       const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
       const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
-      const annualValue = isSale ? amount * freq.multiplier : 0;
+      const annualValue = isSale ? (flatSaleValue > 0 ? flatSaleValue : amount * freq.multiplier) : 0;
 
       // Upgrade detection: Nbedrag (new) > Bedrag (old) on the same record.
       // Only meaningful for winback/upgrade campaigns that populate both fields.
@@ -350,7 +353,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
         const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
         const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
-        const annualValue = isSale ? amount * freq.multiplier : 0;
+        const annualValue = isSale ? (flatSaleValue > 0 ? flatSaleValue : amount * freq.multiplier) : 0;
         [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {
           s.calls++;
           s.durationSec += Number(record.gesprekstijd_sec) || 0;

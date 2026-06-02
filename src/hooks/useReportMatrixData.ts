@@ -33,7 +33,21 @@ const calculateValuesFromRaw = (
 
   const isSale = mappingConfig.sale_results?.includes(resultaat || '') || false;
 
-  const freqRaw = rawData['frequency'] 
+  // Vast bedrag per sale (bv. ANBO: €37,08/sale). Heeft voorrang: geen termijnbedrag/
+  // frequentie in de data, dus elke sale telt exact dit bedrag (eenmalig).
+  const flatSaleValue = Number(mappingConfig.flat_sale_value) || 0;
+  if (isSale && flatSaleValue > 0) {
+    return {
+      annualValue: flatSaleValue,
+      isSale: true,
+      isRecurring: false,
+      frequencyType: 'oneoff',
+      frequencyMultiplier: 1,
+      frequencyMatchedKey: '(vast bedrag per sale)',
+    };
+  }
+
+  const freqRaw = rawData['frequency']
     || rawData[mappingConfig.freq_col] 
     || rawData['frequentie'] 
     || rawData['Frequentie'];
