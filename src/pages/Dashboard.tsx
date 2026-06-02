@@ -267,11 +267,41 @@ const Index = () => {
   const totalAnnualValue = kpiAggregates?.totalAnnualValue ?? 0;
   const hourlyRate = currentMapping.hourly_rate;
   
-  // Prefer logged time (agent login hours) over gesprekstijd (call duration)
-  const rawTotalHours = loggedTime?.hasData
-    ? loggedTime.totalHours
-    : (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
-  const totalHours = ceilHours(rawTotalHours);
+  // Uren: spiegelt de Excel-export (useExcelExport.getHoursForDay) zodat dashboard en
+  // rapportage gelijk lopen. Triple Tree-regel (hours.ts): per dag naar boven afronden;
+  // weektotaal = som van afgeronde dagen. Per dag: ingelogde tijd als die er is, anders
+  // val terug op gesprekstijd. Voorheen koos het dashboard de urenbron op WEEK-niveau
+  // (loggedTime.hasData ? ... : ...), waardoor één rommelrij van enkele seconden in
+  // daily_logged_time de gesprekstijd-fallback voor de hele week onderdrukte
+  // (bijv. Sligro week 22: 1u i.p.v. 9u) en ceil(som) afweek van de export-som(ceil).
+  const gesprekstijdByDay = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const r of reportMatrixProcessedData) {
+      const day = (r.day_name || '').toLowerCase();
+      if (!day) continue;
+      acc[day] = (acc[day] ?? 0) + (r.bc_gesprekstijd || 0);
+    }
+    return acc;
+  }, [reportMatrixProcessedData]);
+
+  const isSingleWeek = !!dateFilter?.isFiltering && dateFilter.filterType === 'week';
+  const totalHours = useMemo(() => {
+    if (isSingleWeek) {
+      const dayKeys = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'] as const;
+      return dayKeys.reduce((sum, day) => {
+        const loggedHours = loggedTime?.dailyHours?.[day] ?? 0;
+        const hoursForDay = loggedHours > 0 ? loggedHours : (gesprekstijdByDay[day] ?? 0) / 3600;
+        return sum + ceilHours(hoursForDay);
+      }, 0);
+    }
+    // 'Alle weken' of meerweekse selectie: geen dag-as -> enkel weektotaal, met
+    // seconden-gebaseerde fallback (lege/ontbrekende logtijd -> gesprekstijd).
+    const rawTotalHours = (loggedTime?.totalSeconds ?? 0) > 0
+      ? (loggedTime?.totalHours ?? 0)
+      : (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
+    return ceilHours(rawTotalHours);
+  }, [isSingleWeek, loggedTime, gesprekstijdByDay, kpiAggregates]);
+
   const totalCost = totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
 
