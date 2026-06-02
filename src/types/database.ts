@@ -53,7 +53,11 @@ export interface MappingConfig {
   location_col?: string; // Veld voor locatie/stad data
   freq_map: Record<string, number>;
   sale_results: string[];
-  
+  // Vast bedrag per sale (excl. btw) voor lead-/aanmeldcampagnes die per sale betaald
+  // worden i.p.v. een donatie met termijnbedrag×frequentie (bv. ANBO: €37,08/sale).
+  // Indien gezet (>0) telt elke sale exact dit bedrag als (jaar)waarde.
+  flat_sale_value?: number;
+
   // Inbound-specifieke configuratie
   retention_results?: string[];      // Resultaten waarbij donateur behouden blijft
   lost_results?: string[];           // Resultaten waarbij donateur verloren is
