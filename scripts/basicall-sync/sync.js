@@ -34,6 +34,10 @@ const BACKFILL_MAX_DAYS_PER_RUN = 5;
 // Persistent-failure alert: na N opeenvolgende mislukte nachten 1× een error_logs-rij wegschrijven
 // (daarna 1×/week), zodat een chronische uitval (ANBO 734/827) niet maandenlang stil blijft.
 const ALERT_AFTER_FAILED_NIGHTS = 3;
+// Daytime retry-ronde: `node sync.js retry` draait ALLEEN de gemiste-dagen-backfill
+// (geen 'gisteren'-stap), bedoeld als tweede cron BUITEN BasiCalls 02:00-04:00-venster,
+// zodat projecten die 's nachts 500'en (734/827/864/924) overdag alsnog binnenkomen.
+const RETRY_MODE = process.argv.slice(2).some(a => a === 'retry' || a === '--retry');
 
 // --- TOKEN HELPER ---
 // Tokens staan in project_secrets (onbereikbaar via API, alleen service key)
@@ -858,13 +862,15 @@ async function getMissedDays(project) {
         }
     });
 
-    // Yesterday wordt altijd door de normale nachtsync gedaan → niet hier meenemen.
+    // Inclusief gisteren: in de nachtronde is die al gedekt door stap 1 (success-rij),
+    // maar in de daytime-retry-ronde moet een gisteren die om 04:00 met 500 faalde
+    // alsnog ingehaald kunnen worden.
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
 
     const missing = [];
-    for (let d = new Date(windowStart); d < yesterday; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(windowStart); d <= yesterday; d.setDate(d.getDate() + 1)) {
         if (d < firstSyncMidnight) continue; // vóór projectstart
         if (!covered.has(formatLocalDate(d))) missing.push(new Date(d));
     }
@@ -916,6 +922,36 @@ async function maybeAlertPersistentFailure(project) {
     } catch (_) {
         // Een falende alert mag de sync nooit breken.
     }
+}
+
+// --- PER-PROJECT: GEMISTE DAGEN INHALEN + BATCHES + ALERT ---
+// Gedeeld door de nachtronde (na de 'gisteren'-sync) en de daytime-retry-ronde.
+async function syncProjectMissedAndBatches(p) {
+    // Losse gemiste dagen (ook midden-gaten) elk GEÏSOLEERD inhalen. Defensief in
+    // try/catch: een fout in de backfill-detectie mag de overige projecten niet afbreken.
+    try {
+        const missingDays = await getMissedDays(p);
+        if (missingDays.length > 0) {
+            console.log(`\n⚠️  ${p.name}: ${missingDays.length} losse gemiste dag(en) inhalen`);
+            for (const day of missingDays) {
+                const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
+                const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999);
+                console.log(`   ↩️  inhalen ${formatLocalDate(day)}`);
+                await performSync(p, dayStart, dayEnd);
+                await syncLoggedTimeSingleDay(p, dayStart, dayEnd);
+                await sleep(CONFIG.DELAY_BETWEEN_DAYS_MS);
+            }
+        }
+    } catch (backfillErr) {
+        console.warn(`   ⚠️  Backfill-check overgeslagen voor ${p.name}: ${backfillErr.message}`);
+    }
+
+    // Batch discovery + totals
+    await discoverBatches(p);
+    await syncBatchTotals(p);
+
+    // Alert bij chronische uitval (bv. ANBO BasiCall-500) — niet meer stil.
+    await maybeAlertPersistentFailure(p);
 }
 
 // --- MAIN ---
@@ -971,6 +1007,24 @@ async function run() {
             return;
         }
 
+        // RETRY-RONDE (overdag): alleen gemiste dagen inhalen, BUITEN BasiCalls 04:00-venster.
+        // Tweede cron op een daytime-tijdstip vangt zo de projecten op die 's nachts 500'en.
+        if (RETRY_MODE) {
+            console.log('\n☀️  Daytime retry-ronde — gemiste dagen inhalen voor projecten die in het 04:00-venster faalden');
+            const { data: retryProjects, error: retryErr } = await supabase
+                .from('projects').select('*').eq('is_active', true);
+            if (retryErr) { console.error('❌ Kon projecten niet ophalen:', retryErr.message); return; }
+            if (!retryProjects || retryProjects.length === 0) { console.log('   Geen actieve projecten.'); return; }
+            const retryEnriched = await enrichProjectsWithTokens(retryProjects);
+            console.log(`   ${retryEnriched.length} actieve projecten.\n`);
+            for (const p of retryEnriched) {
+                await syncProjectMissedAndBatches(p);
+            }
+            const elapsedRetry = Math.round((Date.now() - startTime) / 1000);
+            console.log(`\n--- ☀️ RETRY-RONDE KLAAR (${elapsedRetry}s) ---`);
+            return;
+        }
+
         // 2. AUTOMATISCHE NACHTRONDE
         console.log('\n🌙 Nachtelijke ronde');
 
@@ -1009,33 +1063,8 @@ async function run() {
             await performSync(p, yesterdayStart, yesterdayEnd);
             await syncLoggedTimeSingleDay(p, yesterdayStart, yesterdayEnd);
 
-            // 2. Losse gemiste dagen (ook midden-gaten) elk GEÏSOLEERD inhalen, zodat één
-            //    falende dag de rest niet meesleurt en gaten zelfgenezend worden.
-            //    Defensief in try/catch: een fout in de backfill-detectie mag NOOIT de
-            //    normale nachtronde (stap 1) of de overige projecten afbreken.
-            try {
-                const missingDays = await getMissedDays(p);
-                if (missingDays.length > 0) {
-                    console.log(`\n⚠️  ${p.name}: ${missingDays.length} losse gemiste dag(en) inhalen`);
-                    for (const day of missingDays) {
-                        const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
-                        const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999);
-                        console.log(`   ↩️  inhalen ${formatLocalDate(day)}`);
-                        await performSync(p, dayStart, dayEnd);
-                        await syncLoggedTimeSingleDay(p, dayStart, dayEnd);
-                        await sleep(CONFIG.DELAY_BETWEEN_DAYS_MS);
-                    }
-                }
-            } catch (backfillErr) {
-                console.warn(`   ⚠️  Backfill-check overgeslagen voor ${p.name}: ${backfillErr.message}`);
-            }
-
-            // 3. Batch discovery + totals altijd updaten
-            await discoverBatches(p);
-            await syncBatchTotals(p);
-
-            // 4. Alert bij chronische uitval (bv. ANBO BasiCall-500) — niet meer stil.
-            await maybeAlertPersistentFailure(p);
+            // 2-4. Gemiste dagen inhalen + batches + alert (gedeeld met de retry-ronde)
+            await syncProjectMissedAndBatches(p);
         }
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
