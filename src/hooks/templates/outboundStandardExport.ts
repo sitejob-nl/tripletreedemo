@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
-import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
+import { detectFrequencyFromConfig, FrequencyType, isUnreachable } from '@/lib/statsHelpers';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
@@ -251,7 +251,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       const rawData = record.raw_data ?? {};
       const resultName = record.resultaat ?? (rawData['bc_result_naam'] as string) ?? 'Onbekend';
       const isSale = mappingConfig?.sale_results?.includes(resultName) ?? false;
-      const isUnreachable = mappingConfig?.unreachable_results?.includes(resultName) ?? false;
+      const recordUnreachable = isUnreachable(resultName, mappingConfig);
 
       // Frequency + amount (old)
       const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequentie'] ?? rawData['Frequentie'];
@@ -273,7 +273,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       [dayStats, weekTotal, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {
         s.calls++;
         s.durationSec += Number(record.gesprekstijd_sec) || 0;
-        if (isUnreachable) s.unreachable++;
+        if (recordUnreachable) s.unreachable++;
         if (isSale) {
           s.sales++;
           s.annualValue += annualValue;
@@ -348,7 +348,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         const rawData = record.raw_data ?? {};
         const resultName = record.resultaat ?? (rawData['bc_result_naam'] as string) ?? 'Onbekend';
         const isSale = mappingConfig?.sale_results?.includes(resultName) ?? false;
-        const isUnreachable = mappingConfig?.unreachable_results?.includes(resultName) ?? false;
+        const recordUnreachable = isUnreachable(resultName, mappingConfig);
         const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequentie'] ?? rawData['Frequentie'];
         const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
         const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
@@ -357,7 +357,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {
           s.calls++;
           s.durationSec += Number(record.gesprekstijd_sec) || 0;
-          if (isUnreachable) s.unreachable++;
+          if (recordUnreachable) s.unreachable++;
           if (isSale) {
             s.sales++;
             s.annualValue += annualValue;

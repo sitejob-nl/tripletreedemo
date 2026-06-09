@@ -232,10 +232,14 @@ export const NEGATIVE_ARGUMENTATED = [
   'te jong',
   'geen budget',
   'financiele redenen',
+  'financiele reden',
+  'financiële reden',
+  'ander goed doel',
 ];
 
 // Negative results categorization - not argumentated (external factors)
 export const NEGATIVE_NOT_ARGUMENTATED = [
+  'niet meer benaderen',
   'onjuiste naw-gegevens',
   'onjuiste naw',
   'is bedrijf',
@@ -257,18 +261,29 @@ export const NEGATIVE_NOT_ARGUMENTATED = [
   'niet beschikbaar',
 ];
 
-// Unreachable results (for netto conversion calculation)
+// Unreachable / niet-definitief-bereikt codes (uitgesloten van netto-conversie-noemer).
+// Substring-stammen zodat varianten ook matchen (bv. 'belpogingen' vangt
+// "Max. belpogingen bereikt"). Aangevuld 2026-06 n.a.v. afboekcode-audit: veel
+// hoog-volume BasiCall-codes vielen hiervoor buiten elke categorie.
 export const UNREACHABLE_RESULTS = [
   'geen gehoor',
   'voicemail',
   'in gesprek',
   'niet bereikbaar',
+  'niet bereikt',
   'terugbellen',
+  'terugbelafspraak',
   'niet beschikbaar',
   'onjuiste naw-gegevens',
   'onjuiste naw',
   'foutief telefoonnummer',
+  'foutief nummer',
+  'foutieve telefoon',
   'fax',
+  'belpogingen',
+  'blacklist',
+  'dialer',
+  'abandoned',
 ];
 
 export const categorizeNegativeResult = (
@@ -277,13 +292,9 @@ export const categorizeNegativeResult = (
 ): 'argumentated' | 'not_argumentated' | 'unknown' => {
   const lower = resultName.toLowerCase().trim();
   
-  // Use project-specific config if available, otherwise fall back to hardcoded defaults
-  const argumentated = config?.negative_argumentated?.length 
-    ? config.negative_argumentated 
-    : NEGATIVE_ARGUMENTATED;
-  const notArgumentated = config?.negative_not_argumentated?.length 
-    ? config.negative_not_argumentated 
-    : NEGATIVE_NOT_ARGUMENTATED;
+  // Union: project-config vult de hardcoded defaults AAN i.p.v. ze te vervangen.
+  const argumentated = [...(config?.negative_argumentated ?? []), ...NEGATIVE_ARGUMENTATED];
+  const notArgumentated = [...(config?.negative_not_argumentated ?? []), ...NEGATIVE_NOT_ARGUMENTATED];
   
   if (argumentated.some(r => lower.includes(r.toLowerCase()))) {
     return 'argumentated';
@@ -298,9 +309,9 @@ export const categorizeNegativeResult = (
 
 export const isUnreachable = (resultName: string, config?: MappingConfig): boolean => {
   const lower = resultName.toLowerCase().trim();
-  const unreachable = config?.unreachable_results?.length
-    ? config.unreachable_results
-    : UNREACHABLE_RESULTS;
+  // Union: project-config vult de defaults AAN i.p.v. ze te vervangen, zodat een
+  // project met een eigen (incomplete) lijst de universele niet-bereikt-codes niet mist.
+  const unreachable = [...(config?.unreachable_results ?? []), ...UNREACHABLE_RESULTS];
   return unreachable.some(r => lower.includes(r.toLowerCase()));
 };
 
