@@ -1,4 +1,8 @@
-# Triple Tree Portal — CLAUDE.md
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# Triple Tree Portal — projectgids
 
 > Geautomatiseerd rapportageplatform voor call center Triple Tree (ttcallcenters.nl, Bogert 31-05 Eindhoven). Vervangt handmatige Excel-rapportage: BasiCall → Supabase → klantportaal.
 
@@ -14,7 +18,7 @@
 - **Export**: xlsx-js-style (Excel-weekrapportage per project_type)
 - **Hosting frontend**: Vercel, CNAME `app.ttcallcenters.nl` → Vercel (DNS bij Meetwerk ICT)
 - **DB**: Supabase project `tvsdbztjqksxybxjwtrf` (Frankfurt eu-central-2, Postgres 17.6)
-- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`, cron **04:00 Europe/Amsterdam** in de `sitejob-tt` crontab (sinds 2026-06-01 draait de sync als `sitejob-tt`, niet meer als root; zie §Status)
+- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`. Twee cron-regels in de `sitejob-tt` crontab (Europe/Amsterdam): **04:00** = volledige ronde, **13:30** = `node sync.js retry` (alleen gemiste-dagen-backfill — vangt de projecten op die in BasiCalls nachtelijke 500-venster vielen). Sinds 2026-06-01 draait de sync als `sitejob-tt`, niet meer als root.
 - **Origin**: project is extern gescaffold, eerste live-schema wijzigingen belandden daardoor niet allemaal in `supabase/migrations/`. Altijd live schema checken via MCP voor je lokale migrations baseert op wat er in de repo staat.
 
 ## Architectuur
@@ -64,7 +68,18 @@ Klant = user role + customer_projects join
 
 **Views**: `projects_public` (zonder token — legacy, token zit nu in `project_secrets`, niet meer in `projects`).
 
-**Triggers/functies**: `sync_beldatum_to_date()` (DD-MM-YYYY → DATE), `has_role()`, `get_project_kpi_totals()`, `get_available_weeks()`, `handle_new_user_from_invite()`.
+**Triggers/functies**: `sync_beldatum_to_date()` (DD-MM-YYYY → DATE), `has_role()`, `get_project_kpi_totals()`, `get_project_annual_value()`, `get_available_weeks()`, `handle_new_user_from_invite()`.
+
+## Berekeningspaden (KPI's, conversie, uren, jaarwaarde)
+
+De niet-triviale kern, verspreid over meerdere files: dezelfde cijfers worden via **twee paden** berekend die gelijk moeten lopen. Wijzig je het ene, wijzig dan het andere.
+
+- **Dashboard-KPI's** — [useKPIAggregates.ts](src/hooks/useKPIAggregates.ts) → RPC `get_project_kpi_totals` (positief + gesprekstijd) en `get_project_annual_value` (jaarwaarde). Inbound-retentie telt "behouden" (`retention_results` ∪ `partial_success_results`, substring-match) i.p.v. sales; outbound = exacte match op `sale_results`.
+- **Rapportage / Excel** — [useReportMatrixData.ts](src/hooks/useReportMatrixData.ts) + [hooks/templates/](src/hooks/templates/) rekenen client-side (eigen kopie van dezelfde logica). Dit pad én de RPC's moeten consistent blijven, anders wijkt de KPI-kaart af van de rapportage/export.
+- **Jaarwaarde-RPC** (`get_project_annual_value`): bedrag = `amount_col → termijnbedrag → Bedrag` (fallback); frequentie = `freq_map(freq_col) → numeriek(freq_col) → freq_map(resultaat) → 1`. `mapping_config.flat_sale_value` (vast bedrag per sale, bv. ANBO €37,08) heeft **voorrang**: jaarwaarde = aantal sales × dat bedrag — voor lead-/aanmeldcampagnes zonder termijnbedrag/frequentie.
+- **Conversie & afboekcode-categorisatie** — [lib/statsHelpers.ts](src/lib/statsHelpers.ts). `isUnreachable` / `categorizeNegativeResult` matchen via **substring** en gebruiken de **UNION** van project-`mapping_config` + hardcoded defaults (`UNREACHABLE_RESULTS` / `NEGATIVE_*`). Netto-conversie = sales / (calls − onbereikbaar − `exclude_from_net`). **Valkuil**: een resultaatcode die in géén categorie valt blijft in de noemer → netto structureel te laag. Nieuwe BasiCall-codes met afwijkende spelling ("foutief nummer" ≠ "foutief telefoonnummer") als stam toevoegen aan de defaults of `mapping_config`.
+- **Uren** — businessregel [lib/hours.ts](src/lib/hours.ts): elk uur-getal PER CEL naar boven afronden (vol uur, factuur). Dashboard-weektotaal = **som van per-dag-afgeronde uren** (mirror van de export), bron `daily_logged_time`, per dag fallback naar gesprekstijd als logtijd ontbreekt. Wijkt daardoor bewust 0–2u af van BasiCall (dat niet per cel afrondt).
+- **Inbound-uren bestaan niet per campagne**: `getIngelogdeTijden(campagne)` geeft 404; de bemanning is gepoold onder de gedeelde wachtrij "Inbound opvang" (project 500). Dashboard toont voor inbound dus gesprekstijd (lager dan BasiCalls bezetting). Niet reconstrueerbaar uit onze data of de v2.11-API (uitputtend onderzocht) — open vraag bij BasiCall, zie [MAIL-BASICALL-INBOUND-UREN.md](MAIL-BASICALL-INBOUND-UREN.md).
 
 ## Actieve projecten (uit Supabase, 2026-04-16)
 
@@ -177,6 +192,14 @@ Zie [AUDIT-2026-04-16.md](./AUDIT-2026-04-16.md) + [AUDIT-VPS-SYNC-2026-04-16.md
 6. **VPS/repo sync-discipline** — bron staat nu in `scripts/basicall-sync/sync.js`; houd `/opt/basicall-sync/sync.js` en de repo-copy gelijk na elke deploy of noodwijziging. Zie AUDIT-VPS-SYNC §B.7.
 7. **Geen tests** in frontend.
 8. **Mapping-tool zelfstandig** — niet formeel getest met een gloednieuw project. Amazone kinderen + Omroep MAX zijn de eerste echte casus.
+
+### Update juni 2026 (na week-22-review Esther + Willem)
+
+- **Afboekcode-categorisatie gefixt** (PR #10): netto-conversie was 2-9× te laag doordat hoog-volume codes (max. belpogingen, blacklisted, terugbelafspraak, dialer verbroken, foutief nummer, financiele reden, ander goed doel) in geen categorie vielen. Defaults uitgebreid + config UNION defaults in `statsHelpers.ts`. Nieuwe netto-% nog te valideren tegen Willems BasiCall-rapport.
+- **ANBO 04:00-uitval** (734/827; soms ook 864/924): BasiCall geeft 's nachts HTTP 500 voor deze project-ID's maar serveert overdag prima — opgevangen door de **13:30-retry-cron**. Hetzelfde geldt voor #9 (maandag-uitval). Token is geldig; geen brand meer.
+- **Inbound-uren**: bron-limiet (bemanning gepoold onder queue 500) — zie §Berekeningspaden; mail naar BasiCall klaar.
+- **Nieuw**: `mapping_config.flat_sale_value` (per-sale-betaalde campagnes, ANBO €37,08); jaarwaarde-RPC bedrag/freq-fallback; halfjaarlijks×2 in freq_map's; `sync_logs.kind` ('records'|'logged_time'); per-dag `getMissedDays`-backfill + persistent-failure-alert in sync.js.
+- **LET OP**: regelnummer-verwijzingen in dit bestand (bv. "sync.js regel 411 / 636-685 / 73-86") zijn indicatief en lopen achter op de code — zoek altijd op functienaam (`performSync`, `syncBatchTotals`, `stripPIIFromRawData`, `getMissedDays`).
 
 ## Conventies
 
