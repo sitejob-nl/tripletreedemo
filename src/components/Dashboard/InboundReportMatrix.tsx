@@ -24,6 +24,8 @@ interface InboundReportMatrixProps {
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
   reportageOverrides?: ReportageWeeklyOverride[];
+  /** Whether to show cost/investment rows. Admin-only — customers must never see rates. */
+  showInvestment?: boolean;
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -43,6 +45,7 @@ export const InboundReportMatrix = ({
   loggedTimeHours,
   dailyLoggedHours,
   reportageOverrides = [],
+  showInvestment = true,
 }: InboundReportMatrixProps) => {
   const [showLostReasons, setShowLostReasons] = useState(false);
   const [showRetainedReasons, setShowRetainedReasons] = useState(false);
@@ -169,8 +172,9 @@ export const InboundReportMatrix = ({
   
   const calcHours = (stats: InboundStats, dayName?: string) => {
     // Triple Tree regel: per cel naar boven afronden op hele uren.
-    if (reportageOverrides.length === 0 && !dayName && loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
-    if (reportageOverrides.length === 0 && dayName && dailyLoggedHours) {
+    // Weektotaal (geen dayName) = som van de per-dag-afgeronde uren, zodat de kolom optelt.
+    if (!dayName) return days.reduce((sum, day) => sum + calcHours(aggregated[day], day), 0);
+    if (reportageOverrides.length === 0 && dailyLoggedHours) {
       const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
       if (dh !== undefined && dh > 0) return ceilHours(dh);
     }
@@ -387,11 +391,15 @@ export const InboundReportMatrix = ({
             return hours > 0 ? s.retained / hours : 0;
           }, 'decimal')}
 
-          {/* INVESTERING */}
-          {renderSectionHeader('Investering', 'bg-muted/80', 'text-foreground')}
-          {renderRow('Investering (Excl BTW)', (s, dayName) => calcInvestment(s, dayName), 'currency')}
-          {renderRow('Investering (Incl BTW)', (s, dayName) => calcInvestmentInclVat(s, dayName), 'currency')}
-          {renderRow('Kosten per behouden donateur', (s) => s.retained > 0 ? calcInvestment(s) / s.retained : 0, 'currency')}
+          {/* INVESTERING — cost/rate data is admin-only; hidden for customers (rate is absent in projects_public → would render NaN) */}
+          {showInvestment && (
+            <>
+              {renderSectionHeader('Investering', 'bg-muted/80', 'text-foreground')}
+              {renderRow('Investering (Excl BTW)', (s, dayName) => calcInvestment(s, dayName), 'currency')}
+              {renderRow('Investering (Incl BTW)', (s, dayName) => calcInvestmentInclVat(s, dayName), 'currency')}
+              {renderRow('Kosten per behouden donateur', (s) => s.retained > 0 ? calcInvestment(s) / s.retained : 0, 'currency')}
+            </>
+          )}
         </tbody>
       </table>
     </div>

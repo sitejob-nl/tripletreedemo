@@ -120,9 +120,12 @@ export const ServiceReportMatrix = ({
 
   const calcHours = (stats: ServiceDayStats, isTotal = false, dayName?: string) => {
     // Triple Tree regel: per cel naar boven afronden op hele uren.
+    // Weektotaal = som van de per-dag-afgeronde uren, zodat de kolom optelt.
+    if (isTotal) {
+      return days.reduce((sum, day) => sum + calcHours(aggregated[day], false, day), 0);
+    }
     if (stats.loggedSeconds > 0) return ceilHours(stats.loggedSeconds / 3600);
-    if (reportageOverrides.length === 0 && isTotal && loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
-    if (!isTotal && dayName && dailyLoggedHours) {
+    if (dayName && dailyLoggedHours) {
       const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
       if (dh !== undefined && dh > 0) return ceilHours(dh);
     }

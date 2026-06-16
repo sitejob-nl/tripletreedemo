@@ -182,6 +182,7 @@ export function ReportViewSection({
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
           reportageOverrides={reportageOverrides}
+          showInvestment={isAdmin}
         />
       ) : isLoading ? (
         <div className="flex items-center justify-center py-12">
@@ -200,6 +201,7 @@ export function ReportViewSection({
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
           reportageOverrides={reportageOverrides}
+          showInvestment={isAdmin}
         />
       )}
     </div>
