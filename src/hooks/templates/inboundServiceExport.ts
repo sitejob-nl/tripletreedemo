@@ -398,9 +398,14 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   };
   const serviceLevel = (s: ServiceStats) => (s.calls > 0 ? s.fastAnswered / s.calls : 0);
   const avgDurationMin = (s: ServiceStats) => (s.calls > 0 ? s.durationSec / s.calls / 60 : 0);
-  const toeslag17 = (s: ServiceStats) => ceilHours(s.after17Sec / 3600);
-  const toeslagZa = (d: DailyServiceStats) => getHours(d.perDay.zaterdag);
-  const toeslagZo = (d: DailyServiceStats) => getHours(d.perDay.zondag);
+  // Year totals sum the per-week rounded hours so the year column equals the sum of the week columns.
+  const yearHoursSum = weeks.reduce((sum, w) => sum + getHours(weekStats[w].total), 0);
+  const yearToeslag17Sum = weeks.reduce((sum, w) => sum + ceilHours(weekStats[w].total.after17Sec / 3600), 0);
+  const yearToeslagZaSum = weeks.reduce((sum, w) => sum + getHours(weekStats[w].perDay.zaterdag), 0);
+  const yearToeslagZoSum = weeks.reduce((sum, w) => sum + getHours(weekStats[w].perDay.zondag), 0);
+  const toeslag17 = (s: ServiceStats) => (s === yearTotal.total ? yearToeslag17Sum : ceilHours(s.after17Sec / 3600));
+  const toeslagZa = (d: DailyServiceStats) => (d === yearTotal ? yearToeslagZaSum : getHours(d.perDay.zaterdag));
+  const toeslagZo = (d: DailyServiceStats) => (d === yearTotal ? yearToeslagZoSum : getHours(d.perDay.zondag));
 
   const row = (label: string, fn: (s: ServiceStats) => number, fmt: (n: number) => string = fmtNum, target?: string): (string | number)[] => [
     label,
@@ -427,7 +432,7 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   rows.push(['Totaal overzicht', 'Target', '', String(year), '', ...weekLabels]);
   rows.push([]);
   rows.push(['UREN']);
-  rows.push(weekRow('Inzet agenten (uren)', (d) => getHours(d.total), (v) => v.toFixed(2)));
+  rows.push(weekRow('Inzet agenten (uren)', (d) => (d === yearTotal ? yearHoursSum : getHours(d.total)), (v) => v.toFixed(2)));
   rows.push([]);
   rows.push(['RECORDS']);
   rows.push(row('Aangenomen calls', (s) => s.calls));
@@ -500,6 +505,9 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   const fmtNum = (v: number) => v.toLocaleString('nl-NL');
 
   const total = weekStats.total;
+  // Week total = sum of the per-day rounded hours so the Totaal column equals the sum of the day columns.
+  const weekHoursSum = DAYS.reduce((sum, d) => sum + getHours(weekStats.perDay[d]), 0);
+  const weekToeslag17Sum = DAYS.reduce((sum, d) => sum + ceilHours(weekStats.perDay[d].after17Sec / 3600), 0);
 
   const bereikbaarheid = (s: ServiceStats) => {
     const decided = s.handled + s.notHandled;
@@ -507,7 +515,7 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   };
   const serviceLevel = (s: ServiceStats) => (s.calls > 0 ? s.fastAnswered / s.calls : 0);
   const avgDurationMin = (s: ServiceStats) => (s.calls > 0 ? s.durationSec / s.calls / 60 : 0);
-  const toeslag17 = (s: ServiceStats) => ceilHours(s.after17Sec / 3600);
+  const toeslag17 = (s: ServiceStats) => (s === total ? weekToeslag17Sum : ceilHours(s.after17Sec / 3600));
 
   const row = (label: string, fn: (s: ServiceStats) => number, fmt: (n: number) => string = fmtNum, target?: string): (string | number)[] => [
     label,
@@ -524,7 +532,7 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   rows.push(['Weekoverzicht', 'Target', '', 'Totaal', '', ...DAY_LABELS]);
   rows.push([]);
   rows.push(['UREN']);
-  rows.push(row('Inzet agenten (uren)', (s) => getHours(s), (v) => v.toFixed(2)));
+  rows.push(row('Inzet agenten (uren)', (s) => (s === total ? weekHoursSum : getHours(s)), (v) => v.toFixed(2)));
   rows.push([]);
   rows.push(['RECORDS']);
   rows.push(row('Aangenomen calls', (s) => s.calls));

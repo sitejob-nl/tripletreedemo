@@ -424,6 +424,9 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   const fmtNum = (v: number) => v.toLocaleString('nl-NL');
 
   const weekTotals = weeks.map((w) => weekStats[w].total);
+  // Year total = sum of per-week rounded hours so the year column equals the sum of the week columns.
+  const yearHoursSum = weekTotals.reduce((sum, s) => sum + getHours(s), 0);
+  const hrs = (s: RetentionStats) => (s === yearTotal.total ? yearHoursSum : getHours(s));
 
   const retentionRatio = (s: RetentionStats) => {
     const dec = s.retained + s.lost + s.partial;
@@ -475,8 +478,8 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   rows.push([]);
 
   rows.push(['PRODUCTIVITEIT']);
-  rows.push(row('Aantal beluren', (s) => getHours(s), (v) => v.toFixed(2)));
-  rows.push(row('Gesprekken per uur', (s) => { const h = getHours(s); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
+  rows.push(row('Aantal beluren', (s) => hrs(s), (v) => v.toFixed(2)));
+  rows.push(row('Gesprekken per uur', (s) => { const h = hrs(s); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
   rows.push([]);
 
   if (categoryNames.length > 0) {
@@ -540,6 +543,9 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   const fmtNum = (v: number) => v.toLocaleString('nl-NL');
 
   const total = weekStats.total;
+  // Week total = sum of the per-day rounded hours so the Totaal column equals the sum of the day columns.
+  const weekHoursSum = DAYS.reduce((sum, d) => sum + getHours(weekStats.perDay[d]), 0);
+  const hrs = (s: RetentionStats) => (s === total ? weekHoursSum : getHours(s));
 
   const retentionRatio = (s: RetentionStats) => {
     const dec = s.retained + s.lost + s.partial;
@@ -587,8 +593,8 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   rows.push(row('Netto behouden', netRetained, fmtEuro));
   rows.push([]);
   rows.push(['PRODUCTIVITEIT']);
-  rows.push(row('Aantal beluren', (s) => getHours(s), (v) => v.toFixed(2)));
-  rows.push(row('Gesprekken per uur', (s) => { const h = getHours(s); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
+  rows.push(row('Aantal beluren', (s) => hrs(s), (v) => v.toFixed(2)));
+  rows.push(row('Gesprekken per uur', (s) => { const h = hrs(s); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
   rows.push([]);
   if (categoryNames.length > 0) {
     rows.push(['REDEN-BREAKDOWN']);

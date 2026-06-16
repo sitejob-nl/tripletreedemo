@@ -584,6 +584,7 @@ const Index = () => {
                     totalHandled={totalHandled}
                     totalNotHandled={totalNotHandled}
                     annualValueBreakdown={annualValueBreakdown}
+                    isAdmin={isDbAdmin}
                   />
 
                   <BatchProgress projectId={currentProject.id} />

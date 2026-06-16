@@ -539,7 +539,12 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   };
   const brutoConv = (s: WeekStats) => (s.calls > 0 ? s.sales / s.calls : 0);
   const opwaardeer = (s: WeekStats) => (s.sales > 0 ? s.upgradeSales / s.sales : 0);
-  const investment = (s: WeekStats, dayName?: string) => getHours(s, dayName) * getHourlyRateForDay(dayName);
+  // Year total = sum of per-week rounded hours so the year column equals the sum of the week columns
+  // (mirrors the dashboard: som(ceil per periode), niet ceil(som)).
+  const yearTotalStat = yearTotal.total;
+  const yearHoursSum = weekTotals.reduce((sum, s) => sum + getHours(s), 0);
+  const hrs = (s: WeekStats, dayName?: string) => (s === yearTotalStat ? yearHoursSum : getHours(s, dayName));
+  const investment = (s: WeekStats, dayName?: string) => hrs(s, dayName) * getHourlyRateForDay(dayName);
   const costPerDonor = (s: WeekStats, dayName?: string) => (s.sales > 0 ? investment(s, dayName) / s.sales : 0);
   const costPerDonorInclVat = (s: WeekStats, dayName?: string) => costPerDonor(s, dayName) * (1 + vatRate / 100);
   const upgradePerDonor = (s: WeekStats) => (s.sales > 0 ? s.annualValue / s.sales : 0);
@@ -596,9 +601,9 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   rows.push(row('Netto conversie', nettoConv, fmtPct));
   rows.push([]);
   rows.push(['PRODUCTIVITEIT']);
-  rows.push(row('Aantal beluren', (s) => getHours(s), (v) => v.toFixed(1)));
-  rows.push(row('Gesprekken per uur', (s) => { const h = getHours(s); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
-  rows.push(row('Score per uur', (s) => { const h = getHours(s); return h > 0 ? s.sales / h : 0; }, (v) => v.toFixed(2)));
+  rows.push(row('Aantal beluren', (s) => hrs(s), (v) => v.toFixed(1)));
+  rows.push(row('Gesprekken per uur', (s) => { const h = hrs(s); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
+  rows.push(row('Score per uur', (s) => { const h = hrs(s); return h > 0 ? s.sales / h : 0; }, (v) => v.toFixed(2)));
   rows.push([]);
   rows.push(['INVESTERING']);
   rows.push(row('Investering per donateur (Excl BTW)', (s) => costPerDonor(s), fmtEuro));
@@ -705,7 +710,11 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
     return denom > 0 ? s.sales / denom : 0;
   };
   const opwaardeer = (s: WeekStats) => (s.sales > 0 ? s.upgradeSales / s.sales : 0);
-  const investment = (s: WeekStats, dayName?: string) => getHours(s, dayName) * getHourlyRateForDay(dayName);
+  // Week total = sum of per-day rounded hours (rate-aware) so the Totaal column equals the sum of the day columns.
+  const weekHoursSum = DAYS.reduce((sum, d) => sum + getHours(weekStats.perDay[d], d), 0);
+  const weekInvestmentSum = DAYS.reduce((sum, d) => sum + getHours(weekStats.perDay[d], d) * getHourlyRateForDay(d), 0);
+  const hrs = (s: WeekStats, dayName?: string) => (s === total ? weekHoursSum : getHours(s, dayName));
+  const investment = (s: WeekStats, dayName?: string) => (s === total ? weekInvestmentSum : getHours(s, dayName) * getHourlyRateForDay(dayName));
   const costPerDonor = (s: WeekStats, dayName?: string) => (s.sales > 0 ? investment(s, dayName) / s.sales : 0);
   const costPerDonorInclVat = (s: WeekStats, dayName?: string) => costPerDonor(s, dayName) * (1 + vatRate / 100);
   const upgradePerDonor = (s: WeekStats) => (s.sales > 0 ? s.annualValue / s.sales : 0);
@@ -741,9 +750,9 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   rows.push(row('Netto conversie', nettoConv, fmtPct));
   rows.push([]);
   rows.push(['PRODUCTIVITEIT']);
-  rows.push(row('Aantal beluren', (s, d) => getHours(s, d), (v) => v.toFixed(1)));
-  rows.push(row('Gesprekken per uur', (s, d) => { const h = getHours(s, d); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
-  rows.push(row('Score per uur', (s, d) => { const h = getHours(s, d); return h > 0 ? s.sales / h : 0; }, (v) => v.toFixed(2)));
+  rows.push(row('Aantal beluren', (s, d) => hrs(s, d), (v) => v.toFixed(1)));
+  rows.push(row('Gesprekken per uur', (s, d) => { const h = hrs(s, d); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
+  rows.push(row('Score per uur', (s, d) => { const h = hrs(s, d); return h > 0 ? s.sales / h : 0; }, (v) => v.toFixed(2)));
   rows.push([]);
   rows.push(['INVESTERING']);
   rows.push(row('Investering per donateur (Excl BTW)', (s, d) => costPerDonor(s, d), fmtEuro));
