@@ -26,8 +26,6 @@ interface KPICardsSectionProps {
   totalHandled?: number;
   totalNotHandled?: number;
   annualValueBreakdown?: AnnualValueBreakdown;
-  /** Whether the viewer is an admin. Gates cost/rate cards — customers must never see rates. */
-  isAdmin?: boolean;
 }
 
 export function KPICardsSection({
@@ -44,7 +42,6 @@ export function KPICardsSection({
   totalHandled = 0,
   totalNotHandled = 0,
   annualValueBreakdown,
-  isAdmin = false,
 }: KPICardsSectionProps) {
   const showProgress = totalToCall && totalToCall > 0;
   const progressPercent = showProgress ? Math.min((totalRecords / totalToCall) * 100, 100) : 0;
@@ -201,17 +198,14 @@ export function KPICardsSection({
           isLoading={isLoading}
           popoverContent={breakdownPopover}
         />
-        {/* Kosten/rate is admin-only — customers load via projects_public (no hourly_rate) → would render NaN */}
-        {isAdmin && (
-          <KPICard
-            title="Kosten per Donateur"
-            value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            subtext={`O.b.v. €${hourlyRate}/u`}
-            icon={TrendingUp}
-            variant={costPerDonor > 50 ? 'pink' : 'orange'}
-            isLoading={isLoading}
-          />
-        )}
+        <KPICard
+          title="Kosten per Donateur"
+          value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          subtext={`O.b.v. €${hourlyRate}/u`}
+          icon={TrendingUp}
+          variant={costPerDonor > 50 ? 'pink' : 'orange'}
+          isLoading={isLoading}
+        />
         <KPICard
           title="Inzet Uren"
           value={`${totalHours} u`}

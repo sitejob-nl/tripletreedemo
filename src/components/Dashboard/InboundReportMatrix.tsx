@@ -24,8 +24,6 @@ interface InboundReportMatrixProps {
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
   reportageOverrides?: ReportageWeeklyOverride[];
-  /** Whether to show cost/investment rows. Admin-only — customers must never see rates. */
-  showInvestment?: boolean;
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -45,7 +43,6 @@ export const InboundReportMatrix = ({
   loggedTimeHours,
   dailyLoggedHours,
   reportageOverrides = [],
-  showInvestment = true,
 }: InboundReportMatrixProps) => {
   const [showLostReasons, setShowLostReasons] = useState(false);
   const [showRetainedReasons, setShowRetainedReasons] = useState(false);
@@ -391,15 +388,11 @@ export const InboundReportMatrix = ({
             return hours > 0 ? s.retained / hours : 0;
           }, 'decimal')}
 
-          {/* INVESTERING — cost/rate data is admin-only; hidden for customers (rate is absent in projects_public → would render NaN) */}
-          {showInvestment && (
-            <>
-              {renderSectionHeader('Investering', 'bg-muted/80', 'text-foreground')}
-              {renderRow('Investering (Excl BTW)', (s, dayName) => calcInvestment(s, dayName), 'currency')}
-              {renderRow('Investering (Incl BTW)', (s, dayName) => calcInvestmentInclVat(s, dayName), 'currency')}
-              {renderRow('Kosten per behouden donateur', (s) => s.retained > 0 ? calcInvestment(s) / s.retained : 0, 'currency')}
-            </>
-          )}
+          {/* INVESTERING — klant-facing campagnekosten (tarief komt nu uit projects_public) */}
+          {renderSectionHeader('Investering', 'bg-muted/80', 'text-foreground')}
+          {renderRow('Investering (Excl BTW)', (s, dayName) => calcInvestment(s, dayName), 'currency')}
+          {renderRow('Investering (Incl BTW)', (s, dayName) => calcInvestmentInclVat(s, dayName), 'currency')}
+          {renderRow('Kosten per behouden donateur', (s) => s.retained > 0 ? calcInvestment(s) / s.retained : 0, 'currency')}
         </tbody>
       </table>
     </div>
