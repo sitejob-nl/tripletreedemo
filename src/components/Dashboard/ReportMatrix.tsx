@@ -34,8 +34,6 @@ interface ReportMatrixProps {
   /** Daily breakdown of logged hours per weekday */
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
   reportageOverrides?: ReportageWeeklyOverride[];
-  /** Whether to show cost/investment rows. Admin-only — customers must never see rates. */
-  showInvestment?: boolean;
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -55,8 +53,7 @@ export const ReportMatrix = ({
   mappingConfig,
   loggedTimeHours,
   dailyLoggedHours,
-  reportageOverrides = [],
-  showInvestment = true
+  reportageOverrides = []
 }: ReportMatrixProps) => {
   const [showNegativeArgumented, setShowNegativeArgumented] = useState(false);
   const [showNegativeNotArgumented, setShowNegativeNotArgumented] = useState(false);
@@ -506,20 +503,16 @@ export const ReportMatrix = ({
           }, 'decimal')}
           {renderRow('Gesprekken per uur', (s, isTotal, dayName) => calcCallsPerHour(s, isTotal, dayName), 'decimal', 'bg-muted/20')}
 
-          {/* INVESTERING — cost/rate data is admin-only; hidden for customers (rate is absent in projects_public → would render NaN) */}
-          {showInvestment && (
-            <>
-              {renderSectionHeader('Investering', 'bg-kpi-cyan', 'text-kpi-cyan-text')}
-              {renderRow('Investering (Excl BTW)', (s, isTotal, dayName) => calcInvestment(s, isTotal, dayName), 'currency')}
-              {renderRow(`BTW ${vatRate}%`, (s, isTotal, dayName) => calcBtwAmount(s, isTotal, dayName), 'currency')}
-              {renderRow('Investering (Incl BTW)', (s, isTotal, dayName) => calcInvestmentInclVat(s, isTotal, dayName), 'currency')}
-              {renderRow('Investering per donateur (Excl BTW)', (s, isTotal, dayName) => calcCostPerDonor(s, isTotal, dayName), 'currency')}
-              {renderRow('Investering per donateur (Incl BTW)', (s, isTotal, dayName) => calcCostPerDonorInclVat(s, isTotal, dayName), 'currency')}
-              {renderRow('Terugverdientijd (Excl BTW)', (s, isTotal, dayName) => calcPaybackMonths(s, isTotal, dayName), 'months')}
-              {renderRow('Terugverdientijd (Incl BTW)', (s, isTotal, dayName) => calcPaybackMonthsInclVat(s, isTotal, dayName), 'months')}
-              {renderRow('ROI', (s, isTotal, dayName) => calcROI(s, isTotal, dayName), 'multiplier')}
-            </>
-          )}
+          {/* INVESTERING — klant-facing campagnekosten (tarief komt nu uit projects_public) */}
+          {renderSectionHeader('Investering', 'bg-kpi-cyan', 'text-kpi-cyan-text')}
+          {renderRow('Investering (Excl BTW)', (s, isTotal, dayName) => calcInvestment(s, isTotal, dayName), 'currency')}
+          {renderRow(`BTW ${vatRate}%`, (s, isTotal, dayName) => calcBtwAmount(s, isTotal, dayName), 'currency')}
+          {renderRow('Investering (Incl BTW)', (s, isTotal, dayName) => calcInvestmentInclVat(s, isTotal, dayName), 'currency')}
+          {renderRow('Investering per donateur (Excl BTW)', (s, isTotal, dayName) => calcCostPerDonor(s, isTotal, dayName), 'currency')}
+          {renderRow('Investering per donateur (Incl BTW)', (s, isTotal, dayName) => calcCostPerDonorInclVat(s, isTotal, dayName), 'currency')}
+          {renderRow('Terugverdientijd (Excl BTW)', (s, isTotal, dayName) => calcPaybackMonths(s, isTotal, dayName), 'months')}
+          {renderRow('Terugverdientijd (Incl BTW)', (s, isTotal, dayName) => calcPaybackMonthsInclVat(s, isTotal, dayName), 'months')}
+          {renderRow('ROI', (s, isTotal, dayName) => calcROI(s, isTotal, dayName), 'multiplier')}
 
           {/* BELPOGINGEN */}
           {renderSectionHeader('Belpogingen', 'bg-muted/80', 'text-foreground')}
