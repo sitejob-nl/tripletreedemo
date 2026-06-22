@@ -181,6 +181,12 @@ export const InboundReportMatrix = ({
     const hours = calcHours(stats, dayName);
     return hours > 0 ? stats.calls / hours : 0;
   };
+  // Bereikte gesprekken (contacten) per uur — sluit aan op BasiCall.
+  const calcContactsPerHour = (stats: InboundStats, dayName?: string) => {
+    const hours = calcHours(stats, dayName);
+    const contacts = Math.max(0, stats.calls - stats.unreachableCount);
+    return hours > 0 ? contacts / hours : 0;
+  };
   const calcInvestment = (stats: InboundStats, dayName?: string) => {
     if (!dayName && mappingConfig?.weekday_rates) {
       return days.reduce((sum, day) => {
@@ -382,7 +388,8 @@ export const InboundReportMatrix = ({
           {/* PRODUCTIVITEIT */}
           {renderSectionHeader('Productiviteit', 'bg-kpi-cyan', 'text-kpi-cyan-text')}
           {renderRow('Aantal beluren', (s, dayName) => calcHours(s, dayName), 'decimal')}
-          {renderRow('Gesprekken per uur', (s, dayName) => calcCallsPerHour(s, dayName), 'decimal')}
+          {renderRow('Afgehandeld per uur', (s, dayName) => calcCallsPerHour(s, dayName), 'decimal')}
+          {renderRow('Bereikte gesprekken per uur', (s, dayName) => calcContactsPerHour(s, dayName), 'decimal')}
           {renderRow('Behouden per uur', (s, dayName) => {
             const hours = calcHours(s, dayName);
             return hours > 0 ? s.retained / hours : 0;

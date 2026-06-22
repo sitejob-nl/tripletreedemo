@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
-import { detectFrequencyFromConfig, FrequencyType, isUnreachable } from '@/lib/statsHelpers';
+import { detectFrequencyFromConfig, FrequencyType, isUnreachable, isSale as isSaleResult } from '@/lib/statsHelpers';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
@@ -250,7 +250,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
 
       const rawData = record.raw_data ?? {};
       const resultName = record.resultaat ?? (rawData['bc_result_naam'] as string) ?? 'Onbekend';
-      const isSale = mappingConfig?.sale_results?.includes(resultName) ?? false;
+      const isSale = isSaleResult(resultName, mappingConfig);
       const recordUnreachable = isUnreachable(resultName, mappingConfig);
 
       // Frequency + amount (old)
@@ -347,7 +347,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         if (!dayKey) return;
         const rawData = record.raw_data ?? {};
         const resultName = record.resultaat ?? (rawData['bc_result_naam'] as string) ?? 'Onbekend';
-        const isSale = mappingConfig?.sale_results?.includes(resultName) ?? false;
+        const isSale = isSaleResult(resultName, mappingConfig);
         const recordUnreachable = isUnreachable(resultName, mappingConfig);
         const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequentie'] ?? rawData['Frequentie'];
         const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
@@ -602,7 +602,11 @@ function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
   rows.push([]);
   rows.push(['PRODUCTIVITEIT']);
   rows.push(row('Aantal beluren', (s) => hrs(s), (v) => v.toFixed(1)));
-  rows.push(row('Gesprekken per uur', (s) => { const h = hrs(s); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
+  // Afgehandeld per uur = alle afgehandelde records / uur (productiviteit).
+  rows.push(row('Afgehandeld per uur', (s) => { const h = hrs(s); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
+  // Bereikte gesprekken per uur = contacten (calls − onbereikbaar) / uur. Sluit aan op de
+  // BasiCall-rapportage ("gesprekken per uur"). Label afstemmen met Esther.
+  rows.push(row('Bereikte gesprekken per uur', (s) => { const h = hrs(s); const c = Math.max(0, s.calls - s.unreachable); return h > 0 ? c / h : 0; }, (v) => v.toFixed(1)));
   rows.push(row('Score per uur', (s) => { const h = hrs(s); return h > 0 ? s.sales / h : 0; }, (v) => v.toFixed(2)));
   rows.push([]);
   rows.push(['INVESTERING']);
@@ -751,7 +755,10 @@ function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
   rows.push([]);
   rows.push(['PRODUCTIVITEIT']);
   rows.push(row('Aantal beluren', (s, d) => hrs(s, d), (v) => v.toFixed(1)));
-  rows.push(row('Gesprekken per uur', (s, d) => { const h = hrs(s, d); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
+  // Afgehandeld per uur = alle afgehandelde records / uur (productiviteit).
+  rows.push(row('Afgehandeld per uur', (s, d) => { const h = hrs(s, d); return h > 0 ? s.calls / h : 0; }, (v) => v.toFixed(1)));
+  // Bereikte gesprekken per uur = contacten (calls − onbereikbaar) / uur (BasiCall-aansluiting).
+  rows.push(row('Bereikte gesprekken per uur', (s, d) => { const h = hrs(s, d); const c = Math.max(0, s.calls - s.unreachable); return h > 0 ? c / h : 0; }, (v) => v.toFixed(1)));
   rows.push(row('Score per uur', (s, d) => { const h = hrs(s, d); return h > 0 ? s.sales / h : 0; }, (v) => v.toFixed(2)));
   rows.push([]);
   rows.push(['INVESTERING']);

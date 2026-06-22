@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { isSale as isSaleResult } from '@/lib/statsHelpers';
 import { metricNumber } from '@/lib/reportageOverrideUtils';
 import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
 
@@ -96,12 +97,11 @@ export async function exportFlatYear(args: ExportArgs): Promise<void> {
   try {
     const yearStart = `${year}-01-01`;
     const yearEnd = `${year}-12-31`;
-    const saleSet = new Set(mappingConfig?.sale_results ?? []);
     const voicemailSet = new Set(mappingConfig?.flat_voicemail_results ?? []);
     const nawtSet = new Set(mappingConfig?.flat_nawt_results ?? []);
 
     const classify = (name: string): ResultKind => {
-      if (saleSet.has(name)) return 'sale';
+      if (isSaleResult(name, mappingConfig)) return 'sale';
       if (voicemailSet.has(name)) return 'voicemail';
       if (nawtSet.has(name)) return 'nawt';
       return 'negatief';

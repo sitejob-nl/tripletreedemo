@@ -34,6 +34,8 @@ interface ReportMatrixProps {
   /** Daily breakdown of logged hours per weekday */
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
   reportageOverrides?: ReportageWeeklyOverride[];
+  /** Admin sees the secondary "Bruto conversie"; klanten zien alleen Netto (= BasiCall). */
+  isAdmin?: boolean;
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -53,7 +55,8 @@ export const ReportMatrix = ({
   mappingConfig,
   loggedTimeHours,
   dailyLoggedHours,
-  reportageOverrides = []
+  reportageOverrides = [],
+  isAdmin = false
 }: ReportMatrixProps) => {
   const [showNegativeArgumented, setShowNegativeArgumented] = useState(false);
   const [showNegativeNotArgumented, setShowNegativeNotArgumented] = useState(false);
@@ -233,6 +236,13 @@ export const ReportMatrix = ({
   const calcCallsPerHour = (stats: DayStats, isTotal = false, dayName?: string) => {
     const hours = calcHours(stats, isTotal, dayName);
     return hours > 0 ? stats.calls / hours : 0;
+  };
+  // Bereikte gesprekken (contacten) per uur = (calls − onbereikbaar) / uur. Sluit aan op
+  // BasiCall's "gesprekken per uur"; onbereikbaar wordt NIET als gesprek geteld.
+  const calcContactsPerHour = (stats: DayStats, isTotal = false, dayName?: string) => {
+    const hours = calcHours(stats, isTotal, dayName);
+    const contacts = Math.max(0, stats.calls - stats.unreachableCount);
+    return hours > 0 ? contacts / hours : 0;
   };
   const getHourlyRateForDay = (dayName?: string): number => {
     if (dayName && mappingConfig?.weekday_rates) {
@@ -426,10 +436,12 @@ export const ReportMatrix = ({
           {renderRow('Jaarwaarde totaal', (s) => s.annualValue, 'currency')}
           {renderRow('Jaarwaarde doorlopend', (s) => s.annualValueRecurring, 'currency')}
           {renderRow('Jaarwaarde eenmalig', (s) => s.annualValueOneoff, 'currency')}
-          {renderRow('Bruto conversie', calcBrutoConversion, 'percent')}
+          {/* Netto = hoofdcijfer (sluit aan op BasiCall). Bruto alleen voor admin. */}
           {renderRow('Netto conversie', calcNettoConversion, 'percent')}
+          {isAdmin && renderRow('Bruto conversie', calcBrutoConversion, 'percent')}
           {renderRow('Aantal beluren', (s, isTotal, dayName) => calcHours(s, isTotal, dayName), 'decimal')}
-          {renderRow('Gesprekken per uur', (s, isTotal, dayName) => calcCallsPerHour(s, isTotal, dayName), 'decimal')}
+          {renderRow('Afgehandeld per uur', (s, isTotal, dayName) => calcCallsPerHour(s, isTotal, dayName), 'decimal')}
+          {renderRow('Bereikte gesprekken per uur', (s, isTotal, dayName) => calcContactsPerHour(s, isTotal, dayName), 'decimal')}
           {renderRow('Score per uur', (s, isTotal, dayName) => calcSalesPerHour(s, isTotal, dayName), 'decimal')}
           {renderRow('Gemiddeld donatiebedrag', calcAvgAmount, 'currency')}
 
@@ -501,7 +513,8 @@ export const ReportMatrix = ({
             const hours = calcHours(s, isTotal, dayName);
             return hours > 0 ? s.negativeNotArgumentedCount / hours : 0;
           }, 'decimal')}
-          {renderRow('Gesprekken per uur', (s, isTotal, dayName) => calcCallsPerHour(s, isTotal, dayName), 'decimal', 'bg-muted/20')}
+          {renderRow('Afgehandeld per uur', (s, isTotal, dayName) => calcCallsPerHour(s, isTotal, dayName), 'decimal')}
+          {renderRow('Bereikte gesprekken per uur', (s, isTotal, dayName) => calcContactsPerHour(s, isTotal, dayName), 'decimal', 'bg-muted/20')}
 
           {/* INVESTERING — klant-facing campagnekosten (tarief komt nu uit projects_public) */}
           {renderSectionHeader('Investering', 'bg-kpi-cyan', 'text-kpi-cyan-text')}
