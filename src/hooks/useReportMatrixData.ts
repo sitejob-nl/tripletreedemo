@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { DBProjectBase } from '@/types/database';
 import { ProcessedDBCallRecordWithFreq } from './useCallRecords';
 import { parseDutchFloat } from '@/lib/dataProcessing';
-import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
+import { detectFrequencyFromConfig, FrequencyType, isSale as isSaleResult } from '@/lib/statsHelpers';
 import { ResolvedDateFilter } from './useDateFilter';
 
 const calculateValuesFromRaw = (
@@ -31,7 +31,7 @@ const calculateValuesFromRaw = (
     return defaultResult;
   }
 
-  const isSale = mappingConfig.sale_results?.includes(resultaat || '') || false;
+  const isSale = isSaleResult(resultaat || '', mappingConfig);
 
   // Vast bedrag per sale (bv. ANBO: €37,08/sale). Heeft voorrang: geen termijnbedrag/
   // frequentie in de data, dus elke sale telt exact dit bedrag (eenmalig).

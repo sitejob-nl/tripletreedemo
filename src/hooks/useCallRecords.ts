@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DBProjectBase, MappingConfig, ProcessedDBCallRecord } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
-import { detectFrequencyFromConfig, FrequencyType } from '@/lib/statsHelpers';
+import { detectFrequencyFromConfig, FrequencyType, isSale as isSaleResult } from '@/lib/statsHelpers';
 import { ResolvedDateFilter } from './useDateFilter';
 
 interface UseCallRecordsOptions {
@@ -44,9 +44,9 @@ const calculateValuesFromRaw = (
     return defaultResult;
   }
 
-  const isSale = mappingConfig.sale_results?.includes(resultaat || '') || false;
+  const isSale = isSaleResult(resultaat || '', mappingConfig);
 
-  const freqRaw = rawData['frequency'] 
+  const freqRaw = rawData['frequency']
     || rawData[mappingConfig.freq_col] 
     || rawData['frequentie'] 
     || rawData['Frequentie'];

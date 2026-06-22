@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig, ProjectType } from '@/types/database';
 import { ResolvedDateFilter } from './useDateFilter';
+import { isSale, SALE_RESULTS } from '@/lib/statsHelpers';
 
 interface KPIAggregates {
   totalRecords: number;
@@ -92,7 +93,8 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, project
           if (useSubstring) {
             return (positiveResultsLower as string[]).some(p => raw.includes(p));
           }
-          return positiveResults.includes(resultaat || '');
+          // Outbound: gedeelde isSale (UNION config + SALE_RESULTS, case-insensitive).
+          return isSale(resultaat, mappingConfig);
         };
 
         return {
@@ -134,11 +136,13 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, project
         };
       }
 
+      // Outbound 'all' view: pass the UNION (config ∪ SALE_RESULTS) so the RPC's
+      // case-insensitive predicate matches isSale() exactly (KPI-kaart == matrix).
       const { data, error } = await supabase
         .rpc('get_project_kpi_totals', {
           p_project_id: projectId,
           p_week_number: null,
-          p_sale_results: positiveResults
+          p_sale_results: [...(mappingConfig?.sale_results ?? []), ...SALE_RESULTS]
         });
       
       if (error) throw error;

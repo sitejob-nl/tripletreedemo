@@ -66,6 +66,7 @@ export function ReportViewSection({
             loggedTimeHours={loggedTimeHours}
             dailyLoggedHours={dailyLoggedHours}
             reportageOverrides={reportageOverrides}
+            isAdmin={isAdmin}
           />
         );
       case 'flat':
@@ -200,6 +201,7 @@ export function ReportViewSection({
           loggedTimeHours={loggedTimeHours}
           dailyLoggedHours={dailyLoggedHours}
           reportageOverrides={reportageOverrides}
+          isAdmin={isAdmin}
         />
       )}
     </div>

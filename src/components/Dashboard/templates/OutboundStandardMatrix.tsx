@@ -14,6 +14,7 @@ interface OutboundStandardMatrixProps {
   loggedTimeHours?: number;
   dailyLoggedHours?: DailyLoggedTimeBreakdown;
   reportageOverrides?: ReportageWeeklyOverride[];
+  isAdmin?: boolean;
 }
 
 // Variant 1 of the historical rapportages (17/24 legacy files: STC, Proefdiervrij,
@@ -33,6 +34,7 @@ export function OutboundStandardMatrix({
   loggedTimeHours,
   dailyLoggedHours,
   reportageOverrides,
+  isAdmin = false,
 }: OutboundStandardMatrixProps) {
   return (
     <>
@@ -48,6 +50,7 @@ export function OutboundStandardMatrix({
         loggedTimeHours={loggedTimeHours}
         dailyLoggedHours={dailyLoggedHours}
         reportageOverrides={reportageOverrides}
+        isAdmin={isAdmin}
       />
     </>
   );

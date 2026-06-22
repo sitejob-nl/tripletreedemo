@@ -284,6 +284,16 @@ export const UNREACHABLE_RESULTS = [
   'blacklist',
   'dialer',
   'abandoned',
+  // 2026-06: fall-through codes uit de BasiCall-reconciliatie-audit. Deze telden
+  // onterecht mee in de netto-noemer en als "contact" (gesprek). 'onjuist naw' vangt
+  // de variant ZONDER 'e' (de bestaande 'onjuiste naw' miste "Onjuist NAW-gegevens");
+  // 'nawt' vangt "Onjuiste NAWT-gegevens" + "NAWT fout".
+  'onjuist naw',
+  'nawt',
+  'dubbel in lijst',
+  'recent benaderd',
+  'niet meer benaderen',
+  'leeg',
 ];
 
 export const categorizeNegativeResult = (
@@ -328,6 +338,39 @@ export const isExcludedFromRetention = (resultName: string, config?: MappingConf
   if (!config?.exclude_from_retention?.length) return false;
   const lower = resultName.toLowerCase().trim();
   return config.exclude_from_retention.some(r => lower.includes(r.toLowerCase()));
+};
+
+// Positieve/sale-resultaten. Net als UNREACHABLE_RESULTS een UNION van project-config
+// (mapping_config.sale_results) + deze defaults, zodat een project met een incomplete of
+// anders-gespelde lijst de universele sale-codes niet mist (bv. "machtiging per kwartaal"
+// in kleine letters, of "Machtiging per Half jaar" die niet in de projectlijst stond).
+// BEWUST exact-gelijkheid (case-insensitive + trim), GEEN substring: substring zou
+// 'donateur' op "Is al donateur" laten matchen en 'sale' op "Sale niet doorgezet" — beide
+// negatief en aanwezig in de data. Sale-codes zijn discrete enums, dus gelijkheid is correct.
+// Kale 'eenmalig'/'per kwartaal'/'halfjaarlijks' staan hier BEWUST NIET in: die zijn
+// projectafhankelijk (bv. STC heeft 10× "Eenmalig") en horen via mapping_config.sale_results.
+export const SALE_RESULTS = [
+  'sale',
+  'donateur',
+  'toezegging',
+  'maandelijks',
+  'jaarlijks',
+  'wil lid worden',
+  'machtiging per maand',
+  'machtiging per kwartaal',
+  'machtiging per jaar',
+  'machtiging per half jaar',
+];
+
+// Bepaalt of een resultaatcode een positief/sale is. UNION van project-config + defaults,
+// case-insensitive exact-gelijkheid. Outbound single source of truth — gebruik dit overal
+// i.p.v. een losse `sale_results.includes(...)`, zodat dashboard, rapportage, export en de
+// RPC's identiek tellen (anders wijkt "Aantal Positief" / jaarwaarde tussen de paden af).
+export const isSale = (resultName: string, config?: MappingConfig): boolean => {
+  const target = (resultName || '').toLowerCase().trim();
+  if (!target) return false;
+  const sales = [...(config?.sale_results ?? []), ...SALE_RESULTS];
+  return sales.some(r => r.toLowerCase().trim() === target);
 };
 
 // Legacy wrapper - uses the new centralized function with empty freq_map for backwards compatibility
