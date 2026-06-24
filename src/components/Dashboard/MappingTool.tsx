@@ -145,6 +145,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   
   // Hours factor state
   const [hoursFactor, setHoursFactor] = useState<number>(project.hours_factor ?? 1.0);
+  // Vergoeding per sale (excl. btw) — als > 0 rekent het dashboard kosten = sales × dit bedrag
+  // i.p.v. uren × uurtarief (bv. ANBO 734). Zie src/lib/cost.ts.
+  const [costPerSale, setCostPerSale] = useState<number>(project.mapping_config.cost_per_sale ?? 0);
 
   // Baseline snapshot for unsaved-changes detection (captured once per project load).
   const [baselineKey, setBaselineKey] = useState<string | null>(null);
@@ -201,8 +204,12 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     return Object.keys(clean).length > 0 ? clean : undefined;
   };
 
-  // Build current mapping config for preview
+  // Build current mapping config for preview.
+  // Spread de bestaande config eerst zodat velden die deze tool NIET beheert (bv.
+  // flat_sale_value op 827) niet stilletjes gewist worden bij opslaan; de beheerde
+  // velden hieronder overschrijven ze.
   const currentMappingConfig: MappingConfig = {
+    ...project.mapping_config,
     amount_col: amountCol,
     freq_col: freqCol,
     reason_col: reasonCol === EMPTY_VALUE ? '' : reasonCol,
@@ -228,6 +235,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       service_level_sec: serviceTargetSeconds,
     },
     reason_categories: reasonCategories,
+    cost_per_sale: costPerSale > 0 ? costPerSale : undefined,
   };
 
   const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
@@ -267,6 +275,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setExcludeFromRetention(project.mapping_config.exclude_from_retention || []);
     setWeekdayRates(project.mapping_config.weekday_rates || {});
     setHoursFactor(project.hours_factor ?? 1.0);
+    setCostPerSale(project.mapping_config.cost_per_sale ?? 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
@@ -276,7 +285,10 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   }, [project.id, loadFromProject]);
 
   const handleSave = async () => {
+    // Spread bestaande config eerst (zie currentMappingConfig): behoudt niet-beheerde
+    // velden zoals flat_sale_value op 827 zodat opslaan ze niet wist.
     const mappingConfig: MappingConfig = {
+      ...project.mapping_config,
       amount_col: amountCol,
       freq_col: freqCol,
       reason_col: reasonCol === EMPTY_VALUE ? '' : reasonCol,
@@ -302,6 +314,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         service_level_sec: serviceTargetSeconds,
       },
       reason_categories: reasonCategories,
+      cost_per_sale: costPerSale > 0 ? costPerSale : undefined,
     };
     await onSave(project.id, hourlyRate, mappingConfig, projectType, hoursFactor);
   };
@@ -943,7 +956,25 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                 <Input type="number" value={project.vat_rate} disabled className="mt-1 opacity-50" />
               </div>
             </div>
-            
+
+            {/* Per-sale facturatie */}
+            <div className="mt-4">
+              <Label className="text-xs text-muted-foreground">Vergoeding per sale (€ excl. btw)</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Vul in als het callcenter per sale betaald wordt i.p.v. per uur (bv. ANBO). Dan wordt
+                de investering = aantal sales × dit bedrag. Laat op 0 voor de normale uren × uurtarief-berekening.
+              </p>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={costPerSale || ''}
+                placeholder="0"
+                onChange={(e) => setCostPerSale(parseFloat(e.target.value) || 0)}
+                className="w-32"
+              />
+            </div>
+
             {/* Weekday rates */}
             <div className="mt-4">
               <Label className="text-xs text-muted-foreground mb-2 block">Afwijkende tarieven per weekdag (optioneel)</Label>

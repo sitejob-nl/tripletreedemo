@@ -6,6 +6,7 @@ import { CallAttemptsAnalysis } from './CallAttemptsAnalysis';
 import { ResultsBreakdown } from './ResultsBreakdown';
 import { ProcessedCallRecord } from '@/types/dashboard';
 import { MappingConfig } from '@/types/database';
+import { getCostPerSale } from '@/lib/cost';
 import { WeekYear } from '@/hooks/useCallRecords';
 
 // Lazy-load the geographic tab — mapbox-gl is ~1.7 MB and only used here.
@@ -70,11 +71,12 @@ export function AnalysisViewSection({
         </TabsList>
         
         <TabsContent value="comparison" className="mt-0">
-          <WeekComparison 
-            data={data} 
-            hourlyRate={hourlyRate} 
-            availableWeeks={availableWeeks} 
+          <WeekComparison
+            data={data}
+            hourlyRate={hourlyRate}
+            availableWeeks={availableWeeks}
             amountCol={mappingConfig?.amount_col}
+            costPerSale={getCostPerSale(mappingConfig)}
           />
         </TabsContent>
         

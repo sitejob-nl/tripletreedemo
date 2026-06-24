@@ -54,9 +54,16 @@ export interface MappingConfig {
   freq_map: Record<string, number>;
   sale_results: string[];
   // Vast bedrag per sale (excl. btw) voor lead-/aanmeldcampagnes die per sale betaald
-  // worden i.p.v. een donatie met termijnbedrag×frequentie (bv. ANBO: €37,08/sale).
-  // Indien gezet (>0) telt elke sale exact dit bedrag als (jaar)waarde.
+  // worden i.p.v. een donatie met termijnbedrag×frequentie.
+  // Indien gezet (>0) telt elke sale exact dit bedrag als (jaar)WAARDE (bv. ANBO Tipgids 827).
   flat_sale_value?: number;
+
+  // Vergoeding/KOSTEN die Triple Tree (het callcenter) per sale rekent, excl. btw
+  // (bv. ANBO 734: €37,08/sale). LET OP: dit is iets anders dan flat_sale_value —
+  // dit is de klant-facing kosten/investering, NIET de jaarwaarde. Indien gezet (>0)
+  // wordt de investering = aantal sales × cost_per_sale i.p.v. uren × uurtarief.
+  // Zie src/lib/cost.ts getCostPerSale.
+  cost_per_sale?: number;
 
   // Inbound-specifieke configuratie
   retention_results?: string[];      // Resultaten waarbij donateur behouden blijft

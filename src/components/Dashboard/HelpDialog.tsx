@@ -122,6 +122,15 @@ export const HelpDialog = () => {
                       Investering per Donateur = Totale Investering / Aantal Sales
                     </div>
                   </div>
+
+                  <div>
+                    <p className="font-medium mb-2">Per-sale campagnes (bijv. ANBO)</p>
+                    <p className="text-muted-foreground">
+                      Bij sommige campagnes wordt het callcenter per sale betaald i.p.v. per uur.
+                      Dan geldt: Investering = Aantal Sales × vergoeding per sale (excl. BTW),
+                      niet uren × uurtarief. De ingezette uren blijven zichtbaar als informatie.
+                    </p>
+                  </div>
                 </div>
               </AccordionContent>
             </AccordionItem>

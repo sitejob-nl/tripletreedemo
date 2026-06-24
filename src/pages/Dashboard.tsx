@@ -17,6 +17,7 @@ import { useOnboardingTour } from '@/hooks/useOnboardingTour';
 import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { ceilHours } from '@/lib/hours';
+import { getCostPerSale } from '@/lib/cost';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig, ProjectType } from '@/types/database';
 import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
@@ -302,7 +303,10 @@ const Index = () => {
     return ceilHours(rawTotalHours);
   }, [isSingleWeek, loggedTime, gesprekstijdByDay, kpiAggregates]);
 
-  const totalCost = totalHours * hourlyRate;
+  // Per-sale facturatie (bv. ANBO 734): kosten = aantal sales × vergoeding per sale,
+  // i.p.v. uren × uurtarief. Uren blijven elders zichtbaar als info.
+  const costPerSale = getCostPerSale(currentProject?.mapping_config);
+  const totalCost = costPerSale != null ? totalSales * costPerSale : totalHours * hourlyRate;
   const costPerDonor = totalSales > 0 ? totalCost / totalSales : 0;
 
   // Determine project type
@@ -578,6 +582,7 @@ const Index = () => {
                     totalHours={totalHours}
                     costPerDonor={costPerDonor}
                     hourlyRate={hourlyRate}
+                    costPerSale={costPerSale}
                     selectedWeek={selectedWeek}
                     isLoading={kpiLoading}
                     totalToCall={currentProject?.total_to_call}

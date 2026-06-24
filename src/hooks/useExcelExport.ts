@@ -5,6 +5,7 @@ import { MappingConfig, ProjectType, ReportTemplate, ReportageWeeklyOverride } f
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { categorizeInboundResult } from '@/lib/statsHelpers';
 import { ceilHours } from '@/lib/hours';
+import { getCostPerSale } from '@/lib/cost';
 
 interface UseExcelExportParams {
   data: ProcessedCallRecord[];
@@ -124,6 +125,10 @@ export function useExcelExport({
       return ceilHours(totalDurationSec / 3600);
     };
 
+    // Per-sale facturatie (bv. ANBO 734): investering per dag = aantal sales × vergoeding per sale,
+    // i.p.v. uren × uurtarief. null = normale uren×tarief.
+    const costPerSaleFee = getCostPerSale(mappingConfig);
+
     // ============================
     // OUTBOUND EXPORT
     // ============================
@@ -160,7 +165,8 @@ export function useExcelExport({
       });
 
       const calcDayHours = (d: string) => getHoursForDay(d, aggregated[d].durationSec);
-      const calcDayInvestment = (d: string) => calcDayHours(d) * getHourlyRateForDay(d);
+      const calcDayInvestment = (d: string) =>
+        costPerSaleFee != null ? aggregated[d].sales * costPerSaleFee : calcDayHours(d) * getHourlyRateForDay(d);
       const totalHrs = getTotalHours(aggregated.total.durationSec);
       const totalInvestment = days.reduce((sum, d) => sum + calcDayInvestment(d), 0);
       const totalInvestmentInclVat = totalInvestment * (1 + vatRate / 100);
