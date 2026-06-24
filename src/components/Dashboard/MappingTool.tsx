@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw } from 'lucide-react';
 import { DBProjectBase, MappingConfig, ProjectType } from '@/types/database';
-import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType } from '@/lib/statsHelpers';
+import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isSale, isUnreachable, categorizeNegativeResult, categorizeInboundResult } from '@/lib/statsHelpers';
+import { useResultDistribution } from '@/hooks/useResultDistribution';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,33 @@ interface MappingToolProps {
 
 const EMPTY_VALUE = "__none__";
 const AUTO_VALUE = "__auto__";
+
+// Stabiele serialisatie (object-keys gesorteerd) voor wijzig-detectie, zodat
+// her-ordening van object-keys geen valse "niet-opgeslagen" status geeft.
+const stableStringify = (v: unknown): string => {
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v as Record<string, unknown>)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableStringify((v as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(v ?? null);
+};
+
+// Kleuren per dekkings-categorie (Tailwind bar-classes). 'todo' = nog niet ingedeeld.
+const COVERAGE_COLORS: Record<string, string> = {
+  positief: 'bg-emerald-500',
+  behouden: 'bg-emerald-500',
+  afgehandeld: 'bg-emerald-500',
+  partial: 'bg-teal-500',
+  onbereikbaar: 'bg-slate-400',
+  neg_arg: 'bg-amber-500',
+  neg_notarg: 'bg-orange-500',
+  verloren: 'bg-rose-500',
+  niet_afgehandeld: 'bg-rose-500',
+  todo: 'bg-fuchsia-500',
+};
 
 export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolProps) => {
   const { toast } = useToast();
@@ -117,6 +145,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   
   // Hours factor state
   const [hoursFactor, setHoursFactor] = useState<number>(project.hours_factor ?? 1.0);
+
+  // Baseline snapshot for unsaved-changes detection (captured once per project load).
+  const [baselineKey, setBaselineKey] = useState<string | null>(null);
 
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
 
@@ -205,7 +236,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     sampleSize: 5,
   });
 
-  useEffect(() => {
+  const loadFromProject = useCallback(() => {
     setProjectType(project.project_type || 'outbound');
     setHourlyRate(project.hourly_rate);
     setAmountCol(project.mapping_config.amount_col);
@@ -236,7 +267,13 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setExcludeFromRetention(project.mapping_config.exclude_from_retention || []);
     setWeekdayRates(project.mapping_config.weekday_rates || {});
     setHoursFactor(project.hours_factor ?? 1.0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
+
+  useEffect(() => {
+    loadFromProject();
+    setBaselineKey(null); // recapture clean baseline for the new project
+  }, [project.id, loadFromProject]);
 
   const handleSave = async () => {
     const mappingConfig: MappingConfig = {
@@ -426,6 +463,87 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     )
   );
 
+  // ---- Live data + afgeleide waarden voor het rechter paneel ----
+  const { data: resultDist = [], isLoading: distLoading } = useResultDistribution(project.id);
+
+  // Wijzig-detectie: vergelijk de huidige config met de baseline van deze projectload.
+  const liveKey = stableStringify({ cfg: currentMappingConfig, hourlyRate, projectType, hoursFactor });
+  useEffect(() => {
+    if (baselineKey === null) setBaselineKey(liveKey);
+  }, [baselineKey, liveKey]);
+  const isDirty = baselineKey !== null && liveKey !== baselineKey;
+
+  const handleReset = () => {
+    loadFromProject();
+    setBaselineKey(null);
+  };
+
+  // Categorie-dekking: classificeer elke resultaat-code (gewogen naar volume) precies
+  // zoals het dashboard dat doet, met de HUIDIGE config. De 'todo'-bucket = codes die
+  // nog in geen enkele categorie vallen — dé onboarding-signaalwaarde.
+  const coverage = useMemo(() => {
+    const classify = (r: string): string => {
+      if (projectType === 'outbound') {
+        if (isSale(r, currentMappingConfig)) return 'positief';
+        if (isUnreachable(r, currentMappingConfig)) return 'onbereikbaar';
+        const cat = categorizeNegativeResult(r, currentMappingConfig);
+        return cat === 'argumentated' ? 'neg_arg' : cat === 'not_argumentated' ? 'neg_notarg' : 'todo';
+      }
+      if (projectType === 'inbound') {
+        const c = categorizeInboundResult(r, currentMappingConfig);
+        return c === 'retained' ? 'behouden'
+          : c === 'lost' ? 'verloren'
+          : c === 'partial' ? 'partial'
+          : c === 'unreachable' ? 'onbereikbaar'
+          : 'todo';
+      }
+      const lc = r.toLowerCase();
+      if ((currentMappingConfig.handled_results ?? []).some((x) => x.toLowerCase() === lc)) return 'afgehandeld';
+      if ((currentMappingConfig.not_handled_results ?? []).some((x) => x.toLowerCase() === lc)) return 'niet_afgehandeld';
+      return 'todo';
+    };
+
+    const labels: Record<ProjectType, { key: string; label: string }[]> = {
+      outbound: [
+        { key: 'positief', label: 'Positief' },
+        { key: 'onbereikbaar', label: 'Niet bereikbaar' },
+        { key: 'neg_arg', label: 'Negatief beargumenteerd' },
+        { key: 'neg_notarg', label: 'Negatief niet bearg.' },
+        { key: 'todo', label: 'Nog niet ingedeeld' },
+      ],
+      inbound: [
+        { key: 'behouden', label: 'Behouden' },
+        { key: 'partial', label: 'Gedeeltelijk succes' },
+        { key: 'verloren', label: 'Verloren' },
+        { key: 'onbereikbaar', label: 'Niet bereikbaar' },
+        { key: 'todo', label: 'Nog niet ingedeeld' },
+      ],
+      inbound_service: [
+        { key: 'afgehandeld', label: 'Afgehandeld' },
+        { key: 'niet_afgehandeld', label: 'Niet afgehandeld' },
+        { key: 'todo', label: 'Nog niet ingedeeld' },
+      ],
+    };
+
+    const counts: Record<string, number> = {};
+    const codes: Record<string, string[]> = {};
+    let total = 0;
+    for (const { resultaat, cnt } of resultDist) {
+      const k = classify(resultaat);
+      counts[k] = (counts[k] || 0) + cnt;
+      (codes[k] ||= []).push(resultaat);
+      total += cnt;
+    }
+    const rows = labels[projectType].map(({ key, label }) => ({
+      key,
+      label,
+      count: counts[key] || 0,
+      pct: total > 0 ? ((counts[key] || 0) / total) * 100 : 0,
+    }));
+    return { total, rows, todoCount: counts['todo'] || 0, todoCodes: codes['todo'] || [] };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resultDist, projectType, saleResults, unreachableResults, negativeArgumentated, negativeNotArgumentated, retentionResults, lostResults, partialSuccessResults, handledResults, notHandledResults]);
+
   return (
     <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
       <div className="flex justify-between items-center mb-6">
@@ -464,6 +582,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         </p>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-6 items-start">
+        {/* LINKER KOLOM: configuratie */}
+        <div className="min-w-0">
       <Accordion type="multiple" defaultValue={["results"]} className="space-y-4">
         {/* Results Configuration - Different per project type */}
         {projectType === 'inbound_service' ? (
@@ -1020,49 +1141,145 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+        </div>{/* einde LINKER kolom */}
 
-      {/* Config-health summary — shows admin whether the config will produce valid numbers */}
-      {hasData && (
-        <div className="mt-6 p-4 rounded-lg border border-border bg-muted/30">
-          <div className="text-sm font-semibold mb-2">Configuratie-check</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-            <div className="flex items-center gap-2">
-              {amountColMissing ? <AlertTriangle size={14} className="text-destructive" /> : <CheckCircle size={14} className="text-green-600 dark:text-green-400" />}
-              <span>Bedrag-veld: <strong className={amountColMissing ? "text-destructive" : ""}>{amountCol || '—'}</strong></span>
-            </div>
-            <div className="flex items-center gap-2">
-              {freqColMissing ? <AlertTriangle size={14} className="text-destructive" /> : <CheckCircle size={14} className="text-green-600 dark:text-green-400" />}
-              <span>Frequentie-veld: <strong className={freqColMissing ? "text-destructive" : ""}>{freqCol || '—'}</strong></span>
-            </div>
-            <div className="flex items-center gap-2">
-              {projectType === 'outbound' && saleResults.length === 0 ? (
-                <><AlertTriangle size={14} className="text-destructive" /><span className="text-destructive">Geen positieve resultaten ingesteld</span></>
-              ) : projectType === 'inbound_service' && handledResults.length === 0 ? (
-                <><AlertTriangle size={14} className="text-destructive" /><span className="text-destructive">Geen afgehandeld-resultaten ingesteld</span></>
-              ) : projectType === 'inbound' && retentionResults.length === 0 && lostResults.length === 0 ? (
-                <><AlertTriangle size={14} className="text-destructive" /><span className="text-destructive">Geen behouden/verloren-resultaten ingesteld</span></>
+        {/* RECHTER KOLOM: sticky live-paneel (opslaan, check, dekking, preview) */}
+        <aside className="lg:sticky lg:top-4 self-start space-y-4 lg:max-h-[calc(100vh-1.5rem)] lg:overflow-auto lg:pr-1">
+          {/* Opslaan + wijzig-status */}
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="text-sm font-semibold">Opslaan</span>
+              {isDirty ? (
+                <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" /> Niet opgeslagen
+                </span>
               ) : (
-                <><CheckCircle size={14} className="text-green-600 dark:text-green-400" /><span>Resultaat-mapping ingesteld</span></>
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                  <CheckCircle size={12} /> Opgeslagen
+                </span>
               )}
             </div>
+            <Button onClick={handleSave} disabled={isSaving} className="w-full flex items-center gap-2">
+              {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+              {isSaving ? 'Opslaan...' : 'Configuratie opslaan'}
+            </Button>
+            {isDirty && (
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={isSaving}
+                className="mt-2 w-full flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+              >
+                <RotateCcw size={12} /> Wijzigingen ongedaan maken
+              </button>
+            )}
           </div>
-          {!previewLoading && previewRecords && previewRecords.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-border text-xs">
-              <strong>Preview:</strong> {previewRecords.filter(r => r.annualValue > 0).length} van {previewRecords.length} sample sales krijgt een jaarwaarde &gt; €0
-              {previewRecords.filter(r => r.annualValue > 0).length === 0 && previewRecords.length > 0 && (
-                <span className="text-destructive ml-1">— controleer bedrag-/frequentie-kolom.</span>
+
+          {/* Configuratie-check */}
+          {hasData && (
+            <div className="rounded-lg border border-border bg-muted/30 p-4">
+              <div className="text-sm font-semibold mb-2">Configuratie-check</div>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex items-center gap-2">
+                  {amountColMissing ? <AlertTriangle size={14} className="text-destructive shrink-0" /> : <CheckCircle size={14} className="text-green-600 dark:text-green-400 shrink-0" />}
+                  <span>Bedrag-veld: <strong className={amountColMissing ? 'text-destructive' : ''}>{amountCol || '—'}</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {freqColMissing ? <AlertTriangle size={14} className="text-destructive shrink-0" /> : <CheckCircle size={14} className="text-green-600 dark:text-green-400 shrink-0" />}
+                  <span>Frequentie-veld: <strong className={freqColMissing ? 'text-destructive' : ''}>{freqCol || '—'}</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {projectType === 'outbound' && saleResults.length === 0 ? (
+                    <><AlertTriangle size={14} className="text-destructive shrink-0" /><span className="text-destructive">Geen positieve resultaten ingesteld</span></>
+                  ) : projectType === 'inbound_service' && handledResults.length === 0 ? (
+                    <><AlertTriangle size={14} className="text-destructive shrink-0" /><span className="text-destructive">Geen afgehandeld-resultaten ingesteld</span></>
+                  ) : projectType === 'inbound' && retentionResults.length === 0 && lostResults.length === 0 ? (
+                    <><AlertTriangle size={14} className="text-destructive shrink-0" /><span className="text-destructive">Geen behouden/verloren-resultaten ingesteld</span></>
+                  ) : (
+                    <><CheckCircle size={14} className="text-green-600 dark:text-green-400 shrink-0" /><span>Resultaat-mapping ingesteld</span></>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Categorie-dekking (live, volume-gewogen) */}
+          <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-semibold">Categorie-dekking</span>
+              <span className="text-[11px] text-muted-foreground">{coverage.total.toLocaleString('nl-NL')} records</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mb-3">Hoe dit project elke resultaatcode telt, gewogen naar volume.</p>
+            {distLoading ? (
+              <div className="flex items-center justify-center py-4"><Loader2 size={18} className="animate-spin text-muted-foreground" /></div>
+            ) : coverage.total === 0 ? (
+              <p className="text-xs text-muted-foreground">Nog geen records voor dit project.</p>
+            ) : (
+              <div className="space-y-2">
+                {coverage.rows.map((row) => (
+                  <div key={row.key}>
+                    <div className="flex items-center justify-between text-xs mb-0.5">
+                      <span className={row.key === 'todo' && row.count > 0 ? 'font-semibold text-fuchsia-600 dark:text-fuchsia-400' : ''}>{row.label}</span>
+                      <span className="text-muted-foreground tabular-nums">{row.count.toLocaleString('nl-NL')} · {row.pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full rounded-full ${COVERAGE_COLORS[row.key] || 'bg-primary'}`} style={{ width: `${row.pct}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {coverage.todoCount > 0 && (
+              <div className="mt-3 rounded-md border border-fuchsia-300 dark:border-fuchsia-900 bg-fuchsia-50 dark:bg-fuchsia-950/30 p-2 text-[11px] text-fuchsia-800 dark:text-fuchsia-200">
+                <div className="flex items-center gap-1 font-semibold mb-1"><AlertTriangle size={12} /> {coverage.todoCount.toLocaleString('nl-NL')} records nog niet ingedeeld</div>
+                <p className="mb-1 opacity-90">Deel deze codes in via de categorieën links:</p>
+                <div className="flex flex-wrap gap-1">
+                  {coverage.todoCodes.slice(0, 10).map((c) => (
+                    <span key={c} className="rounded bg-fuchsia-500/15 px-1.5 py-0.5">{c}</span>
+                  ))}
+                  {coverage.todoCodes.length > 10 && <span className="opacity-70">+{coverage.todoCodes.length - 10} meer</span>}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Jaarwaarde-voorbeeld (compact) — outbound met sales */}
+          {projectType === 'outbound' && (
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm font-semibold flex items-center gap-1.5"><Eye size={14} /> Jaarwaarde-voorbeeld</span>
+                <button type="button" onClick={() => refetchPreview()} disabled={previewLoading} className="text-muted-foreground hover:text-foreground transition-colors" title="Ververs">
+                  <RefreshCw size={13} className={previewLoading ? 'animate-spin' : ''} />
+                </button>
+              </div>
+              {previewLoading ? (
+                <div className="flex items-center justify-center py-4"><Loader2 size={18} className="animate-spin text-muted-foreground" /></div>
+              ) : previewRecords && previewRecords.length > 0 ? (
+                <>
+                  <p className="text-xs text-muted-foreground mb-2">{previewRecords.filter((r) => r.annualValue > 0).length}/{previewRecords.length} sample-sales met jaarwaarde &gt; €0.</p>
+                  <div className="space-y-1">
+                    {previewRecords.slice(0, 5).map((r) => (
+                      <div key={r.recordId} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate text-muted-foreground" title={r.resultaat}>{r.resultaat}</span>
+                        <span className={`font-mono tabular-nums shrink-0 ${r.annualValue > 0 ? '' : 'text-destructive'}`}>€{r.annualValue.toLocaleString('nl-NL', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-border text-xs flex items-center justify-between">
+                    <span className="text-muted-foreground">Totaal voorbeeld</span>
+                    <strong>€{previewRecords.reduce((s, r) => s + r.annualValue, 0).toLocaleString('nl-NL', { maximumFractionDigits: 0 })}/jr</strong>
+                  </div>
+                  {previewRecords.some((r) => !r.matchedKey && r.freqRaw) && (
+                    <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-1"><AlertTriangle size={11} className="mt-0.5 shrink-0" /> Frequentie niet herkend bij sommige sales → controleer de Frequentie-mapping.</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">Geen sample-sales gevonden. Controleer de positieve resultaten.</p>
               )}
             </div>
           )}
-        </div>
-      )}
-
-      <div className="mt-6 flex justify-end">
-        <Button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2">
-          {isSaving ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
-          {isSaving ? 'Opslaan...' : 'Configuratie Opslaan'}
-        </Button>
-      </div>
+        </aside>
+      </div>{/* einde 2-koloms grid */}
     </div>
   );
 };

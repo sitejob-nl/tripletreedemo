@@ -650,6 +650,13 @@ export type Database = {
           total_sales: number
         }[]
       }
+      get_project_result_distribution: {
+        Args: { p_project_id: string }
+        Returns: {
+          cnt: number
+          resultaat: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
