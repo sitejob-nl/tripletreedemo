@@ -13,6 +13,7 @@ import {
 } from '@/lib/statsHelpers';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { ceilHours } from '@/lib/hours';
+import { getCostPerSale } from '@/lib/cost';
 import {
   deriveCalls,
   deriveUnreachable,
@@ -253,6 +254,11 @@ export const ReportMatrix = ({
   };
   
   const calcInvestment = (stats: DayStats, isTotal = false, dayName?: string) => {
+    // Per-sale facturatie (bv. ANBO 734): kosten = aantal sales × vergoeding per sale,
+    // i.p.v. uren × uurtarief. Omzeilt weekday_rates/uren bewust. stats.sales is in beide
+    // gevallen (per dag én totaal) betrouwbaar (zie calcSalesPerHour).
+    const cps = getCostPerSale(mappingConfig);
+    if (cps != null) return stats.sales * cps;
     if (isTotal && mappingConfig?.weekday_rates) {
       // Sum investment per day using day-specific rates
       return days.reduce((sum, day) => {

@@ -23,6 +23,7 @@ interface WeekComparisonProps {
   hourlyRate: number;
   availableWeeks: WeekYear[];
   amountCol?: string;
+  costPerSale?: number | null; // per-sale facturatie (bv. ANBO 734): investering = sales × dit bedrag
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -38,7 +39,7 @@ interface WeekStats extends DayStats {
   weekYearKey: string; // "2026-01" format
 }
 
-export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = 'termijnbedrag' }: WeekComparisonProps) => {
+export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = 'termijnbedrag', costPerSale = null }: WeekComparisonProps) => {
   const [selectedWeeks, setSelectedWeeks] = useState<string[]>(() => {
     // Default: select last 2 available weeks (by value, e.g., "2026-01")
     return availableWeeks.slice(0, Math.min(2, availableWeeks.length)).map(w => w.value);
@@ -128,7 +129,9 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
     const hours = calcHours(stats);
     return hours > 0 ? stats.sales / hours : 0;
   };
-  const calcInvestment = (stats: DayStats) => calcHours(stats) * hourlyRate;
+  // Per-sale facturatie (bv. ANBO 734): kosten = aantal sales × vergoeding per sale, i.p.v. uren × tarief.
+  const calcInvestment = (stats: DayStats) =>
+    costPerSale != null ? stats.sales * costPerSale : calcHours(stats) * hourlyRate;
   const calcCostPerDonor = (stats: DayStats) =>
     stats.sales > 0 ? calcInvestment(stats) / stats.sales : 0;
   const calcConversion = (stats: DayStats) =>
@@ -492,7 +495,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
               {/* Investering Section */}
               <tr>
                 <td colSpan={filteredStats.length + (filteredStats.length > 1 ? 2 : 1)} className="px-6 py-3 bg-kpi-cyan text-kpi-cyan-text font-bold text-xs uppercase tracking-wider">
-                  Investering (o.b.v. €{hourlyRate}/u)
+                  Investering (o.b.v. {costPerSale != null ? `€${costPerSale.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/sale` : `€${hourlyRate}/u`})
                 </td>
               </tr>
               {metrics.slice(12).map((metric) => (

@@ -20,6 +20,7 @@ interface KPICardsSectionProps {
   totalHours: number;
   costPerDonor: number;
   hourlyRate: number;
+  costPerSale?: number | null; // per-sale facturatie (bv. ANBO 734): subtitel "/sale" i.p.v. "/u"
   selectedWeek: string | number;
   isLoading: boolean;
   totalToCall?: number | null;
@@ -36,6 +37,7 @@ export function KPICardsSection({
   totalHours,
   costPerDonor,
   hourlyRate,
+  costPerSale,
   selectedWeek,
   isLoading,
   totalToCall,
@@ -201,7 +203,9 @@ export function KPICardsSection({
         <KPICard
           title="Kosten per Donateur"
           value={`€ ${costPerDonor.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          subtext={`O.b.v. €${hourlyRate}/u`}
+          subtext={costPerSale != null
+            ? `O.b.v. €${costPerSale.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/sale`
+            : `O.b.v. €${hourlyRate}/u`}
           icon={TrendingUp}
           variant={costPerDonor > 50 ? 'pink' : 'orange'}
           isLoading={isLoading}
