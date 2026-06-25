@@ -102,7 +102,7 @@ BasiCall `project_id` → dashboard naam:
 
 ## BasiCall API (s06.basicall.nl/BasiCall/bc_WebApi/v2.0/, SOAP)
 
-Header per request: `Token` (string, per project) + `Project` (int). IP-whitelist 85.10.132.126 verplicht. Token-opslag: `project_secrets.basicall_token`.
+Header per request: `Token` (string) + `Project` (int). IP-whitelist 85.10.132.126 verplicht. Token-opslag: `project_secrets.basicall_token` (één rij per project, maar **account-breed dezelfde waarde**: alle echte Triple Tree-projecten delen hetzelfde BasiCall account-token; per request verschilt alleen het `Project`-ID). Daarom heeft het project-formulier sinds 24-06-2026 **geen tokenveld meer** — bij het aanmaken van een nieuw project zet de `project-secret` edge function automatisch het gedeelde account-token (= meest voorkomende waarde in `project_secrets` via `mostFrequentToken`). Een afwijkend token per project (bv. een toekomstige klant met eigen BasiCall-account) kan alleen nog handmatig via de edge function/SQL.
 
 Endpoints relevant:
 - `Record.getAfgehandeldIds(datum_van, datum_tot)` — afgehandelde record-ids (API ≥2.9, 22-01-2026)

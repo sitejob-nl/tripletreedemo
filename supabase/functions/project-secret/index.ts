@@ -7,12 +7,36 @@
 //   gatekeeper aanpassen/checken (boolean-state, geen waarde).
 //
 // Routes (allemaal admin/superadmin only):
-//   POST   body { project_id, token }  -> upsert token
+//   POST   body { project_id, token? } -> upsert token; zonder token wordt het
+//                                          gedeelde account-token hergebruikt
 //   GET    ?project_id=...             -> { hasToken: boolean }
 //   DELETE ?project_id=...             -> verwijder secret
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Alle echte Triple Tree-projecten delen één BasiCall account-token; per request
+// verschilt alleen de Project-header. We bepalen dat account-token als de meest
+// voorkomende niet-lege waarde in project_secrets (placeholders zoals demo/test
+// zijn in de minderheid en verliezen het altijd). Zo hoeft een admin bij een
+// nieuw project geen token meer te plakken.
+function mostFrequentToken(rows: { basicall_token: string | null }[]): string | null {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const token = row.basicall_token?.trim();
+    if (!token) continue;
+    counts.set(token, (counts.get(token) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  for (const [token, count] of counts) {
+    if (count > bestCount) {
+      best = token;
+      bestCount = count;
+    }
+  }
+  return best;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -64,8 +88,22 @@ serve(async (req) => {
     if (req.method === "POST") {
       const body = await req.json().catch(() => null) as { project_id?: string; token?: string } | null;
       const projectId = body?.project_id;
-      const token = body?.token?.trim();
-      if (!projectId || !token) return json(400, { error: "Vul zowel een project als een token in." });
+      if (!projectId) return json(400, { error: "Geen project geselecteerd." });
+
+      // Token is optioneel: als de admin geen waarde meegeeft, hergebruiken we het
+      // gedeelde account-token zodat een nieuw project meteen kan syncen.
+      let token = body?.token?.trim();
+      if (!token) {
+        const { data: rows, error: readError } = await supabaseAdmin
+          .from("project_secrets")
+          .select("basicall_token");
+        if (readError) {
+          console.error("project-secret read-for-reuse error:", readError);
+          return json(500, { error: "Kon het account-token niet ophalen. Probeer het opnieuw." });
+        }
+        token = mostFrequentToken(rows ?? []) ?? undefined;
+        if (!token) return json(400, { error: "Geen account-token gevonden om te hergebruiken." });
+      }
 
       const { error } = await supabaseAdmin
         .from("project_secrets")
