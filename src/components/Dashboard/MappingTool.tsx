@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw } from 'lucide-react';
-import { DBProjectBase, MappingConfig, ProjectType } from '@/types/database';
+import { DBProjectBase, MappingConfig, ProjectType, HoursSource } from '@/types/database';
 import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isSale, isUnreachable, categorizeNegativeResult, categorizeInboundResult } from '@/lib/statsHelpers';
 import { useResultDistribution } from '@/hooks/useResultDistribution';
 import { useToast } from '@/hooks/use-toast';
@@ -145,6 +145,8 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   
   // Hours factor state
   const [hoursFactor, setHoursFactor] = useState<number>(project.hours_factor ?? 1.0);
+  // Urenbron voor het Urencorrectie-paneel (logged | auto | gesprekstijd). Default 'auto'.
+  const [hoursSource, setHoursSource] = useState<HoursSource>(project.mapping_config.hours_source ?? 'auto');
   // Vergoeding per sale (excl. btw) — als > 0 rekent het dashboard kosten = sales × dit bedrag
   // i.p.v. uren × uurtarief (bv. ANBO 734). Zie src/lib/cost.ts.
   const [costPerSale, setCostPerSale] = useState<number>(project.mapping_config.cost_per_sale ?? 0);
@@ -236,6 +238,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     },
     reason_categories: reasonCategories,
     cost_per_sale: costPerSale > 0 ? costPerSale : undefined,
+    hours_source: hoursSource,
   };
 
   const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
@@ -275,6 +278,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setExcludeFromRetention(project.mapping_config.exclude_from_retention || []);
     setWeekdayRates(project.mapping_config.weekday_rates || {});
     setHoursFactor(project.hours_factor ?? 1.0);
+    setHoursSource(project.mapping_config.hours_source ?? 'auto');
     setCostPerSale(project.mapping_config.cost_per_sale ?? 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
@@ -315,6 +319,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       },
       reason_categories: reasonCategories,
       cost_per_sale: costPerSale > 0 ? costPerSale : undefined,
+      hours_source: hoursSource,
     };
     await onSave(project.id, hourlyRate, mappingConfig, projectType, hoursFactor);
   };
@@ -1014,6 +1019,24 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                 onChange={(e) => setHoursFactor(parseFloat(e.target.value) || 1.0)}
                 className="w-32"
               />
+            </div>
+
+            {/* Urenbron voor het Urencorrectie-paneel */}
+            <div className="mt-4">
+              <Label className="text-xs text-muted-foreground">Urenbron (Urencorrectie-paneel)</Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Bepaalt welke uren het Urencorrectie-paneel toont per dag. <span className="font-medium">Automatisch</span> = gelogde tijd waar die er is, anders gesprekstijd. <span className="font-medium">Gesprekstijd</span> = altijd beltijd als basis (handig voor inbound waar logtijd ontbreekt). <span className="font-medium">Logtijd</span> = alleen echte gelogde tijd.
+              </p>
+              <Select value={hoursSource} onValueChange={(v) => setHoursSource(v as HoursSource)}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Automatisch</SelectItem>
+                  <SelectItem value="gesprekstijd">Gesprekstijd</SelectItem>
+                  <SelectItem value="logged">Logtijd</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </AccordionContent>
         </AccordionItem>
