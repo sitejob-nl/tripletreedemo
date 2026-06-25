@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getDay } from 'date-fns';
-import { ResolvedDateFilter } from './useDateFilter';
+import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
 
 // Daily breakdown of logged time per weekday
 export interface DailyLoggedTimeBreakdown {
@@ -40,7 +40,7 @@ const dayIndexToDutch: Record<number, keyof DailyLoggedTimeBreakdown> = {
 
 export const useLoggedTime = ({ projectId, dateFilter, hoursFactor = 1.0 }: UseLoggedTimeOptions) => {
   return useQuery({
-    queryKey: ['logged_time', projectId, dateFilter?.startDate, dateFilter?.endDate, hoursFactor],
+    queryKey: ['logged_time', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.maxDate, hoursFactor],
     queryFn: async (): Promise<LoggedTimeData> => {
       if (!projectId) {
         return { totalSeconds: 0, totalHours: 0, hasData: false };
@@ -57,7 +57,10 @@ export const useLoggedTime = ({ projectId, dateFilter, hoursFactor = 1.0 }: UseL
           .gte('date', dateFilter.startDate)
           .lte('date', dateFilter.endDate);
       }
-      
+
+      // Embargo upper bound on the `date` column (admin preview only; no-op otherwise).
+      query = applyMaxDate(query, dateFilter?.maxDate, 'date');
+
       const { data, error } = await query;
       
       if (error) throw error;

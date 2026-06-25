@@ -27,6 +27,13 @@ export interface ResolvedDateFilter {
   year: number | null;
   /** The filter type being used */
   filterType: DateFilterType;
+  /**
+   * Optional inclusive upper bound on the date column, independent of
+   * isFiltering. Used only for the admin "view as client" preview to reproduce
+   * the server-side embargo (clients are capped by RLS regardless). When set,
+   * every query additionally applies `<dateColumn> <= maxDate`.
+   */
+  maxDate?: string | null;
 }
 
 /**
@@ -157,4 +164,19 @@ export function applyDateFilter<T extends { gte: (col: string, val: string) => T
   return query
     .gte(dateColumn, filter.startDate)
     .lte(dateColumn, filter.endDate);
+}
+
+/**
+ * Apply the embargo upper bound (`maxDate`) to a query builder, independent of
+ * the date filter. No-op when maxDate is not set (the production path for real
+ * clients, who are capped server-side via RLS). Only the admin view-as-client
+ * preview sets maxDate. Stacks with applyDateFilter — two `.lte` on the same
+ * column are ANDed, so the effective upper bound is the earliest one.
+ */
+export function applyMaxDate<T extends { lte: (col: string, val: string) => T }>(
+  query: T,
+  maxDate: string | null | undefined,
+  dateColumn: string = 'beldatum_date'
+): T {
+  return maxDate ? query.lte(dateColumn, maxDate) : query;
 }

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { DBProjectBase } from '@/types/database';
 import { ProcessedDBCallRecordWithFreq } from './useCallRecords';
 import { calculateValuesFromRaw, getDayName } from '@/lib/recordValue';
-import { ResolvedDateFilter } from './useDateFilter';
+import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
 
 /**
  * Hook to fetch ALL call records for a specific date range (without pagination)
@@ -14,7 +14,7 @@ export const useReportMatrixData = (
   dateFilter?: ResolvedDateFilter
 ) => {
   return useQuery({
-    queryKey: ['report_matrix_data', project?.id, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber],
+    queryKey: ['report_matrix_data', project?.id, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, dateFilter?.maxDate],
     queryFn: async (): Promise<ProcessedDBCallRecordWithFreq[]> => {
       if (!project) return [];
 
@@ -45,6 +45,9 @@ export const useReportMatrixData = (
               .lte('beldatum_date', dateFilter.endDate);
           }
         }
+
+        // Embargo upper bound (admin view-as-client preview only; no-op otherwise).
+        query = applyMaxDate(query, dateFilter?.maxDate);
 
         const { data, error } = await query;
 
