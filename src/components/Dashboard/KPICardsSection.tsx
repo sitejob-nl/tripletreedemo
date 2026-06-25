@@ -1,4 +1,4 @@
-import { CheckCircle, DollarSign, TrendingUp, Users, Shield, Target, Headphones, PhoneCall } from 'lucide-react';
+import { CheckCircle, Euro, TrendingUp, Users, Shield, Target, Headphones, PhoneCall } from 'lucide-react';
 import { KPICard } from './KPICard';
 import { Progress } from '@/components/ui/progress';
 import { ProjectType } from '@/types/database';
@@ -154,7 +154,7 @@ export function KPICardsSection({
           title="Behouden Waarde"
           value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           subtext={annualValueBreakdown ? 'Klik voor details' : 'Jaarwaarde behouden'}
-          icon={DollarSign}
+          icon={Euro}
           variant="blue"
           isLoading={isLoading}
           popoverContent={breakdownPopover}
@@ -195,7 +195,7 @@ export function KPICardsSection({
           title="Jaarwaarde"
           value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           subtext={annualValueBreakdown ? 'Klik voor details' : 'Totale opbrengst'}
-          icon={DollarSign}
+          icon={Euro}
           variant="blue"
           isLoading={isLoading}
           popoverContent={breakdownPopover}
