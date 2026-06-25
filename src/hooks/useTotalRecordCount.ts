@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { ResolvedDateFilter } from './useDateFilter';
+import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
 
 export const useTotalRecordCount = (projectId?: string, dateFilter?: ResolvedDateFilter) => {
   return useQuery({
-    queryKey: ['total_record_count', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber],
+    queryKey: ['total_record_count', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, dateFilter?.maxDate],
     queryFn: async (): Promise<number> => {
       if (!projectId) return 0;
 
@@ -26,6 +26,9 @@ export const useTotalRecordCount = (projectId?: string, dateFilter?: ResolvedDat
             .lte('beldatum_date', dateFilter.endDate);
         }
       }
+
+      // Embargo upper bound (admin view-as-client preview only; no-op otherwise).
+      query = applyMaxDate(query, dateFilter?.maxDate);
 
       const { count, error } = await query;
 
