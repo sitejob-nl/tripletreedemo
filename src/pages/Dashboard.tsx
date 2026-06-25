@@ -553,6 +553,7 @@ const Index = () => {
                         projectId={currentProject.id}
                         startDate={dateFilter.startDate}
                         endDate={dateFilter.endDate}
+                        hoursSource={currentProject.mapping_config?.hours_source ?? 'auto'}
                       />
                     </div>
                   )}

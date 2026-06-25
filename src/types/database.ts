@@ -117,7 +117,17 @@ export interface MappingConfig {
     zaterdag?: number;
     zondag?: number;
   };
+
+  // Urenbron voor het admin Urencorrectie-paneel: bepaalt of een dag de echte
+  // gelogde tijd toont, terugvalt op gesprekstijd, of beide combineert.
+  // 'logged' = alleen daily_logged_time-rijen; 'gesprekstijd' = altijd beltijd
+  // als basis; 'auto' (default) = logtijd waar die er is, anders gesprekstijd.
+  // Raakt UITSLUITEND HoursCorrection — niet de KPI/matrix/export (die vallen
+  // al per dag terug op gesprekstijd).
+  hours_source?: HoursSource;
 }
+
+export type HoursSource = 'logged' | 'auto' | 'gesprekstijd';
 
 export interface DBProject {
   id: string;

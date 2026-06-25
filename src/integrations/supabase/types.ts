@@ -628,6 +628,20 @@ export type Database = {
           week_number: number
         }[]
       }
+      get_daily_hours_breakdown: {
+        Args: {
+          p_end: string
+          p_project_id: string
+          p_start: string
+        }
+        Returns: {
+          corrected_seconds: number
+          day: string
+          gesprekstijd_seconds: number
+          logged_seconds: number
+          row_id: string
+        }[]
+      }
       get_project_annual_value: {
         Args: {
           p_end_date?: string
