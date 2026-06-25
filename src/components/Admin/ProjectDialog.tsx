@@ -11,7 +11,6 @@ export interface ProjectFormData {
   name: string;
   project_key: string;
   basicall_project_id: string;
-  basicall_token: string;
   hourly_rate: string;
   vat_rate: string;
   is_active: boolean;
@@ -154,33 +153,19 @@ export function ProjectDialog({
           {/* BasiCall Config */}
           <div className="space-y-4">
             <h3 className="font-semibold text-foreground">BasiCall configuratie</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="basicall_project_id">BasiCall Project ID *</Label>
-                <Input
-                  id="basicall_project_id"
-                  type="number"
-                  value={formData.basicall_project_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, basicall_project_id: e.target.value }))}
-                  placeholder="1001"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="basicall_token">
-                  API Token {isEditing ? "" : "*"}
-                </Label>
-                <Input
-                  id="basicall_token"
-                  type="password"
-                  value={formData.basicall_token}
-                  onChange={(e) => setFormData(prev => ({ ...prev, basicall_token: e.target.value }))}
-                  placeholder={isEditing ? "Laat leeg om bestaande token te behouden" : "Verplicht bij nieuw project"}
-                  autoComplete="new-password"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Wordt veilig opgeslagen in <code>project_secrets</code> (niet zichtbaar na opslaan).
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="basicall_project_id">BasiCall Project ID *</Label>
+              <Input
+                id="basicall_project_id"
+                type="number"
+                value={formData.basicall_project_id}
+                onChange={(e) => setFormData(prev => ({ ...prev, basicall_project_id: e.target.value }))}
+                placeholder="1001"
+              />
+              <p className="text-xs text-muted-foreground">
+                Het BasiCall account-token wordt automatisch ingesteld — alle Triple Tree-projecten delen
+                hetzelfde token, alleen het Project ID verschilt.
+              </p>
             </div>
           </div>
 
