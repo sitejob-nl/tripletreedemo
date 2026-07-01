@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Export**: xlsx-js-style (Excel-weekrapportage per project_type)
 - **Hosting frontend**: Vercel, CNAME `app.ttcallcenters.nl` → Vercel (DNS bij Meetwerk ICT)
 - **DB**: Supabase project `tvsdbztjqksxybxjwtrf` (Frankfurt eu-central-2, Postgres 17.6)
-- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`. Twee cron-regels in de `sitejob-tt` crontab (Europe/Amsterdam): **04:00** = volledige ronde, **13:30** = `node sync.js retry` (alleen gemiste-dagen-backfill — vangt de projecten op die in BasiCalls nachtelijke 500-venster vielen). Sinds 2026-06-01 draait de sync als `sitejob-tt`, niet meer als root.
+- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`. Drie cron-regels in de `sitejob-tt` crontab (Europe/Amsterdam): **04:00** = volledige ronde (haalt *gisteren* op), **13:30** = `node sync.js retry` (alleen gemiste-dagen-backfill — vangt de projecten op die in BasiCalls nachtelijke 500-venster vielen), **21:30** = `node sync.js today` (haalt *vandaag* op zodra iedereen om 21:00 stopt met bellen — geeft de admin ruim correctietijd vóór de 09:00-publicatie/embargo). Sinds 2026-06-01 draait de sync als `sitejob-tt`, niet meer als root.
 - **Origin**: project is extern gescaffold, eerste live-schema wijzigingen belandden daardoor niet allemaal in `supabase/migrations/`. Altijd live schema checken via MCP voor je lokale migrations baseert op wat er in de repo staat.
 
 ## Architectuur
