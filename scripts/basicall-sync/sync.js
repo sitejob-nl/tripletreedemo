@@ -38,6 +38,11 @@ const ALERT_AFTER_FAILED_NIGHTS = 3;
 // (geen 'gisteren'-stap), bedoeld als tweede cron BUITEN BasiCalls 02:00-04:00-venster,
 // zodat projecten die 's nachts 500'en (734/827/864/924) overdag alsnog binnenkomen.
 const RETRY_MODE = process.argv.slice(2).some(a => a === 'retry' || a === '--retry');
+// Avondronde: `node sync.js today` haalt VANDAAG op (i.p.v. 'gisteren'), bedoeld als derde cron
+// om 21:30 — net nadat iedereen om 21:00 stopt met bellen. Zo staat de complete dag 's avonds al
+// klaar en heeft de admin ruim tijd om te corrigeren vóór de 09:00-publicatie (embargo). De
+// 04:00-nachtronde haalt 'gisteren' daarna nog eens op als vangnet.
+const TODAY_MODE = process.argv.slice(2).some(a => a === 'today' || a === '--today');
 
 // --- TOKEN HELPER ---
 // Tokens staan in project_secrets (onbereikbaar via API, alleen service key)
@@ -1004,6 +1009,34 @@ async function run() {
 
             const elapsed = Math.round((Date.now() - startTime) / 1000);
             console.log(`\n--- ✅ ALLE JOBS KLAAR (${elapsed}s) ---`);
+            return;
+        }
+
+        // AVONDRONDE (21:30): vandaag ophalen zodra iedereen om 21:00 gestopt is met bellen.
+        // Zelfde stappen als de nachtronde maar voor VANDAAG i.p.v. gisteren, zodat de complete
+        // dag 's avonds al klaarstaat voor correctie vóór de 09:00-publicatie (embargo).
+        if (TODAY_MODE) {
+            console.log('\n🌆 Avondronde — vandaag ophalen na sluitingstijd (21:00)');
+            const now = getNowAmsterdam();
+            const todayStart = new Date(now);
+            todayStart.setHours(0, 0, 0, 0);
+            const todayEnd = new Date(now);
+            todayEnd.setHours(23, 59, 59, 999);
+            console.log(`   Periode: ${formatDate(todayStart)} - ${formatDate(todayEnd)}`);
+
+            const { data: todayProjects, error: todayErr } = await supabase
+                .from('projects').select('*').eq('is_active', true);
+            if (todayErr) { console.error('❌ Kon projecten niet ophalen:', todayErr.message); return; }
+            if (!todayProjects || todayProjects.length === 0) { console.log('   Geen actieve projecten.'); return; }
+            const todayEnriched = await enrichProjectsWithTokens(todayProjects);
+            console.log(`   ${todayEnriched.length} actieve projecten.\n`);
+            for (const p of todayEnriched) {
+                await performSync(p, todayStart, todayEnd);
+                await syncLoggedTimeSingleDay(p, todayStart, todayEnd);
+                await syncProjectMissedAndBatches(p);
+            }
+            const elapsedToday = Math.round((Date.now() - startTime) / 1000);
+            console.log(`\n--- 🌆 AVONDRONDE KLAAR (${elapsedToday}s) ---`);
             return;
         }
 
