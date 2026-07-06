@@ -5,6 +5,7 @@ import { parseDutchFloat } from '@/lib/dataProcessing';
 import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { friendlyError } from '@/lib/friendlyError';
 import { metricNumber, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
 import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
 
@@ -398,7 +399,7 @@ export async function exportInboundRetentionYear(args: ExportArgs): Promise<void
     console.error('Inbound retention year export failed:', err);
     onToast?.({
       title: 'Export mislukt',
-      description: err instanceof Error ? err.message : 'Onbekende fout',
+      description: friendlyError(err, 'Het jaarrapport kon niet gegenereerd worden. Probeer het opnieuw.'),
       variant: 'destructive',
     });
   }

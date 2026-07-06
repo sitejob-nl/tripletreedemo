@@ -35,6 +35,7 @@ import { useReportageOverrides } from '@/hooks/useReportageOverrides';
 import { Navigate } from 'react-router-dom';
 import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { errorLogger } from '@/lib/errorLogger';
+import { friendlyError } from '@/lib/friendlyError';
 
 const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis'];
 
@@ -406,7 +407,7 @@ const Index = () => {
     } catch (error) {
       toast({
         title: 'Fout bij opslaan',
-        description: error instanceof Error ? error.message : 'Onbekende fout',
+        description: friendlyError(error, 'De configuratie kon niet opgeslagen worden. Probeer het opnieuw.'),
         variant: 'destructive',
       });
     }

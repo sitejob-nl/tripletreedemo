@@ -19,6 +19,7 @@ import { UsersTable } from "@/components/Admin/UsersTable";
 import { SyncManager } from "@/components/Admin/SyncManager";
 import { BatchManager } from "@/components/Admin/BatchManager";
 import { ProjectDialog, ProjectFormData } from "@/components/Admin/ProjectDialog";
+import { friendlyError } from "@/lib/friendlyError";
 
 const defaultMappingConfig: MappingConfig = {
   amount_col: "termijnbedrag",
@@ -180,7 +181,7 @@ export default function Admin() {
     } catch (error: any) {
       toast({
         title: "Fout",
-        description: error.message || "Er is iets misgegaan.",
+        description: friendlyError(error, "Het project kon niet opgeslagen worden. Controleer de gegevens en probeer opnieuw."),
         variant: "destructive"
       });
     } finally {

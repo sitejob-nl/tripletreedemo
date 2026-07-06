@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useUsers, useUpdateUserRole, useDeleteUserRole, useAddUserRole } from "@/hooks/useUsers";
 import { useAuth } from "@/hooks/useAuth";
+import { friendlyError } from "@/lib/friendlyError";
 
 type AppRole = 'admin' | 'user' | 'superadmin';
 
@@ -48,7 +49,7 @@ export default function AdminUsers() {
     } catch (error: any) {
       toast({
         title: "Fout",
-        description: error.message || "Kon rol niet bijwerken.",
+        description: friendlyError(error, "Kon rol niet bijwerken."),
         variant: "destructive"
       });
     }
@@ -75,7 +76,7 @@ export default function AdminUsers() {
     } catch (error: any) {
       toast({
         title: "Fout",
-        description: error.message || "Kon rol niet verwijderen.",
+        description: friendlyError(error, "Kon rol niet verwijderen."),
         variant: "destructive"
       });
     }
@@ -103,7 +104,7 @@ export default function AdminUsers() {
     } catch (error: any) {
       toast({
         title: "Fout",
-        description: error.message || "Kon rol niet toevoegen.",
+        description: friendlyError(error, "Kon rol niet toevoegen."),
         variant: "destructive"
       });
     }

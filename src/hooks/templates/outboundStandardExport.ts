@@ -5,6 +5,7 @@ import { detectFrequencyFromConfig, FrequencyType, isUnreachable, isSale as isSa
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { friendlyError } from '@/lib/friendlyError';
 import { deriveCalls, deriveUnreachable, metricNumber, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
 import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
 
@@ -490,7 +491,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
     console.error('Outbound year export failed:', err);
     onToast?.({
       title: 'Export mislukt',
-      description: err instanceof Error ? err.message : 'Onbekende fout',
+      description: friendlyError(err, 'Het jaarrapport kon niet gegenereerd worden. Probeer het opnieuw.'),
       variant: 'destructive',
     });
   }
