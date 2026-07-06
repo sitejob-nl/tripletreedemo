@@ -27,6 +27,7 @@ import { useKPIAggregates } from '@/hooks/useKPIAggregates';
 import { useLoggedTime } from '@/hooks/useLoggedTime';
 import { useReportMatrixData } from '@/hooks/useReportMatrixData';
 import { useDateFilter, DateFilterType, DateRange } from '@/hooks/useDateFilter';
+import { getClientVisibleCutoff } from '@/lib/embargo';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
@@ -72,6 +73,19 @@ const Index = () => {
   const isDbAdmin = userRole?.role === 'admin' || userRole?.role === 'superadmin';
   const effectiveRole: Role = viewAsClient ? 'client' : (isDbAdmin ? 'admin' : 'client');
 
+  // Embargo preview: when an admin previews as a client, reproduce the
+  // server-side embargo cutoff client-side (the admin bypasses RLS, so the DB
+  // would otherwise return today's uncorrected data). Real clients are capped
+  // by RLS, so this stays null for them and nothing changes on the data path.
+  const previewCutoff = useMemo(
+    () => (viewAsClient ? getClientVisibleCutoff() : null),
+    [viewAsClient]
+  );
+  const effectiveDateFilter = useMemo(
+    () => ({ ...dateFilter, maxDate: previewCutoff }),
+    [dateFilter, previewCutoff]
+  );
+
   // Fetch projects from Supabase - admins get full access, customers get public view
   const { projects, isLoading: projectsLoading, error: projectsError } = useProjects(true, user?.id, isDbAdmin);
   const updateProject = useUpdateProject();
@@ -87,14 +101,14 @@ const Index = () => {
     data: callRecords = [], 
     isLoading: recordsLoading,
     error: recordsError 
-  } = useCallRecords(currentProject, { 
-    dateFilter,
+  } = useCallRecords(currentProject, {
+    dateFilter: effectiveDateFilter,
     page: dashboardPage,
     pageSize: dashboardPageSize
   });
 
   // Fetch total record count for pagination
-  const { data: totalRecordCount = 0 } = useTotalRecordCount(currentProject?.id, dateFilter);
+  const { data: totalRecordCount = 0 } = useTotalRecordCount(currentProject?.id, effectiveDateFilter);
 
   // Get available weeks
   const { data: availableWeeks = [] } = useAvailableWeeks(currentProject?.id);
@@ -156,7 +170,7 @@ const Index = () => {
   // Fetch KPI aggregates (totals over ALL records, not paginated)
   const { data: kpiAggregates, isLoading: kpiLoading } = useKPIAggregates({
     projectId: currentProject?.id,
-    dateFilter,
+    dateFilter: effectiveDateFilter,
     mappingConfig: currentProject?.mapping_config,
     projectType: currentProject?.project_type as ProjectType | undefined
   });
@@ -164,15 +178,15 @@ const Index = () => {
   // Fetch logged time for accurate cost calculation
   const { data: loggedTime, isLoading: loggedTimeLoading } = useLoggedTime({
     projectId: currentProject?.id,
-    dateFilter,
+    dateFilter: effectiveDateFilter,
     hoursFactor: currentProject?.hours_factor ?? 1.0
   });
 
   // Fetch ALL records for selected period for ReportMatrix (no pagination)
-  const { 
-    data: reportMatrixData = [], 
-    isLoading: reportMatrixLoading 
-  } = useReportMatrixData(currentProject, dateFilter);
+  const {
+    data: reportMatrixData = [],
+    isLoading: reportMatrixLoading
+  } = useReportMatrixData(currentProject, effectiveDateFilter);
 
   const {
     data: reportageOverrides = [],
@@ -187,7 +201,7 @@ const Index = () => {
   const { 
     data: allRecordsForAnalysis = [], 
     isLoading: analysisLoading 
-  } = useAllCallRecordsForAnalysis(currentProject, dateFilter);
+  } = useAllCallRecordsForAnalysis(currentProject, effectiveDateFilter);
 
   // Convert DB records to ProcessedCallRecord format for DashboardView (paginated)
   const processedData: ProcessedCallRecord[] = useMemo(() => {

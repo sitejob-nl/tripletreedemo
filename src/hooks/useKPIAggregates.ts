@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig, ProjectType } from '@/types/database';
-import { ResolvedDateFilter } from './useDateFilter';
+import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
 import { isSale, SALE_RESULTS } from '@/lib/statsHelpers';
 
 interface KPIAggregates {
@@ -44,10 +44,24 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, project
 
   // Query 1: Get basic aggregates
   const basicAggregatesQuery = useQuery({
-    queryKey: ['kpi_basic_aggregates', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, projectType, positiveResults],
+    queryKey: ['kpi_basic_aggregates', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, dateFilter?.maxDate, projectType, positiveResults],
     queryFn: async () => {
       if (!projectId) return null;
-      
+
+      // Embargo upper bound — only set by the admin view-as-client preview.
+      const cap = dateFilter?.maxDate ?? null;
+
+      // Shared positive-result matcher (inbound substring vs outbound isSale).
+      const matchesPositive = (resultaat: string | null) => {
+        const raw = (resultaat || '').toLowerCase();
+        if (!raw) return false;
+        if (useSubstring) {
+          return (positiveResultsLower as string[]).some(p => raw.includes(p));
+        }
+        // Outbound: gedeelde isSale (UNION config + SALE_RESULTS, case-insensitive).
+        return isSale(resultaat, mappingConfig);
+      };
+
       // If we have date filtering, use direct query
       if (dateFilter?.isFiltering && dateFilter.startDate && dateFilter.endDate) {
         // PostgREST caps unpaginated SELECTs at 1000 rows; a single week can exceed
@@ -75,6 +89,9 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, project
               .lte('beldatum_date', dateFilter.endDate);
           }
 
+          // Embargo upper bound (admin preview only; no-op otherwise).
+          query = applyMaxDate(query, cap);
+
           const { data, error } = await query;
           if (error) throw error;
 
@@ -87,16 +104,6 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, project
           }
         }
 
-        const matchesPositive = (resultaat: string | null) => {
-          const raw = (resultaat || '').toLowerCase();
-          if (!raw) return false;
-          if (useSubstring) {
-            return (positiveResultsLower as string[]).some(p => raw.includes(p));
-          }
-          // Outbound: gedeelde isSale (UNION config + SALE_RESULTS, case-insensitive).
-          return isSale(resultaat, mappingConfig);
-        };
-
         return {
           totalRecords: allRecords.length,
           totalSales: allRecords.filter(r => matchesPositive(r.resultaat)).length,
@@ -104,19 +111,23 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, project
         };
       }
 
-      // For 'all' (no filtering), use the RPC. The RPC matches exactly, so for
-      // inbound substring-matching we fall back to a paginated client-side count.
-      if (useSubstring) {
+      // For 'all' (no filtering), use the RPC. Two cases fall back to a
+      // paginated client-side count instead: (1) inbound substring-matching,
+      // which the exact-match RPC can't do, and (2) an active embargo cap
+      // (admin view-as-client preview), which the date-less RPC can't honor.
+      if (useSubstring || cap) {
         const allRecords: Array<{ gesprekstijd_sec: number | null; resultaat: string | null }> = [];
         const batchSize = 1000;
         let offset = 0;
         let hasMore = true;
         while (hasMore) {
-          const { data, error } = await supabase
+          let query = supabase
             .from('call_records')
             .select('gesprekstijd_sec, resultaat')
             .eq('project_id', projectId)
             .range(offset, offset + batchSize - 1);
+          query = applyMaxDate(query, cap);
+          const { data, error } = await query;
           if (error) throw error;
           if (data && data.length > 0) {
             allRecords.push(...data);
@@ -128,10 +139,7 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, project
         }
         return {
           totalRecords: allRecords.length,
-          totalSales: allRecords.filter(r => {
-            const raw = (r.resultaat || '').toLowerCase();
-            return raw && (positiveResultsLower as string[]).some(p => raw.includes(p));
-          }).length,
+          totalSales: allRecords.filter(r => matchesPositive(r.resultaat)).length,
           totalGesprekstijdSec: allRecords.reduce((sum, r) => sum + (r.gesprekstijd_sec || 0), 0)
         };
       }
@@ -160,15 +168,22 @@ export const useKPIAggregates = ({ projectId, dateFilter, mappingConfig, project
 
   // Query 2: Get annual value via server-side RPC
   const annualValueQuery = useQuery({
-    queryKey: ['kpi_annual_value', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, dateFilter?.year],
+    queryKey: ['kpi_annual_value', projectId, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, dateFilter?.year, dateFilter?.maxDate],
     queryFn: async () => {
       if (!projectId || !mappingConfig?.amount_col || !mappingConfig?.freq_col) {
         return 0;
       }
+      // Embargo cap (admin preview only): fold it into p_end_date as the earliest
+      // upper bound. The RPC already filters beldatum_date <= p_end_date.
+      const cap = dateFilter?.maxDate ?? null;
+      const filterEnd = dateFilter?.isFiltering ? dateFilter.endDate : null;
+      const effectiveEnd = cap
+        ? (filterEnd && filterEnd < cap ? filterEnd : cap)
+        : filterEnd;
       const { data, error } = await supabase.rpc('get_project_annual_value', {
         p_project_id: projectId,
         p_start_date: dateFilter?.isFiltering ? dateFilter.startDate : null,
-        p_end_date: dateFilter?.isFiltering ? dateFilter.endDate : null,
+        p_end_date: effectiveEnd,
         p_week_number: (dateFilter?.isFiltering && dateFilter.filterType === 'week') ? dateFilter.weekNumber : null,
         p_year: (dateFilter?.isFiltering && dateFilter.filterType === 'week') ? dateFilter.year : null,
       });
