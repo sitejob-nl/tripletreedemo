@@ -506,7 +506,12 @@ export const ReportMatrix = ({
           {renderRow('Positief', (s) => s.sales)}
           {renderRow('Negatief beargumenteerd', (s) => s.negativeArgumentedCount)}
           {renderRow('Negatief niet beargumenteerd', (s) => s.negativeNotArgumentedCount)}
-          {renderRow('Totaal', (s) => s.calls, 'number', 'bg-muted/20')}
+          {renderRow('Onbereikbaar', (s) => s.unreachableCount)}
+          {/* "Bereikte gesprekken (netto)" = afgehandeld − onbereikbaar: dít sluit aan op wat
+              BasiCall "netto" noemt. "Totaal afgehandeld" (álle calls, incl. voicemail/geen
+              gehoor) ligt veel hoger — die twee niet verwarren (reconciliatie Esther 05-07-2026). */}
+          {renderRow('Bereikte gesprekken (netto)', (s) => Math.max(0, s.calls - s.unreachableCount), 'number', 'bg-muted/20')}
+          {renderRow('Totaal afgehandeld', (s) => s.calls, 'number', 'bg-muted/20')}
 
           {/* CONVERSIE PER UUR */}
           {renderSectionHeader('Conversie per Uur', 'bg-kpi-purple', 'text-kpi-purple-text')}
