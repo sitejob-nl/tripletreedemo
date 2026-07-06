@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUsers, useUpdateUserRole, useDeleteUserRole, useAddUserRole } from "@/hooks/useUsers";
 import { useAuth } from "@/hooks/useAuth";
 import { friendlyError } from "@/lib/friendlyError";
+import { errorLogger } from "@/lib/errorLogger";
 
 type AppRole = 'admin' | 'user' | 'superadmin';
 
@@ -47,6 +48,7 @@ export default function AdminUsers() {
         description: `Gebruikersrol is gewijzigd naar ${roleLabels[newRole]}.`
       });
     } catch (error: any) {
+      errorLogger.logApiError("userRoles.update", error, { userId, newRole });
       toast({
         title: "Fout",
         description: friendlyError(error, "Kon rol niet bijwerken."),
@@ -74,6 +76,7 @@ export default function AdminUsers() {
         description: "De gebruikersrol is verwijderd."
       });
     } catch (error: any) {
+      errorLogger.logApiError("userRoles.delete", error, { roleId, userId });
       toast({
         title: "Fout",
         description: friendlyError(error, "Kon rol niet verwijderen."),
@@ -102,6 +105,7 @@ export default function AdminUsers() {
       setNewUserId('');
       setNewUserRole('user');
     } catch (error: any) {
+      errorLogger.logApiError("userRoles.add", error, { userId: newUserId, role: newUserRole });
       toast({
         title: "Fout",
         description: friendlyError(error, "Kon rol niet toevoegen."),

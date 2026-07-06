@@ -20,6 +20,7 @@ import { SyncManager } from "@/components/Admin/SyncManager";
 import { BatchManager } from "@/components/Admin/BatchManager";
 import { ProjectDialog, ProjectFormData } from "@/components/Admin/ProjectDialog";
 import { friendlyError } from "@/lib/friendlyError";
+import { errorLogger } from "@/lib/errorLogger";
 
 const defaultMappingConfig: MappingConfig = {
   amount_col: "termijnbedrag",
@@ -179,6 +180,14 @@ export default function Admin() {
       setEditingProject(null);
       setFormData(emptyFormData);
     } catch (error: any) {
+      // Leg de mislukte poging + de ingevoerde waarden vast in error_logs, zodat
+      // een fout (bv. dubbele project key / BasiCall-ID) achteraf te herleiden is.
+      errorLogger.logApiError("projects.save", error, {
+        mode: editingProject ? "update" : "insert",
+        name: projectData.name,
+        project_key: projectData.project_key,
+        basicall_project_id: projectData.basicall_project_id,
+      });
       toast({
         title: "Fout",
         description: friendlyError(error, "Het project kon niet opgeslagen worden. Controleer de gegevens en probeer opnieuw."),
