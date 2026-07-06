@@ -6,6 +6,7 @@ import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
 import { categorizeInboundResult } from '@/lib/statsHelpers';
 import { ceilHours } from '@/lib/hours';
 import { getCostPerSale } from '@/lib/cost';
+import { friendlyError } from '@/lib/friendlyError';
 
 interface UseExcelExportParams {
   data: ProcessedCallRecord[];
@@ -404,7 +405,7 @@ export function useExcelExport({
       } catch (error) {
         toast({
           title: 'Export mislukt',
-          description: error instanceof Error ? error.message : 'Onbekende fout bij het schrijven van het Excel-bestand.',
+          description: friendlyError(error, 'Onbekende fout bij het schrijven van het Excel-bestand.'),
           variant: 'destructive',
         });
       }
