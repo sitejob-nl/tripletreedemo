@@ -61,7 +61,12 @@ export const calculateValuesFromRaw = (
     || rawData['frequentie']
     || rawData['Frequentie'];
 
-  const freqResult = detectFrequencyFromConfig(freqRaw, mappingConfig.freq_map);
+  // Pass `resultaat` so the frequency can be derived from the result name when the
+  // frequency column is empty (e.g. 919 "Machtiging per Maand" with an empty
+  // Ntermijn). Mirrors get_project_annual_value's freq_map(resultaat) fallback, so
+  // the report matrix/analysis agree with the dashboard KPI. Without it these paths
+  // fell back to ×1 while the RPC used ×12.
+  const freqResult = detectFrequencyFromConfig(freqRaw, mappingConfig.freq_map, resultaat);
 
   if (!isSale) {
     return {
