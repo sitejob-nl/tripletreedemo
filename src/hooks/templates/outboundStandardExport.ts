@@ -254,8 +254,9 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       const isSale = isSaleResult(resultName, mappingConfig);
       const recordUnreachable = isUnreachable(resultName, mappingConfig);
 
-      // Frequency + amount (old)
-      const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequentie'] ?? rawData['Frequentie'];
+      // Frequency + amount (old). Frequency: configured freq_col only (RPC-aligned),
+      // not the generic 'frequentie'/'Frequentie' fallbacks — see recordValue.ts.
+      const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined);
       const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
 
       const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
@@ -350,7 +351,8 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         const resultName = record.resultaat ?? (rawData['bc_result_naam'] as string) ?? 'Onbekend';
         const isSale = isSaleResult(resultName, mappingConfig);
         const recordUnreachable = isUnreachable(resultName, mappingConfig);
-        const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequentie'] ?? rawData['Frequentie'];
+        // Frequency: configured freq_col only (RPC-aligned), not generic fallbacks — see recordValue.ts.
+        const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined);
         const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
         const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
         const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
