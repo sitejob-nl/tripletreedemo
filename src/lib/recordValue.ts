@@ -56,10 +56,13 @@ export const calculateValuesFromRaw = (
     };
   }
 
-  const freqRaw = rawData['frequency']
-    || rawData[mappingConfig.freq_col]
-    || rawData['frequentie']
-    || rawData['Frequentie'];
+  // Frequency source mirrors get_project_annual_value: ONLY the configured freq_col
+  // (plus the normalised 'frequency' key). Deliberately NOT the generic 'frequentie'/
+  // 'Frequentie' columns — for projects whose freq_col is a different field those hold
+  // unrelated codes (e.g. 869 Hersenstichting: freq_col=Ntermijn empty while 'Frequentie'
+  // held "1" for monthly machtigingen → the matrix read ×1 i.p.v. ×12). When freq_col is
+  // empty the detection falls back to the result name, exactly like the RPC.
+  const freqRaw = rawData['frequency'] || rawData[mappingConfig.freq_col];
 
   // Pass `resultaat` so the frequency can be derived from the result name when the
   // frequency column is empty (e.g. 919 "Machtiging per Maand" with an empty
