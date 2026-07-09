@@ -20,6 +20,38 @@ export interface FrequencyDetectionResult {
  * @param freqMap - Frequency mapping from project's mapping_config
  * @returns FrequencyDetectionResult with type, multiplier, matchedKey, and isOneOff
  */
+/**
+ * Match a lowercased string against the freq_map with the same priority the
+ * get_project_annual_value RPC uses:
+ *  0. Exact match
+ *  1. Value contains key, longest key wins (so "maandelijks" beats "maand"
+ *     and "2 maandlijks" beats "maandelijks" for value "2 maandlijks")
+ *  2. Key contains value, longest key wins (only for short value abbrevs like "m")
+ * The bidirectional OR lets value "Maandelijks" match key "2 maandlijks" via
+ * group 2, giving ×6 for ordinary monthly machtigingen on Trombose 761.
+ * Project-specific numeric keys (e.g. Proefdiervrij {"1":12}) still match via
+ * group 0 (exact). Returns null when nothing matches.
+ */
+const matchFreqMap = (
+  str: string,
+  freqMap: Record<string, number>
+): { key: string; value: number } | null => {
+  const candidates: Array<{ key: string; value: number; priority: number }> = [];
+  for (const [mapKey, mapValue] of Object.entries(freqMap)) {
+    const lowerMapKey = mapKey.toLowerCase();
+    if (str === lowerMapKey) {
+      candidates.push({ key: mapKey, value: mapValue, priority: 0 });
+    } else if (str.includes(lowerMapKey)) {
+      candidates.push({ key: mapKey, value: mapValue, priority: 1 });
+    } else if (lowerMapKey.includes(str)) {
+      candidates.push({ key: mapKey, value: mapValue, priority: 2 });
+    }
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => a.priority - b.priority || b.key.length - a.key.length);
+  return { key: candidates[0].key, value: candidates[0].value };
+};
+
 export const detectFrequencyFromConfig = (
   freqRaw: unknown,
   freqMap: Record<string, number>,
@@ -32,112 +64,114 @@ export const detectFrequencyFromConfig = (
     isOneOff: true,
   };
 
-  if (!freqRaw) return defaultResult;
+  // ── 1. PRIMARY: derive from the frequency value (freq_col) ────────────────
+  // Only when that column actually carries a value. Many projects leave the
+  // frequency column empty and encode the term in the result name instead (e.g.
+  // 919 "Machtiging per Maand" with an empty Ntermijn); that case falls through
+  // to the resultaat fallback below. NOTE: an empty freqRaw used to `return`
+  // ×1 here immediately, which made the resultaat fallback dead code and let the
+  // client diverge from get_project_annual_value (the RPC *does* apply the
+  // freq_map to the result name) — the dashboard KPI showed ×12 while the
+  // matrix/export/preview showed ×1.
+  if (freqRaw !== null && freqRaw !== undefined && String(freqRaw).trim() !== '') {
+    const freqStr = String(freqRaw).toLowerCase().trim();
 
-  const freqStr = String(freqRaw).toLowerCase().trim();
-
-  // Check one-off patterns first (highest priority)
-  if (freqStr.includes('eenmalig') || freqStr === '0' || freqStr === 'e') {
-    return {
-      type: 'oneoff',
-      multiplier: 1,
-      matchedKey: 'eenmalig',
-      isOneOff: true,
-    };
-  }
-
-  // Match against freq_map with priority (mirrors get_project_annual_value RPC):
-  //  0. Exact match
-  //  1. Value contains key, longest key wins (so "maandelijks" beats "maand"
-  //     and "2 maandlijks" beats "maandelijks" for value "2 maandlijks")
-  //  2. Key contains value, longest key wins (only for short value abbrevs like "m")
-  // The earlier bidirectional OR let value "Maandelijks" match key "2 maandlijks"
-  // via group 2, giving ×6 for ordinary monthly machtigingen on Trombose 761.
-  // Project-specific numeric keys (e.g. Proefdiervrij {"1":12}) still match via
-  // group 0 (exact) — so this MUST run before the generic numeric-string fallback.
-  const entries = Object.entries(freqMap);
-  const candidates: Array<{ key: string; value: number; priority: number }> = [];
-  for (const [mapKey, mapValue] of entries) {
-    const lowerMapKey = mapKey.toLowerCase();
-    if (freqStr === lowerMapKey) {
-      candidates.push({ key: mapKey, value: mapValue, priority: 0 });
-    } else if (freqStr.includes(lowerMapKey)) {
-      candidates.push({ key: mapKey, value: mapValue, priority: 1 });
-    } else if (lowerMapKey.includes(freqStr)) {
-      candidates.push({ key: mapKey, value: mapValue, priority: 2 });
+    // Check one-off patterns first (highest priority)
+    if (freqStr.includes('eenmalig') || freqStr === '0' || freqStr === 'e') {
+      return { type: 'oneoff', multiplier: 1, matchedKey: 'eenmalig', isOneOff: true };
     }
-  }
-  if (candidates.length) {
-    candidates.sort((a, b) => a.priority - b.priority || b.key.length - a.key.length);
-    const best = candidates[0];
-    return {
-      type: mapMultiplierToType(best.value),
-      multiplier: best.value,
-      matchedKey: best.key,
-      isOneOff: best.value === 1 && !freqStr.includes('jaar'),
-    };
-  }
 
-  // Numeric fallback: only when freq_map didn't match. Treat the raw value
-  // as a literal multiplier (e.g. "12" → monthly without any freq_map present).
-  const freqNum = parseInt(freqStr, 10);
-  if (!isNaN(freqNum) && freqNum > 0 && freqStr === String(freqNum)) {
-    return {
-      type: mapMultiplierToType(freqNum),
-      multiplier: freqNum,
-      matchedKey: `(numeriek: ${freqNum})`,
-      isOneOff: freqNum === 1,
-    };
-  }
+    // Match against freq_map (mirrors the RPC). MUST run before the numeric
+    // fallback so project-specific numeric keys (e.g. {"1":12}) win via exact match.
+    const mapped = matchFreqMap(freqStr, freqMap);
+    if (mapped) {
+      return {
+        type: mapMultiplierToType(mapped.value),
+        multiplier: mapped.value,
+        matchedKey: mapped.key,
+        isOneOff: mapped.value === 1 && !freqStr.includes('jaar'),
+      };
+    }
 
-  // Fallback: use pattern matching for common terms. Bimaandelijks MUST come
-  // before the generic 'maand' check — "2-maandelijks" contains "maand" too.
-  if (
-    freqStr.includes('2-maand') ||
-    freqStr.includes('2 maand') ||
-    freqStr.includes('tweemaand') ||
-    freqStr.includes('bimaand')
-  ) {
-    return { type: 'biMonthly', multiplier: 6, matchedKey: '(patroon: 2-maandelijks)', isOneOff: false };
-  }
-  if (freqStr.includes('maand') || freqStr.includes('mnd') || freqStr === 'm') {
-    return { type: 'monthly', multiplier: 12, matchedKey: '(patroon: maand)', isOneOff: false };
-  }
-  if (freqStr.includes('kwartaal') || freqStr === 'k') {
-    return { type: 'quarterly', multiplier: 4, matchedKey: '(patroon: kwartaal)', isOneOff: false };
-  }
-  if (freqStr.includes('halfjaar') || freqStr.includes('half jaar') || freqStr === 'h') {
-    return { type: 'halfYearly', multiplier: 2, matchedKey: '(patroon: halfjaar)', isOneOff: false };
-  }
-  if (freqStr.includes('jaar') || freqStr === 'j') {
-    return { type: 'yearly', multiplier: 1, matchedKey: '(patroon: jaar)', isOneOff: false };
-  }
+    // Numeric fallback: only when freq_map didn't match. Treat the raw value
+    // as a literal multiplier (e.g. "12" → monthly without any freq_map present).
+    const freqNum = parseInt(freqStr, 10);
+    if (!isNaN(freqNum) && freqNum > 0 && freqStr === String(freqNum)) {
+      return {
+        type: mapMultiplierToType(freqNum),
+        multiplier: freqNum,
+        matchedKey: `(numeriek: ${freqNum})`,
+        isOneOff: freqNum === 1,
+      };
+    }
 
-  // Fallback: try to detect frequency from resultaat name
-  if (resultaat) {
-    const resultLower = resultaat.toLowerCase();
+    // Pattern net for common terms. Bimaandelijks MUST come before the generic
+    // 'maand' check — "2-maandelijks" contains "maand" too.
     if (
-      resultLower.includes('2-maand') ||
-      resultLower.includes('2 maand') ||
-      resultLower.includes('tweemaand') ||
-      resultLower.includes('bimaand')
+      freqStr.includes('2-maand') ||
+      freqStr.includes('2 maand') ||
+      freqStr.includes('tweemaand') ||
+      freqStr.includes('bimaand')
     ) {
-      return { type: 'biMonthly', multiplier: 6, matchedKey: '(resultaat: 2-maandelijks)', isOneOff: false };
+      return { type: 'biMonthly', multiplier: 6, matchedKey: '(patroon: 2-maandelijks)', isOneOff: false };
     }
-    if (resultLower.includes('per maand') || resultLower.includes('maandelijks')) {
-      return { type: 'monthly', multiplier: 12, matchedKey: '(resultaat: maand)', isOneOff: false };
+    if (freqStr.includes('maand') || freqStr.includes('mnd') || freqStr === 'm') {
+      return { type: 'monthly', multiplier: 12, matchedKey: '(patroon: maand)', isOneOff: false };
     }
-    if (resultLower.includes('per kwartaal') || resultLower.includes('kwartaal')) {
-      return { type: 'quarterly', multiplier: 4, matchedKey: '(resultaat: kwartaal)', isOneOff: false };
+    if (freqStr.includes('kwartaal') || freqStr === 'k') {
+      return { type: 'quarterly', multiplier: 4, matchedKey: '(patroon: kwartaal)', isOneOff: false };
     }
-    if (resultLower.includes('per half jaar') || resultLower.includes('halfjaar')) {
-      return { type: 'halfYearly', multiplier: 2, matchedKey: '(resultaat: halfjaar)', isOneOff: false };
+    if (freqStr.includes('halfjaar') || freqStr.includes('half jaar') || freqStr === 'h') {
+      return { type: 'halfYearly', multiplier: 2, matchedKey: '(patroon: halfjaar)', isOneOff: false };
     }
-    if (resultLower.includes('per jaar') || resultLower.includes('jaarlijks')) {
-      return { type: 'yearly', multiplier: 1, matchedKey: '(resultaat: jaar)', isOneOff: false };
+    if (freqStr.includes('jaar') || freqStr === 'j') {
+      return { type: 'yearly', multiplier: 1, matchedKey: '(patroon: jaar)', isOneOff: false };
     }
-    if (resultLower.includes('eenmalig')) {
-      return { type: 'oneoff', multiplier: 1, matchedKey: '(resultaat: eenmalig)', isOneOff: true };
+  }
+
+  // ── 2. FALLBACK: derive from the resultaat name ───────────────────────────
+  // Runs when the frequency column is empty (or held an unrecognised value).
+  // Mirrors the RPC's freq_map(resultaat) step + a pattern net, so the KPI card,
+  // report matrix, Excel export and mapping preview all agree.
+  if (resultaat) {
+    const resultLower = resultaat.toLowerCase().trim();
+    if (resultLower) {
+      // Eenmalig first so it keeps type 'oneoff' even if the freq_map has an
+      // "eenmalig" key (which would otherwise resolve to a generic ×1 type).
+      if (resultLower.includes('eenmalig')) {
+        return { type: 'oneoff', multiplier: 1, matchedKey: '(resultaat: eenmalig)', isOneOff: true };
+      }
+      // freq_map against the result name (exactly the RPC's freq_map(resultaat)).
+      const mapped = matchFreqMap(resultLower, freqMap);
+      if (mapped) {
+        return {
+          type: mapMultiplierToType(mapped.value),
+          multiplier: mapped.value,
+          matchedKey: `(resultaat: ${mapped.key})`,
+          isOneOff: mapped.value === 1 && !resultLower.includes('jaar'),
+        };
+      }
+      // Pattern net for result names ("Machtiging per Maand" → monthly, etc.).
+      if (
+        resultLower.includes('2-maand') ||
+        resultLower.includes('2 maand') ||
+        resultLower.includes('tweemaand') ||
+        resultLower.includes('bimaand')
+      ) {
+        return { type: 'biMonthly', multiplier: 6, matchedKey: '(resultaat: 2-maandelijks)', isOneOff: false };
+      }
+      if (resultLower.includes('per maand') || resultLower.includes('maandelijks')) {
+        return { type: 'monthly', multiplier: 12, matchedKey: '(resultaat: maand)', isOneOff: false };
+      }
+      if (resultLower.includes('per kwartaal') || resultLower.includes('kwartaal')) {
+        return { type: 'quarterly', multiplier: 4, matchedKey: '(resultaat: kwartaal)', isOneOff: false };
+      }
+      if (resultLower.includes('per half jaar') || resultLower.includes('halfjaar')) {
+        return { type: 'halfYearly', multiplier: 2, matchedKey: '(resultaat: halfjaar)', isOneOff: false };
+      }
+      if (resultLower.includes('per jaar') || resultLower.includes('jaarlijks')) {
+        return { type: 'yearly', multiplier: 1, matchedKey: '(resultaat: jaar)', isOneOff: false };
+      }
     }
   }
 
