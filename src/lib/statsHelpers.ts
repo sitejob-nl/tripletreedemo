@@ -483,3 +483,46 @@ export const calcSaveRate = (stats: InboundStats): number => {
 export const calcNetSavedValue = (stats: InboundStats): number => {
   return stats.retainedValue - stats.lostValue;
 };
+
+// ============= RESULT COVERAGE (ENGINE-TRUTH CLASSIFICATION) =============
+
+export type CoverageCategory =
+  | 'positief' | 'onbereikbaar' | 'neg_arg' | 'neg_notarg'   // outbound
+  | 'behouden' | 'verloren' | 'partial'                      // inbound (retentie)
+  | 'afgehandeld' | 'niet_afgehandeld'                       // inbound_service
+  | 'todo';
+
+/**
+ * Classificeer een resultaat-code precies zoals de rekenpaden dat doen (UNION van
+ * project-config + hardcoded defaults, via isSale/isUnreachable/categorize*).
+ * 'todo' = de code valt in GEEN enkele categorie — bij outbound blijft die dan in de
+ * netto-conversie-noemer hangen of mist als sale (de CLAUDE.md-valkuil; zie EO
+ * Muziekspel "EO donateur eenmalig", juli 2026). Gedeeld door het dekking-paneel in
+ * MappingTool én de "niet-ingedeelde codes"-melding op het admin-dashboard, zodat
+ * beide nooit kunnen afwijken van wat de engine werkelijk telt.
+ */
+export const classifyResultCoverage = (
+  resultaat: string,
+  config: MappingConfig,
+  projectType: ProjectType
+): CoverageCategory => {
+  if (projectType === 'outbound') {
+    if (isSale(resultaat, config)) return 'positief';
+    if (isUnreachable(resultaat, config)) return 'onbereikbaar';
+    const cat = categorizeNegativeResult(resultaat, config);
+    return cat === 'argumentated' ? 'neg_arg' : cat === 'not_argumentated' ? 'neg_notarg' : 'todo';
+  }
+  if (projectType === 'inbound') {
+    const c = categorizeInboundResult(resultaat, config);
+    return c === 'retained' ? 'behouden'
+      : c === 'lost' ? 'verloren'
+      : c === 'partial' ? 'partial'
+      : c === 'unreachable' ? 'onbereikbaar'
+      : 'todo';
+  }
+  // inbound_service: exact-match op handled/not_handled (mirror van de export-paden)
+  const lc = resultaat.toLowerCase();
+  if ((config.handled_results ?? []).some((x) => x.toLowerCase() === lc)) return 'afgehandeld';
+  if ((config.not_handled_results ?? []).some((x) => x.toLowerCase() === lc)) return 'niet_afgehandeld';
+  return 'todo';
+};
