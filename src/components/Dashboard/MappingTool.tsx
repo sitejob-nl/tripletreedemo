@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw } from 'lucide-react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw, Info } from 'lucide-react';
 import { DBProjectBase, MappingConfig, ProjectType, HoursSource } from '@/types/database';
-import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isSale, isUnreachable, categorizeNegativeResult, categorizeInboundResult } from '@/lib/statsHelpers';
+import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isSale, isUnreachable, categorizeNegativeResult, categorizeInboundResult, detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { useResultDistribution } from '@/hooks/useResultDistribution';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -333,6 +335,16 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         setNewFreqValue('');
       }
     }
+  };
+
+  // Bij selectie de multiplier voorinvullen als de gekozen waarde/resultaatnaam de
+  // frequentie al verraadt ("Machtiging per Maand" → 12, "eenmalig" → 1). Herkent de
+  // engine niets (bv. "EO Donateur"), dan blijft het veld leeg zodat de admin bewust
+  // een vermenigvuldiger kiest. Prefill overschrijft bij elke nieuwe selectie.
+  const handleFreqKeySelect = (selected: string) => {
+    setNewFreqKey(selected);
+    const suggestion = detectFrequencyFromConfig(selected, freqMap, selected);
+    setNewFreqValue(suggestion.matchedKey ? String(suggestion.multiplier) : '');
   };
 
   const removeFreqMapping = (key: string) => {
@@ -937,6 +949,11 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                   <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                     <AlertTriangle size={12} /> {freqMapMissingCount} van {availableFrequencyValues.length} unieke waarden hebben geen match in freq_map.
                   </p>
+                ) : hasData && freqCol && availableFrequencyValues.length === 0 ? (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Info size={12} className="shrink-0" /> Kolom is leeg in de records — de frequentie wordt dan
+                    uit de resultaatnaam afgeleid. Map zo nodig resultaatnamen in de Frequentie Mapping.
+                  </p>
                 ) : hasData && freqCol ? (
                   <p className="mt-1 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                     <CheckCircle size={12} /> Veld gevonden in raw_data.
@@ -1054,21 +1071,57 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
               ))}
             </div>
             <div className="flex gap-2">
-              <Select value={newFreqKey} onValueChange={setNewFreqKey}>
+              <Select value={newFreqKey} onValueChange={handleFreqKeySelect}>
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Selecteer frequentie..." />
+                  <SelectValue placeholder="Selecteer frequentie of resultaatnaam..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {availableFrequencyValues
-                    .filter(f => !Object.keys(freqMap).includes(f))
-                    .map(freq => (
-                      <SelectItem key={freq} value={freq}>{freq}</SelectItem>
-                    ))}
+                  {(() => {
+                    // Twee bronnen: waarden uit de frequentie-kolom én resultaatnamen.
+                    // Resultaatnamen zijn nodig voor campagnes waar de frequentie in de
+                    // naam zit i.p.v. in een kolom (bv. PDV 919, EO Muziekspel 935) —
+                    // de engine valt bij een lege frequentie-kolom terug op de naam.
+                    const mapped = new Set(Object.keys(freqMap).map(k => k.toLowerCase()));
+                    const freqOpts = availableFrequencyValues.filter(f => !mapped.has(f));
+                    const resultOpts = availableResults.filter(r => {
+                      const lower = r.toLowerCase().trim();
+                      return !mapped.has(lower) && !freqOpts.includes(lower);
+                    });
+                    if (freqOpts.length === 0 && resultOpts.length === 0) {
+                      return <div className="px-3 py-2 text-xs text-muted-foreground">Alles is al gemapt.</div>;
+                    }
+                    return (
+                      <>
+                        {freqOpts.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Frequentie-kolom{freqCol ? ` (${freqCol})` : ''}</SelectLabel>
+                            {freqOpts.map(freq => (
+                              <SelectItem key={`f:${freq}`} value={freq}>{freq}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {resultOpts.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Resultaatnamen</SelectLabel>
+                            {resultOpts.map(r => (
+                              <SelectItem key={`r:${r}`} value={r}>{r}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                      </>
+                    );
+                  })()}
                 </SelectContent>
               </Select>
               <Input type="number" value={newFreqValue} onChange={(e) => setNewFreqValue(e.target.value)} placeholder="Mult." className="w-20" />
               <Button onClick={addFreqMapping} size="sm" variant="outline"><Plus size={16} /></Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Is de frequentie-kolom leeg in de data? Map dan de <strong>resultaatnaam</strong> (bv.
+              "Machtiging per Maand" → 12): sales zonder frequentie-waarde vallen automatisch terug
+              op hun resultaatnaam. De vermenigvuldiger wordt voorgesteld als de naam de frequentie
+              al verraadt.
+            </p>
           </AccordionContent>
         </AccordionItem>
 
@@ -1169,24 +1222,45 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             )}
 
             {previewRecords && previewRecords.some(r => !r.matchedKey) && (() => {
-              const unmatched = Array.from(new Set(
-                previewRecords.filter(r => !r.matchedKey).map(r => r.freqRaw).filter(Boolean)
+              // Twee smaken "niet herkend": (1) de frequentie-kolom had een waarde die
+              // nergens op matcht, (2) de kolom was leeg én de resultaatnaam zegt ook
+              // niets over de frequentie (engine-fallback vond niets). Beide zijn via
+              // de Frequentie Mapping hierboven op te lossen (waarde óf resultaatnaam).
+              const unmatchedFreq = Array.from(new Set(
+                previewRecords.filter(r => !r.matchedKey && r.freqRaw).map(r => String(r.freqRaw))
+              ));
+              const unmatchedResults = Array.from(new Set(
+                previewRecords.filter(r => !r.matchedKey && !r.freqRaw).map(r => r.resultaat).filter(Boolean)
+              ));
+              const renderCodes = (items: string[]) => items.map((v, i) => (
+                <span key={v}>
+                  <code className="bg-amber-500/20 px-1 rounded">{v}</code>
+                  {i < items.length - 1 ? ', ' : ''}
+                </span>
               ));
               return (
                 <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
                   <div className="flex items-start gap-2">
                     <AlertTriangle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                    <div className="text-xs text-amber-700 dark:text-amber-200">
-                      <strong>Waarschuwing:</strong> {unmatched.length === 1 ? 'Deze frequentie-waarde is' : 'Deze frequentie-waarden zijn'} niet herkend:{' '}
-                      {unmatched.map((v, i) => (
-                        <span key={String(v)}>
-                          <code className="bg-amber-500/20 px-1 rounded">{String(v)}</code>
-                          {i < unmatched.length - 1 ? ', ' : ''}
-                        </span>
-                      ))}.
-                      Voeg {unmatched.length === 1 ? 'die' : 'ze'} toe aan de <strong>Frequentie Mapping</strong> hierboven met de juiste vermenigvuldiger
-                      (per maand = 12, per 2 maanden = 6, per kwartaal = 4, per half jaar = 2, per jaar = 1, eenmalig = 1).
-                      Zonder match wordt elke record gerekend als ×1.
+                    <div className="text-xs text-amber-700 dark:text-amber-200 space-y-1">
+                      {unmatchedFreq.length > 0 && (
+                        <p>
+                          <strong>Waarschuwing:</strong> {unmatchedFreq.length === 1 ? 'deze frequentie-waarde is' : 'deze frequentie-waarden zijn'} niet
+                          herkend: {renderCodes(unmatchedFreq)}.
+                        </p>
+                      )}
+                      {unmatchedResults.length > 0 && (
+                        <p>
+                          <strong>Waarschuwing:</strong> {unmatchedResults.length === 1 ? 'deze sale heeft' : 'deze sales hebben'} geen frequentie
+                          in de data, en de resultaatnaam verraadt de frequentie ook niet: {renderCodes(unmatchedResults)}.
+                        </p>
+                      )}
+                      <p>
+                        Voeg {unmatchedFreq.length + unmatchedResults.length === 1 ? 'die' : 'ze'} toe aan de{' '}
+                        <strong>Frequentie Mapping</strong> hierboven — als frequentie-waarde óf als resultaatnaam —
+                        met de juiste vermenigvuldiger (per maand = 12, per 2 maanden = 6, per kwartaal = 4,
+                        per half jaar = 2, per jaar = 1, eenmalig = 1). Zonder match telt elke record als ×1.
+                      </p>
                     </div>
                   </div>
                 </div>
