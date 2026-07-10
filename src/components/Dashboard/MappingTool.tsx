@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw, Info } from 'lucide-react';
 import { DBProjectBase, MappingConfig, ProjectType, HoursSource } from '@/types/database';
-import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isSale, isUnreachable, categorizeNegativeResult, categorizeInboundResult, detectFrequencyFromConfig } from '@/lib/statsHelpers';
+import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isSale, isUnreachable, categorizeNegativeResult, categorizeInboundResult, detectFrequencyFromConfig, classifyResultCoverage } from '@/lib/statsHelpers';
 import { useResultDistribution } from '@/hooks/useResultDistribution';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -512,26 +512,10 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   // zoals het dashboard dat doet, met de HUIDIGE config. De 'todo'-bucket = codes die
   // nog in geen enkele categorie vallen — dé onboarding-signaalwaarde.
   const coverage = useMemo(() => {
-    const classify = (r: string): string => {
-      if (projectType === 'outbound') {
-        if (isSale(r, currentMappingConfig)) return 'positief';
-        if (isUnreachable(r, currentMappingConfig)) return 'onbereikbaar';
-        const cat = categorizeNegativeResult(r, currentMappingConfig);
-        return cat === 'argumentated' ? 'neg_arg' : cat === 'not_argumentated' ? 'neg_notarg' : 'todo';
-      }
-      if (projectType === 'inbound') {
-        const c = categorizeInboundResult(r, currentMappingConfig);
-        return c === 'retained' ? 'behouden'
-          : c === 'lost' ? 'verloren'
-          : c === 'partial' ? 'partial'
-          : c === 'unreachable' ? 'onbereikbaar'
-          : 'todo';
-      }
-      const lc = r.toLowerCase();
-      if ((currentMappingConfig.handled_results ?? []).some((x) => x.toLowerCase() === lc)) return 'afgehandeld';
-      if ((currentMappingConfig.not_handled_results ?? []).some((x) => x.toLowerCase() === lc)) return 'niet_afgehandeld';
-      return 'todo';
-    };
+    // Gedeelde engine-truth classificatie (statsHelpers) — dezelfde functie voedt de
+    // "niet-ingedeelde codes"-melding op het admin-dashboard, dus dit paneel en die
+    // melding kunnen nooit van elkaar afwijken.
+    const classify = (r: string): string => classifyResultCoverage(r, currentMappingConfig, projectType);
 
     const labels: Record<ProjectType, { key: string; label: string }[]> = {
       outbound: [
