@@ -6,6 +6,11 @@ geautomatiseerde analyse: 5 agents lazen elk een deel van de branch, daarna zijn
 
 ---
 
+> **Bijgewerkt 19-07-2026, commit `65219e4`.** Het blokkeerpad is verwijderd en de twee
+> correctheidsfixes zijn doorgevoerd. De secties "Eruit halen of ombouwen" en de eerste
+> twee observaties hieronder zijn daarmee afgehandeld — ze blijven staan als verantwoording
+> van wat er is veranderd en waarom. Wat nog openstaat, staat onderaan.
+
 ## Kernconclusie
 
 **Deze branch mergen verandert vandaag niets voor je klanten. Nul.**
@@ -115,18 +120,40 @@ dat al goed staat, dan kan een handmatig vastgelegde vermenigvuldiger stilletjes
 
 ---
 
-## Aanbevolen volgorde
+## Afgehandeld in commit `65219e4`
 
-1. **Merge de backend en de adminschermen.** Dat is wat al live draait plus gereedschap
-   dat alleen jij en Esther zien. Nul risico voor klanten.
-2. **Haal het blokkeerpad eruit of bouw het om** vóór het klantdashboard live gaat. Het
-   is nu één toggle verwijderd van een leeg scherm.
-3. **Trek `outboundStandardExport.ts` gelijk** met `recordValue.ts`. Kost een regel, en
-   voorkomt dat de export ooit van het dashboard gaat afwijken.
-4. **Stel vast wat `other_results` hoort te doen** en zorg dat de rekenlogica dat volgt.
-5. **De 380 niet-gecategoriseerde resultaatcodes opruimen.** Bestaande backlog van 10 juli.
-   Dit is waarschijnlijk de grootste winst voor de juistheid van je netto conversie, en
-   staat helemaal los van deze branch.
+- **Het blokkeerpad is weg.** Geen `QualityBlockedPanel` meer, geen streepje in plaats van
+  een cijfer, geen verdwijnende voortgangsbalk, geen uitgeschakelde exportknop. De
+  afleidingen `blocksRecords` / `blocksReport` / `blocksAnalysis` / `blocksExport` bestaan
+  niet meer, en `isQualityMetricBlocked` is verwijderd zodat niemand het per ongeluk
+  opnieuw aansluit.
+- **Kwaliteitssignalen zijn admin-only.** De banner en `blockedMetrics` gaan alleen nog
+  naar `effectiveRole === 'admin'`. Een klant ziet geen enkele kwaliteitsmelding — ook geen
+  aantekening bij een cijfer. Hij kan er niets mee, en een waarschuwing zonder
+  handelingsperspectief doet alleen afbreuk aan het vertrouwen in het hele dashboard.
+- **De KPI-prop `blocked` heet nu `provisional`** en vult de subtekst aan in plaats van hem
+  te vervangen. De waarde en de popover met de opbouw van de jaarwaarde blijven altijd staan.
+- **`outboundStandardExport.ts` is gelijkgetrokken** met `recordValue.ts`.
+- **De mappingtool overschrijft geen ingestelde frequentie meer.**
+
+Gecontroleerd: typecheck schoon, 0 lintfouten op de gewijzigde bestanden, 17 tests groen,
+productiebuild slaagt.
+
+## Wat nog openstaat
+
+1. **Stel vast wat `other_results` hoort te doen** en zorg dat de rekenlogica dat volgt.
+   Nu verdwijnt een code die je daarin parkeert wel uit de meldingen, maar telt hij in de
+   berekening gewoon mee in de noemer van de netto conversie.
+2. **De 380 niet-gecategoriseerde resultaatcodes opruimen.** Bestaande backlog van 10 juli.
+   Waarschijnlijk de grootste winst voor de juistheid van je netto conversie, en staat
+   helemaal los van deze branch.
+3. **De klantteksten in de database** beloven nog dat cijfers "tijdelijk verborgen" worden
+   (`evaluate_project_quality` en `recordSyncQualityIssue`). Dat klopt niet meer. Vergt een
+   migratie die de functie herdefinieert; doe dat samen met punt 2.
+4. **De UTC/NL-datumvergelijking** in de trustlaag-SQL. Latent, maar gaat dagen verkeerd
+   beoordelen zodra iemand de handhaving aanzet.
+5. **Mergen naar `main`.** Nog niet gedaan — dat is een productiedeploy en die beslissing
+   is aan jou.
 
 ---
 
