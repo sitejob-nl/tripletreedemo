@@ -38,6 +38,156 @@ const ALERT_AFTER_FAILED_NIGHTS = 3;
 // (geen 'gisteren'-stap), bedoeld als tweede cron BUITEN BasiCalls 02:00-04:00-venster,
 // zodat projecten die 's nachts 500'en (734/827/864/924) overdag alsnog binnenkomen.
 const RETRY_MODE = process.argv.slice(2).some(a => a === 'retry' || a === '--retry');
+const TODAY_MODE = process.argv.slice(2).some(a => a === 'today' || a === '--today');
+const QUALITY_ALERT_EMAILS = (process.env.QUALITY_ALERT_EMAILS || '')
+    .split(',')
+    .map(email => email.trim())
+    .filter(Boolean);
+const QUALITY_ALERT_FROM = process.env.QUALITY_ALERT_FROM
+    || 'Triple Tree Dashboard <tripletree@sitejob.nl>';
+
+function scrubTechnicalMessage(value) {
+    return String(value || 'Onbekende fout')
+        .replace(/bearer\s+[a-z0-9._-]+/gi, 'Bearer [afgeschermd]')
+        .replace(/(<(?:ns2:)?Token>).*?(<\/(?:ns2:)?Token>)/gi, '$1[afgeschermd]$2')
+        .replace(/[\r\n\t]+/g, ' ')
+        .slice(0, 500);
+}
+
+async function evaluateProjectQuality(projectId) {
+    try {
+        const { error } = await supabase.rpc('evaluate_project_quality', {
+            p_project_id: projectId,
+        });
+        if (error) console.warn(`   ⚠️  Kwaliteitscontrole kon niet worden vernieuwd: ${error.message}`);
+    } catch (error) {
+        console.warn(`   ⚠️  Kwaliteitscontrole overgeslagen: ${error.message}`);
+    }
+}
+
+async function recordSyncQualityIssue(project, start, end, outcome) {
+    const day = formatLocalDate(start);
+    const issueKey = `sync:${day}`;
+    const isComplete = outcome.status === 'success'
+        && outcome.recordsSynced === outcome.expectedRecords
+        && outcome.failedRecords === 0;
+
+    try {
+        if (isComplete) {
+            const { error } = await supabase
+                .from('data_quality_issues')
+                .update({ resolved_at: new Date().toISOString(), email_status: 'disabled' })
+                .eq('project_id', project.id)
+                .eq('issue_key', issueKey)
+                .is('resolved_at', null);
+            if (error) throw error;
+            return;
+        }
+
+        const detail = outcome.status === 'warning'
+            ? `${outcome.failedRecords} van ${outcome.expectedRecords} records ontbreken`
+                + `${outcome.failureNote ? ` (${outcome.failureNote})` : ''}.`
+            : `Records-sync mislukt: ${scrubTechnicalMessage(outcome.errorMessage)}`;
+        const { error } = await supabase.rpc('set_data_quality_issue', {
+            p_project_id: project.id,
+            p_issue_key: issueKey,
+            p_source: 'sync',
+            p_severity: 'critical',
+            p_affected_metrics: [
+                'records', 'sales', 'annual_value', 'conversion', 'retention',
+                'service', 'hours', 'costs', 'analysis', 'export',
+            ],
+            p_public_message: 'Een deel van deze dag wordt opnieuw opgehaald; rapportcijfers zijn tijdelijk verborgen.',
+            p_admin_detail: detail,
+            p_period_start: day,
+            p_period_end: formatLocalDate(end),
+        });
+        if (error) throw error;
+    } catch (error) {
+        // Gefaseerde uitrol: de synchronisatie mag blijven werken voordat de trustlaag live staat.
+        console.warn(`   ⚠️  Sync-kwaliteitsregistratie overgeslagen: ${error.message}`);
+    }
+}
+
+async function sendQualityAlertDigest() {
+    if (QUALITY_ALERT_EMAILS.length === 0) return;
+
+    // De mailprovider-sleutel blijft bij voorkeur in Supabase. De VPS roept de
+    // service-only edge function aan met zijn bestaande service-role sleutel.
+    if (!process.env.RESEND_API_KEY) {
+        try {
+            const { data } = await axios.post(
+                `${process.env.SUPABASE_URL}/functions/v1/quality-alert`,
+                {},
+                {
+                    headers: {
+                        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+                        apikey: process.env.SUPABASE_SERVICE_KEY,
+                    },
+                    timeout: 30000,
+                },
+            );
+            if (data?.sent > 0) {
+                console.log(`   ✉️  Kwaliteitsmelding verstuurd voor ${data.sent} open probleem(en).`);
+            }
+        } catch (error) {
+            console.warn(`   ⚠️  Kwaliteitsmail niet verstuurd: ${scrubTechnicalMessage(error.message)}`);
+        }
+        return;
+    }
+
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    try {
+        const { data: issues, error } = await supabase
+            .from('data_quality_issues')
+            .select('id,source,severity,public_message,last_notified_at,projects!inner(name,reporting_state,quality_enforcement_enabled)')
+            .is('resolved_at', null)
+            .eq('severity', 'critical')
+            .eq('projects.reporting_state', 'live')
+            .or(`last_notified_at.is.null,last_notified_at.lt.${cutoff}`)
+            .order('last_seen_at', { ascending: false });
+        if (error) throw error;
+        const alertableIssues = (issues || []).filter(issue => {
+            const project = Array.isArray(issue.projects)
+                ? issue.projects[0]
+                : issue.projects;
+            return issue.source === 'sync' || project?.quality_enforcement_enabled === true;
+        });
+        if (alertableIssues.length === 0) return;
+
+        const lines = alertableIssues.map(issue => {
+            const project = Array.isArray(issue.projects)
+                ? issue.projects[0]
+                : issue.projects;
+            const projectName = project?.name || 'Onbekend project';
+            return `- ${projectName} (${issue.source}): ${issue.public_message}`;
+        });
+        await axios.post('https://api.resend.com/emails', {
+            from: QUALITY_ALERT_FROM,
+            to: QUALITY_ALERT_EMAILS,
+            subject: `Dashboard datakwaliteit: ${alertableIssues.length} open probleem${alertableIssues.length === 1 ? '' : 'en'}`,
+            text: [
+                'Na de herstelronde staan onderstaande klantveilige kwaliteitsproblemen nog open.',
+                'Deze melding bevat geen recorddata of persoonsgegevens.',
+                '',
+                ...lines,
+            ].join('\n'),
+        }, {
+            headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+            timeout: 30000,
+        });
+
+        const now = new Date().toISOString();
+        const { error: updateError } = await supabase
+            .from('data_quality_issues')
+            .update({ last_notified_at: now, email_status: 'sent' })
+            .in('id', alertableIssues.map(issue => issue.id));
+        if (updateError) throw updateError;
+        console.log(`   ✉️  Kwaliteitsmelding verstuurd voor ${alertableIssues.length} open probleem(en).`);
+    } catch (error) {
+        console.warn(`   ⚠️  Kwaliteitsmail niet verstuurd: ${scrubTechnicalMessage(error.message)}`);
+    }
+}
 
 // --- TOKEN HELPER ---
 // Tokens staan in project_secrets (onbereikbaar via API, alleen service key)
@@ -398,9 +548,12 @@ async function syncLoggedTimeRange(project, start, end) {
         status: errorDays > 0 ? 'warning' : 'success',
         kind: 'logged_time',
         records_synced: totalSaved,
+        expected_records: activeDaySet.size,
+        failed_records: errorDays,
         sync_from: start.toISOString(),
         sync_to: end.toISOString(),
         error_message: errorDays > 0 ? `${errorDays} dagen konden niet opgehaald worden (inlogtijd)` : null,
+        completed_at: new Date().toISOString(),
     });
 }
 
@@ -443,7 +596,12 @@ async function syncLoggedTimeSingleDay(project, start, end) {
 }
 
 // --- FETCH ENKEL RECORD (met retry) ---
-async function fetchRecordDetail(id, project) {
+// fallbackDate (YYYY-MM-DD) vangt records op waarvan BasiCall bc_beldatum leeg laat. Dat
+// gebeurt structureel bij dialer-uitkomsten als 'Geen gehoor'. Het ID kwam uit
+// Record.getAfgehandeldIds voor precies die dag, dus die dag is de juiste beldatum.
+// Zonder deze fallback verdwenen zulke records stilzwijgend uit het dashboard — bij KIA
+// ging het om bijna de helft van alle belpogingen.
+async function fetchRecordDetail(id, project, fallbackDate = null) {
     const respBody = await soapCall(
         'Record.get',
         `<record_id>${id}</record_id>`,
@@ -465,6 +623,7 @@ async function fetchRecordDetail(id, project) {
         isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
 
+    if (!isoDate) isoDate = fallbackDate;
     if (!isoDate) return null;
 
     const recordId = cleanRecord.bc_record_id ? parseInt(cleanRecord.bc_record_id) : parseInt(id);
@@ -483,9 +642,10 @@ async function fetchRecordDetail(id, project) {
 }
 
 // --- PARALLEL BATCH FETCH ---
-async function fetchRecordsBatch(ids, project) {
+async function fetchRecordsBatch(ids, project, fallbackDate = null) {
     const results = [];
     const errors = [];
+    let skipped = 0;
 
     // Verwerk in parallel batches van PARALLEL_FETCH_SIZE
     for (let i = 0; i < ids.length; i += CONFIG.PARALLEL_FETCH_SIZE) {
@@ -495,7 +655,7 @@ async function fetchRecordsBatch(ids, project) {
             batch.map(async (id) => {
                 if (!id || id.length > CONFIG.MAX_RECORD_ID_LENGTH) return null;
                 await sleep(CONFIG.DELAY_BETWEEN_RECORDS_MS);
-                return fetchRecordDetail(id, project);
+                return fetchRecordDetail(id, project, fallbackDate);
             })
         );
 
@@ -504,6 +664,10 @@ async function fetchRecordsBatch(ids, project) {
                 results.push(result.value);
             } else if (result.status === 'rejected') {
                 errors.push(result.reason?.message || 'Unknown error');
+            } else {
+                // Geslaagde aanroep zonder bruikbaar record. Expliciet tellen: juist het
+                // stil laten verdwijnen hiervan hield jarenlang dataverlies onzichtbaar.
+                skipped += 1;
             }
         }
 
@@ -519,8 +683,11 @@ async function fetchRecordsBatch(ids, project) {
         const uniqueErrors = [...new Set(errors)].slice(0, 3);
         console.warn(`   ⚠️  ${errors.length} record errors. Voorbeelden: ${uniqueErrors.join(', ')}`);
     }
+    if (skipped > 0) {
+        console.warn(`   ⚠️  ${skipped} records zonder bruikbare datum overgeslagen.`);
+    }
 
-    return { results, errorCount: errors.length };
+    return { results, errorCount: errors.length, skippedCount: skipped };
 }
 
 // --- UPSERT BATCH NAAR DB ---
@@ -538,9 +705,16 @@ async function upsertBatch(records) {
 }
 
 // --- CORE SYNC (call records) ---
-async function performSync(project, start, end, jobId = null) {
+// isFinalForDay=false betekent: deze ronde kijkt naar een dag die nog loopt (de avondronde
+// om 21:30). Zo'n run mag de dag niet afsluiten. De rij krijgt daarom kind 'records_preview',
+// dat buiten elke dekkingscontrole valt (getMissedDays, maybeAlertPersistentFailure en de
+// SQL-trustlaag filteren allemaal op kind='records'). Zonder dat onderscheid telt de
+// 21:30-momentopname als volledige dagdekking en haalt de backfill de dag nooit meer op
+// wanneer de nachtronde faalt — precies wat 14-18 juli bij o.a. EO Zilver Goud gebeurde.
+async function performSync(project, start, end, jobId = null, isFinalForDay = true) {
     console.log(`\n🔄 Uitvoeren: ${project.name}`);
     console.log(`   📅 ${formatDate(start)} tot ${formatDate(end)}`);
+    const logKind = isFinalForDay ? 'records' : 'records_preview';
 
     if (jobId) {
         await supabase.from('sync_jobs').update({
@@ -549,6 +723,8 @@ async function performSync(project, start, end, jobId = null) {
             updated_at: new Date().toISOString(),
         }).eq('id', jobId);
     }
+
+    let expectedRecords = 0;
 
     try {
         // GEEN aparte pre-flight token-check meer. Die deed exact dezelfde call als de echte sync
@@ -580,12 +756,21 @@ async function performSync(project, start, end, jobId = null) {
             await supabase.from('sync_logs').insert({
                 project_id: project.id,
                 status: 'success',
-                kind: 'records',
+                kind: logKind,
                 records_synced: 0,
+                expected_records: 0,
+                failed_records: 0,
                 sync_from: start.toISOString(),
                 sync_to: end.toISOString(),
                 error_message: null,
+                completed_at: new Date().toISOString(),
             });
+            if (isFinalForDay) {
+                await recordSyncQualityIssue(project, start, end, {
+                    status: 'success', expectedRecords: 0, recordsSynced: 0, failedRecords: 0,
+                });
+            }
+            await evaluateProjectQuality(project.id);
             if (jobId) {
                 await supabase.from('sync_jobs').update({
                     status: 'completed',
@@ -608,6 +793,7 @@ async function performSync(project, start, end, jobId = null) {
             }
         });
         ids = [...new Set(ids)];
+        expectedRecords = ids.length;
         console.log(`   🔎 ${ids.length} ID's gevonden.`);
 
         // basicall_record_id is not unique per call — it identifies a prospect/badge.
@@ -617,8 +803,20 @@ async function performSync(project, start, end, jobId = null) {
         console.log(`   📥 ${idsToFetch.length} records ophalen...`);
 
         // 5. Fetch record details (parallel in batches)
-        const { results: fetchedRecords, errorCount } = await fetchRecordsBatch(idsToFetch, project);
-        console.log(`   📋 ${fetchedRecords.length} records opgehaald, ${errorCount} fouten.`);
+        // Alleen bij een sync van één kalenderdag is af te leiden bij welke dag een record
+        // zonder eigen beldatum hoort; bij een meerdaagse handmatige job niet.
+        const singleDay = formatLocalDate(start) === formatLocalDate(end);
+        const { results: fetchedRecords, errorCount, skippedCount } = await fetchRecordsBatch(
+            idsToFetch, project, singleDay ? formatLocalDate(start) : null,
+        );
+        // Elk ID levert precies één uitkomst op: een record, een fout of een overslag.
+        // Die optelling is exact — de oude Math.max-schatting verhulde de overslagen.
+        const failedRecords = errorCount + skippedCount;
+        const failureNote = [
+            errorCount > 0 ? `${errorCount} niet opgehaald` : null,
+            skippedCount > 0 ? `${skippedCount} zonder bruikbare datum overgeslagen` : null,
+        ].filter(Boolean).join(', ');
+        console.log(`   📋 ${fetchedRecords.length} records opgehaald, ${failedRecords} fouten.`);
 
         // 6. Upsert in batches naar DB
         for (let i = 0; i < fetchedRecords.length; i += CONFIG.BATCH_UPSERT_SIZE) {
@@ -630,20 +828,33 @@ async function performSync(project, start, end, jobId = null) {
         // 7. Sync log
         await supabase.from('sync_logs').insert({
             project_id: project.id,
-            status: errorCount > 0 ? 'warning' : 'success',
-            kind: 'records',
+            status: failedRecords > 0 ? 'warning' : 'success',
+            kind: logKind,
             records_synced: fetchedRecords.length,
+            expected_records: expectedRecords,
+            failed_records: failedRecords,
             sync_from: start.toISOString(),
             sync_to: end.toISOString(),
-            error_message: errorCount > 0 ? `${errorCount} records konden niet opgehaald worden` : null,
+            error_message: failedRecords > 0 ? failureNote : null,
+            completed_at: new Date().toISOString(),
         });
+        if (isFinalForDay) {
+            await recordSyncQualityIssue(project, start, end, {
+                status: failedRecords > 0 ? 'warning' : 'success',
+                expectedRecords,
+                recordsSynced: fetchedRecords.length,
+                failedRecords,
+                failureNote,
+            });
+        }
+        await evaluateProjectQuality(project.id);
 
         // 8. Job update
         if (jobId) {
             await supabase.from('sync_jobs').update({
                 status: 'completed',
                 records_synced: fetchedRecords.length,
-                log_message: `${fetchedRecords.length} gesynchroniseerd${errorCount > 0 ? `, ${errorCount} fouten` : ''}`,
+                log_message: `${fetchedRecords.length} gesynchroniseerd${failedRecords > 0 ? `, ${failedRecords} fouten` : ''}`,
                 completed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             }).eq('id', jobId);
@@ -662,12 +873,25 @@ async function performSync(project, start, end, jobId = null) {
         await supabase.from('sync_logs').insert({
             project_id: project.id,
             status: 'failed',
-            kind: 'records',
+            kind: logKind,
             records_synced: 0,
+            expected_records: expectedRecords,
+            failed_records: Math.max(expectedRecords, 1),
             sync_from: start.toISOString(),
             sync_to: end.toISOString(),
             error_message: errorMessage,
+            completed_at: new Date().toISOString(),
         });
+        if (isFinalForDay) {
+            await recordSyncQualityIssue(project, start, end, {
+                status: 'failed',
+                expectedRecords,
+                recordsSynced: 0,
+                failedRecords: Math.max(expectedRecords, 1),
+                errorMessage,
+            });
+        }
+        await evaluateProjectQuality(project.id);
 
         if (jobId) {
             await supabase.from('sync_jobs').update({
@@ -833,7 +1057,7 @@ async function getMissedDays(project) {
         .from('sync_logs')
         .select('sync_to')
         .eq('project_id', project.id)
-        .in('status', ['success', 'warning'])
+        .eq('status', 'success')
         .or('kind.eq.records,kind.is.null')
         .order('sync_to', { ascending: true })
         .limit(1)
@@ -845,15 +1069,16 @@ async function getMissedDays(project) {
     // Welke lokale dagen zijn al gedekt door een geslaagde records-sync binnen het venster?
     const { data: rows } = await supabase
         .from('sync_logs')
-        .select('sync_from, sync_to, status')
+        .select('sync_from, sync_to, status, expected_records, records_synced, failed_records')
         .eq('project_id', project.id)
-        .in('status', ['success', 'warning'])
+        .eq('status', 'success')
         .or('kind.eq.records,kind.is.null')
         .gte('sync_to', windowStart.toISOString());
 
     const covered = new Set();
     (rows || []).forEach((r) => {
         if (!r.sync_from || !r.sync_to) return;
+        if (r.expected_records !== r.records_synced || r.failed_records !== 0) return;
         const from = new Date(r.sync_from);
         const to = new Date(r.sync_to);
         // Markeer elke lokale kalenderdag tussen sync_from en sync_to (inclusief).
@@ -896,7 +1121,7 @@ async function maybeAlertPersistentFailure(project) {
         const failedDays = new Set();
         let lastErr = '';
         for (const row of (recent || [])) {
-            if (row.status === 'success' || row.status === 'warning') break; // streak eindigt
+            if (row.status === 'success') break; // alleen een volledige sync beëindigt de streak
             if (row.status === 'failed') {
                 failedDays.add(formatLocalDate(new Date(row.sync_to)));
                 if (!lastErr) lastErr = row.error_message || '';
@@ -998,6 +1223,7 @@ async function run() {
                 console.log(`\n📋 Job: ${project.name} (${job.start_date} - ${job.end_date})`);
                 await performSync(project, new Date(job.start_date), new Date(job.end_date), job.id);
                 await syncLoggedTimeRange(project, new Date(job.start_date), new Date(job.end_date));
+                await evaluateProjectQuality(project.id);
                 await discoverBatches(project);
                 await syncBatchTotals(project);
             }
@@ -1007,19 +1233,52 @@ async function run() {
             return;
         }
 
+        // AVONDRONDE: haal de lopende dag op voor een actueel dashboard. Vandaag
+        // is nog niet definitief compleet en veroorzaakt daarom geen sync-issue;
+        // de nachtronde verwerkt dezelfde dag morgen opnieuw als afgesloten dag.
+        if (TODAY_MODE) {
+            console.log('\n🌆 Avondronde — gegevens van vandaag bijwerken');
+            const now = getNowAmsterdam();
+            const todayStart = new Date(now);
+            todayStart.setHours(0, 0, 0, 0);
+            const todayEnd = new Date(now);
+            todayEnd.setHours(23, 59, 59, 999);
+
+            const { data: todayProjects, error: todayErr } = await supabase
+                .from('projects').select('*').eq('is_active', true).eq('reporting_state', 'live');
+            if (todayErr) { console.error('❌ Kon projecten niet ophalen:', todayErr.message); return; }
+            if (!todayProjects || todayProjects.length === 0) {
+                console.log('   Geen actieve projecten.');
+                return;
+            }
+
+            const todayEnriched = await enrichProjectsWithTokens(todayProjects);
+            console.log(`   ${todayEnriched.length} actieve projecten.\n`);
+            for (const project of todayEnriched) {
+                await performSync(project, todayStart, todayEnd, null, false);
+                await syncLoggedTimeSingleDay(project, todayStart, todayEnd);
+            }
+
+            const elapsedToday = Math.round((Date.now() - startTime) / 1000);
+            console.log(`\n--- 🌆 AVONDRONDE KLAAR (${elapsedToday}s) ---`);
+            return;
+        }
+
         // RETRY-RONDE (overdag): alleen gemiste dagen inhalen, BUITEN BasiCalls 04:00-venster.
         // Tweede cron op een daytime-tijdstip vangt zo de projecten op die 's nachts 500'en.
         if (RETRY_MODE) {
             console.log('\n☀️  Daytime retry-ronde — gemiste dagen inhalen voor projecten die in het 04:00-venster faalden');
             const { data: retryProjects, error: retryErr } = await supabase
-                .from('projects').select('*').eq('is_active', true);
+                .from('projects').select('*').eq('is_active', true).eq('reporting_state', 'live');
             if (retryErr) { console.error('❌ Kon projecten niet ophalen:', retryErr.message); return; }
             if (!retryProjects || retryProjects.length === 0) { console.log('   Geen actieve projecten.'); return; }
             const retryEnriched = await enrichProjectsWithTokens(retryProjects);
             console.log(`   ${retryEnriched.length} actieve projecten.\n`);
             for (const p of retryEnriched) {
                 await syncProjectMissedAndBatches(p);
+                await evaluateProjectQuality(p.id);
             }
+            await sendQualityAlertDigest();
             const elapsedRetry = Math.round((Date.now() - startTime) / 1000);
             console.log(`\n--- ☀️ RETRY-RONDE KLAAR (${elapsedRetry}s) ---`);
             return;
@@ -1041,7 +1300,8 @@ async function run() {
         const { data: projects, error: projError } = await supabase
             .from('projects')
             .select('*')
-            .eq('is_active', true);
+            .eq('is_active', true)
+            .eq('reporting_state', 'live');
 
         if (projError) {
             console.error('❌ Kon projecten niet ophalen:', projError.message);
@@ -1062,6 +1322,7 @@ async function run() {
             // 1. Normale sync van gisteren
             await performSync(p, yesterdayStart, yesterdayEnd);
             await syncLoggedTimeSingleDay(p, yesterdayStart, yesterdayEnd);
+            await evaluateProjectQuality(p.id);
 
             // 2-4. Gemiste dagen inhalen + batches + alert (gedeeld met de retry-ronde)
             await syncProjectMissedAndBatches(p);

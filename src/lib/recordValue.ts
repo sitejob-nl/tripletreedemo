@@ -23,7 +23,7 @@ export interface CalculatedRecordValues {
  *  2. anders: Bedrag × frequentie-multiplier (de gewone outbound-campagnes).
  */
 export const calculateValuesFromRaw = (
-  rawData: Record<string, any> | null,
+  rawData: Record<string, unknown> | null,
   resultaat: string | null,
   mappingConfig: MappingConfig | null | undefined
 ): CalculatedRecordValues => {
@@ -56,12 +56,14 @@ export const calculateValuesFromRaw = (
     };
   }
 
-  const freqRaw = rawData['frequency']
-    || rawData[mappingConfig.freq_col]
+  // De expliciet goedgekeurde projectmapping heeft voorrang. Generieke velden
+  // kunnen bij winback-projecten nog de oude donatiefrequentie bevatten.
+  const freqRaw = rawData[mappingConfig.freq_col]
+    || rawData['frequency']
     || rawData['frequentie']
     || rawData['Frequentie'];
 
-  const freqResult = detectFrequencyFromConfig(freqRaw, mappingConfig.freq_map);
+  const freqResult = detectFrequencyFromConfig(freqRaw, mappingConfig.freq_map, resultaat);
 
   if (!isSale) {
     return {
@@ -73,8 +75,8 @@ export const calculateValuesFromRaw = (
     };
   }
 
-  const amountRaw = rawData['amount']
-    || rawData[mappingConfig.amount_col]
+  const amountRaw = rawData[mappingConfig.amount_col]
+    || rawData['amount']
     || rawData['termijnbedrag']
     || rawData['Bedrag'];
 
@@ -90,7 +92,7 @@ export const calculateValuesFromRaw = (
   }
 
   // 2. Bedrag × frequentie (gewone outbound-campagnes).
-  const amount = parseDutchFloat(amountRaw);
+  const amount = parseDutchFloat(typeof amountRaw === 'number' ? amountRaw : String(amountRaw));
 
   return {
     annualValue: amount * freqResult.multiplier,

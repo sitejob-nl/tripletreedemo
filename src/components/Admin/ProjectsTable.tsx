@@ -42,10 +42,18 @@ export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
   }, [projects, search, showOnlyActive]);
 
   const handleToggleActive = async (project: DBProject) => {
+    const nextActive = !project.is_active;
     try {
+      // reporting_state moet meebewegen. Blijft het op 'live' staan terwijl het project
+      // inactief is, dan verwacht de trustlaag dagelijkse dekking van een project dat
+      // helemaal niet meer gesynchroniseerd wordt (de sync filtert op beide velden).
+      // Wie 'gepauzeerd' wil, gebruikt de dropdown Rapportagestatus in het bewerkscherm.
       const { error } = await supabase
         .from("projects")
-        .update({ is_active: !project.is_active })
+        .update({
+          is_active: nextActive,
+          reporting_state: nextActive ? "live" : "ended",
+        })
         .eq("id", project.id);
 
       if (error) throw error;
@@ -154,13 +162,20 @@ export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
                     <TableCell className="hidden md:table-cell">{project.basicall_project_id}</TableCell>
                     <TableCell className="hidden lg:table-cell">€{project.hourly_rate}</TableCell>
                     <TableCell>
-                      <Badge 
-                        variant={project.is_active ? "default" : "secondary"}
-                        className="cursor-pointer"
-                        onClick={() => handleToggleActive(project)}
-                      >
-                        {project.is_active ? "Actief" : "Inactief"}
-                      </Badge>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge
+                          variant={project.is_active ? "default" : "secondary"}
+                          className="cursor-pointer"
+                          onClick={() => handleToggleActive(project)}
+                        >
+                          {project.is_active ? "Zichtbaar" : "Inactief"}
+                        </Badge>
+                        {project.is_active && (
+                          <Badge variant="outline">
+                            {project.reporting_state === 'paused' ? 'Gepauzeerd' : project.reporting_state === 'ended' ? 'Beëindigd' : 'Live'}
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">

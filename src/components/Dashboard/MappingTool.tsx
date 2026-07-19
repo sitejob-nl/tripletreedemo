@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw } from 'lucide-react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw, Sparkles } from 'lucide-react';
 import { DBProjectBase, MappingConfig, ProjectType, HoursSource } from '@/types/database';
-import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isSale, isUnreachable, categorizeNegativeResult, categorizeInboundResult } from '@/lib/statsHelpers';
+import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType } from '@/lib/statsHelpers';
 import { useResultDistribution } from '@/hooks/useResultDistribution';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/select';
 import { useProjectFieldOptions } from '@/hooks/useProjectFieldOptions';
 import { useConfigPreview } from '@/hooks/useConfigPreview';
+import { useMappingCandidates } from '@/hooks/useMappingCandidates';
+import { buildMappingSuggestion } from '@/lib/mappingTrust';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -66,6 +68,7 @@ const COVERAGE_COLORS: Record<string, string> = {
   neg_notarg: 'bg-orange-500',
   verloren: 'bg-rose-500',
   niet_afgehandeld: 'bg-rose-500',
+  overig: 'bg-sky-500',
   todo: 'bg-fuchsia-500',
 };
 
@@ -78,6 +81,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [reasonCol, setReasonCol] = useState(project.mapping_config.reason_col || EMPTY_VALUE);
   const [locationCol, setLocationCol] = useState(project.mapping_config.location_col || AUTO_VALUE);
   const [saleResults, setSaleResults] = useState<string[]>(project.mapping_config.sale_results || []);
+  const [otherResults, setOtherResults] = useState<string[]>(project.mapping_config.other_results || []);
   const [freqMap, setFreqMap] = useState<Record<string, number>>(project.mapping_config.freq_map || {});
   const [newFreqKey, setNewFreqKey] = useState('');
   const [newFreqValue, setNewFreqValue] = useState('');
@@ -155,6 +159,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [baselineKey, setBaselineKey] = useState<string | null>(null);
 
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
+  const { data: mappingCandidates, isLoading: candidatesLoading } = useMappingCandidates(project.id);
 
   // Projects that never saved unreachable/negative configs use the runtime
   // fallback in isUnreachable() / categorizeNegativeResult(). For the admin UI
@@ -194,7 +199,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const amountColMissing = hasData && !!amountCol && !availableFields.includes(amountCol);
   const freqColMissing = hasData && !!freqCol && !availableFields.includes(freqCol);
   const freqMapMissingCount = availableFrequencyValues.filter(
-    (v) => !Object.keys(freqMap).some((k) => v.includes(k.toLowerCase()) || k.toLowerCase().includes(v))
+    (value) => !Object.keys(freqMap).some(
+      (key) => key.trim().toLowerCase() === value.trim().toLowerCase(),
+    ),
   ).length;
 
   // Build clean weekday_rates (filter out undefined)
@@ -218,6 +225,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     location_col: locationCol === AUTO_VALUE ? '' : locationCol,
     freq_map: freqMap,
     sale_results: saleResults,
+    other_results: otherResults,
     retention_results: retentionResults,
     lost_results: lostResults,
     partial_success_results: partialSuccessResults,
@@ -255,6 +263,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setReasonCol(project.mapping_config.reason_col || EMPTY_VALUE);
     setLocationCol(project.mapping_config.location_col || AUTO_VALUE);
     setSaleResults(project.mapping_config.sale_results || []);
+    setOtherResults(project.mapping_config.other_results || []);
     setFreqMap(project.mapping_config.freq_map || {});
     setRetentionResults(project.mapping_config.retention_results || []);
     setLostResults(project.mapping_config.lost_results || []);
@@ -299,6 +308,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       location_col: locationCol === AUTO_VALUE ? '' : locationCol,
       freq_map: freqMap,
       sale_results: saleResults,
+      other_results: otherResults,
       retention_results: retentionResults,
       lost_results: lostResults,
       partial_success_results: partialSuccessResults,
@@ -347,7 +357,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   // een andere dimensie (waarom een donateur verloren is, niet of het positief/
   // negatief telt). Dezelfde code kan dus tegelijk in lost_results én in
   // reason_categories.Overleden voorkomen.
-  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults, ...flatVoicemailResults, ...flatNawtResults];
+  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults, ...unreachableResults, ...negativeArgumentated, ...negativeNotArgumentated, ...otherResults, ...flatVoicemailResults, ...flatNawtResults];
   const availableResultsFiltered = availableResults.filter((r) => !allSelected.includes(r));
   // Dropdown-filter specifiek voor reason-categorieën: elke code mag in
   // precies één reason-categorie zitten, maar onafhankelijk van de outcome-
@@ -370,6 +380,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       check('Gedeeltelijk Succes', partialSuccessResults) ||
       check('Afgehandeld', handledResults) ||
       check('Niet Afgehandeld', notHandledResults) ||
+      check('Overig', otherResults) ||
       check('Max voicemail', flatVoicemailResults) ||
       check('NAWT fout', flatNawtResults)
       // reason_categories bewust niet meegenomen: reden is een orthogonale
@@ -496,29 +507,77 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setBaselineKey(null);
   };
 
+  const handleApplySuggestions = () => {
+    if (!mappingCandidates) return;
+    const suggestion = buildMappingSuggestion(mappingCandidates, projectType);
+    const merge = (current: string[], proposed: string[] | undefined) =>
+      [...new Set([...current, ...(proposed ?? [])])];
+    const claimed = new Set(allSelected.map((value) => value.trim().toLowerCase()));
+    const takeUnclaimed = (proposed: string[] | undefined) => (proposed ?? []).filter((value) => {
+      const key = value.trim().toLowerCase();
+      if (claimed.has(key)) return false;
+      claimed.add(key);
+      return true;
+    });
+    const proposals = {
+      sale: takeUnclaimed(suggestion.categories.sale_results),
+      retention: takeUnclaimed(suggestion.categories.retention_results),
+      lost: takeUnclaimed(suggestion.categories.lost_results),
+      partial: takeUnclaimed(suggestion.categories.partial_success_results),
+      handled: takeUnclaimed(suggestion.categories.handled_results),
+      notHandled: takeUnclaimed(suggestion.categories.not_handled_results),
+      unreachable: takeUnclaimed(suggestion.categories.unreachable_results),
+      negativeArgumentated: takeUnclaimed(suggestion.categories.negative_argumentated),
+      negativeNotArgumentated: takeUnclaimed(suggestion.categories.negative_not_argumentated),
+      other: takeUnclaimed(suggestion.categories.other_results),
+    };
+
+    if (suggestion.amount_col) setAmountCol(suggestion.amount_col);
+    if (suggestion.freq_col) setFreqCol(suggestion.freq_col);
+    if (suggestion.reason_col) setReasonCol(suggestion.reason_col);
+    if (suggestion.location_col) setLocationCol(suggestion.location_col);
+    setFreqMap((current) => ({ ...current, ...suggestion.freq_map }));
+    setSaleResults((current) => merge(current, proposals.sale));
+    setRetentionResults((current) => merge(current, proposals.retention));
+    setLostResults((current) => merge(current, proposals.lost));
+    setPartialSuccessResults((current) => merge(current, proposals.partial));
+    setHandledResults((current) => merge(current, proposals.handled));
+    setNotHandledResults((current) => merge(current, proposals.notHandled));
+    setUnreachableResults((current) => merge(current, proposals.unreachable));
+    setNegativeArgumentated((current) => merge(current, proposals.negativeArgumentated));
+    setNegativeNotArgumentated((current) => merge(current, proposals.negativeNotArgumentated));
+    setOtherResults((current) => merge(current, proposals.other));
+    toast({
+      title: 'Voorstellen ingevuld',
+      description: 'Controleer de categorieën en frequenties. Ze worden pas actief nadat je de mapping goedkeurt.',
+    });
+  };
+
   // Categorie-dekking: classificeer elke resultaat-code (gewogen naar volume) precies
   // zoals het dashboard dat doet, met de HUIDIGE config. De 'todo'-bucket = codes die
   // nog in geen enkele categorie vallen — dé onboarding-signaalwaarde.
   const coverage = useMemo(() => {
+    const exact = (values: string[], candidate: string) =>
+      values.some((value) => value.trim().toLowerCase() === candidate.trim().toLowerCase());
     const classify = (r: string): string => {
       if (projectType === 'outbound') {
-        if (isSale(r, currentMappingConfig)) return 'positief';
-        if (isUnreachable(r, currentMappingConfig)) return 'onbereikbaar';
-        const cat = categorizeNegativeResult(r, currentMappingConfig);
-        return cat === 'argumentated' ? 'neg_arg' : cat === 'not_argumentated' ? 'neg_notarg' : 'todo';
+        if (exact(saleResults, r)) return 'positief';
+        if (exact(unreachableResults, r)) return 'onbereikbaar';
+        if (exact(negativeArgumentated, r)) return 'neg_arg';
+        if (exact(negativeNotArgumentated, r)) return 'neg_notarg';
+        return exact(otherResults, r) ? 'overig' : 'todo';
       }
       if (projectType === 'inbound') {
-        const c = categorizeInboundResult(r, currentMappingConfig);
-        return c === 'retained' ? 'behouden'
-          : c === 'lost' ? 'verloren'
-          : c === 'partial' ? 'partial'
-          : c === 'unreachable' ? 'onbereikbaar'
-          : 'todo';
+        if (exact(retentionResults, r)) return 'behouden';
+        if (exact(lostResults, r)) return 'verloren';
+        if (exact(partialSuccessResults, r)) return 'partial';
+        if (exact(unreachableResults, r)) return 'onbereikbaar';
+        return exact(otherResults, r) ? 'overig' : 'todo';
       }
       const lc = r.toLowerCase();
       if ((currentMappingConfig.handled_results ?? []).some((x) => x.toLowerCase() === lc)) return 'afgehandeld';
       if ((currentMappingConfig.not_handled_results ?? []).some((x) => x.toLowerCase() === lc)) return 'niet_afgehandeld';
-      return 'todo';
+      return otherResults.some((x) => x.toLowerCase() === lc) ? 'overig' : 'todo';
     };
 
     const labels: Record<ProjectType, { key: string; label: string }[]> = {
@@ -527,6 +586,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         { key: 'onbereikbaar', label: 'Niet bereikbaar' },
         { key: 'neg_arg', label: 'Negatief beargumenteerd' },
         { key: 'neg_notarg', label: 'Negatief niet bearg.' },
+        { key: 'overig', label: 'Overig (bewust)' },
         { key: 'todo', label: 'Nog niet ingedeeld' },
       ],
       inbound: [
@@ -534,11 +594,13 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         { key: 'partial', label: 'Gedeeltelijk succes' },
         { key: 'verloren', label: 'Verloren' },
         { key: 'onbereikbaar', label: 'Niet bereikbaar' },
+        { key: 'overig', label: 'Overig (bewust)' },
         { key: 'todo', label: 'Nog niet ingedeeld' },
       ],
       inbound_service: [
         { key: 'afgehandeld', label: 'Afgehandeld' },
         { key: 'niet_afgehandeld', label: 'Niet afgehandeld' },
+        { key: 'overig', label: 'Overig (bewust)' },
         { key: 'todo', label: 'Nog niet ingedeeld' },
       ],
     };
@@ -560,7 +622,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     }));
     return { total, rows, todoCount: counts['todo'] || 0, todoCodes: codes['todo'] || [] };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resultDist, projectType, saleResults, unreachableResults, negativeArgumentated, negativeNotArgumentated, retentionResults, lostResults, partialSuccessResults, handledResults, notHandledResults]);
+  }, [resultDist, projectType, saleResults, unreachableResults, negativeArgumentated, negativeNotArgumentated, retentionResults, lostResults, partialSuccessResults, handledResults, notHandledResults, otherResults]);
 
   return (
     <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
@@ -572,7 +634,17 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
           </h2>
           <p className="text-muted-foreground text-sm">Beheer veldmappings, tarieven en resultaat categorieën.</p>
         </div>
-        {isLoading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleApplySuggestions}
+          disabled={isLoading || candidatesLoading || !mappingCandidates}
+          className="gap-2"
+        >
+          {isLoading || candidatesLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          Voorstellen invullen
+        </Button>
       </div>
 
       {/* Project Type Selector */}
@@ -752,6 +824,17 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             </AccordionItem>
           </>
         )}
+
+        <AccordionItem value="other_results" className="border border-border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-semibold">📎 Overig — bewust neutraal ({otherResults.length})</AccordionTrigger>
+          <AccordionContent className="space-y-4 pt-4">
+            <p className="text-xs text-muted-foreground">
+              Codes die bewust geen positieve, negatieve, retentie- of servicecategorie zijn. Nieuwe codes blijven als controlepunt zichtbaar totdat je ze hier of elders indeelt.
+            </p>
+            {renderResultBadges(otherResults, (r) => setOtherResults(otherResults.filter((x) => x !== r)))}
+            {renderResultSelect((r) => setOtherResults([...otherResults, r]))}
+          </AccordionContent>
+        </AccordionItem>
 
         {/* Inbound-retention-template: reden-breakdown voor opzeggers.
             Alleen zichtbaar als het project-template 'inbound_retention' is.
@@ -1121,7 +1204,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                         const amount = typeof record.amountRaw === 'number'
                           ? record.amountRaw
                           : record.amountRaw
-                            ? parseFloat(String(record.amountRaw).replace(',', '.').replace(/[^0-9.\-]/g, '')) || 0
+                            ? parseFloat(String(record.amountRaw).replace(',', '.').replace(/[^0-9.-]/g, '')) || 0
                             : 0;
                         return (
                           <TableRow key={record.recordId}>
@@ -1215,7 +1298,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             </div>
             <Button onClick={handleSave} disabled={isSaving} className="w-full flex items-center gap-2">
               {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-              {isSaving ? 'Opslaan...' : 'Configuratie opslaan'}
+              {isSaving ? 'Goedkeuren...' : 'Mapping goedkeuren'}
             </Button>
             {isDirty && (
               <button

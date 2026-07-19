@@ -1,7 +1,7 @@
-import { CheckCircle, DollarSign, TrendingUp, Users, Shield, Target, Headphones, PhoneCall } from 'lucide-react';
+import { CheckCircle, Euro, TrendingUp, Users, Shield, Target, Headphones, PhoneCall } from 'lucide-react';
 import { KPICard } from './KPICard';
 import { Progress } from '@/components/ui/progress';
-import { ProjectType } from '@/types/database';
+import { ProjectType, QualityMetric } from '@/types/database';
 
 export interface AnnualValueBreakdown {
   monthly: { count: number; value: number; totalAmount: number };
@@ -27,6 +27,7 @@ interface KPICardsSectionProps {
   totalHandled?: number;
   totalNotHandled?: number;
   annualValueBreakdown?: AnnualValueBreakdown;
+  blockedMetrics?: QualityMetric[];
 }
 
 export function KPICardsSection({
@@ -44,7 +45,9 @@ export function KPICardsSection({
   totalHandled = 0,
   totalNotHandled = 0,
   annualValueBreakdown,
+  blockedMetrics = [],
 }: KPICardsSectionProps) {
+  const blocked = (metric: QualityMetric) => blockedMetrics.includes(metric);
   const showProgress = totalToCall && totalToCall > 0;
   const progressPercent = showProgress ? Math.min((totalRecords / totalToCall) * 100, 100) : 0;
 
@@ -109,6 +112,7 @@ export function KPICardsSection({
           icon={Headphones}
           variant="green"
           isLoading={isLoading}
+          blocked={blocked('service')}
         />
         <KPICard
           title="Totaal Calls"
@@ -117,6 +121,7 @@ export function KPICardsSection({
           icon={PhoneCall}
           variant="blue"
           isLoading={isLoading}
+          blocked={blocked('records')}
         />
         <KPICard
           title="Calls per Uur"
@@ -125,6 +130,7 @@ export function KPICardsSection({
           icon={TrendingUp}
           variant="purple"
           isLoading={isLoading}
+          blocked={blocked('service') || blocked('hours')}
         />
         <KPICard
           title="Inzet Uren"
@@ -133,6 +139,7 @@ export function KPICardsSection({
           icon={Users}
           variant="cyan"
           isLoading={isLoading}
+          blocked={blocked('hours')}
         />
       </div>
     );
@@ -149,15 +156,17 @@ export function KPICardsSection({
           icon={Shield}
           variant="green"
           isLoading={isLoading}
+          blocked={blocked('retention')}
         />
         <KPICard
           title="Behouden Waarde"
           value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           subtext={annualValueBreakdown ? 'Klik voor details' : 'Jaarwaarde behouden'}
-          icon={DollarSign}
+          icon={Euro}
           variant="blue"
           isLoading={isLoading}
           popoverContent={breakdownPopover}
+          blocked={blocked('annual_value')}
         />
         <KPICard
           title="Retentie Ratio"
@@ -166,6 +175,7 @@ export function KPICardsSection({
           icon={TrendingUp}
           variant="purple"
           isLoading={isLoading}
+          blocked={blocked('retention')}
         />
         <KPICard
           title="Inzet Uren"
@@ -174,6 +184,7 @@ export function KPICardsSection({
           icon={Users}
           variant="cyan"
           isLoading={isLoading}
+          blocked={blocked('hours')}
         />
       </div>
     );
@@ -190,15 +201,17 @@ export function KPICardsSection({
           icon={CheckCircle}
           variant="green"
           isLoading={isLoading}
+          blocked={blocked('sales')}
         />
         <KPICard
           title="Jaarwaarde"
           value={`€ ${totalAnnualValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           subtext={annualValueBreakdown ? 'Klik voor details' : 'Totale opbrengst'}
-          icon={DollarSign}
+          icon={Euro}
           variant="blue"
           isLoading={isLoading}
           popoverContent={breakdownPopover}
+          blocked={blocked('annual_value')}
         />
         <KPICard
           title="Kosten per Donateur"
@@ -209,6 +222,7 @@ export function KPICardsSection({
           icon={TrendingUp}
           variant={costPerDonor > 50 ? 'pink' : 'orange'}
           isLoading={isLoading}
+          blocked={blocked('costs')}
         />
         <KPICard
           title="Inzet Uren"
@@ -217,6 +231,7 @@ export function KPICardsSection({
           icon={Users}
           variant="cyan"
           isLoading={isLoading}
+          blocked={blocked('hours')}
         />
       </div>
       

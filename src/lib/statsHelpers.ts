@@ -32,9 +32,12 @@ export const detectFrequencyFromConfig = (
     isOneOff: true,
   };
 
-  if (!freqRaw) return defaultResult;
+  if (!freqRaw && !resultaat) return defaultResult;
 
-  const freqStr = String(freqRaw).toLowerCase().trim();
+  // Sommige campagnes leveren de nieuwe frequentie uitsluitend als discrete
+  // resultaatcode aan. Gebruik die alleen wanneer het goedgekeurde bronveld
+  // werkelijk leeg is.
+  const freqStr = String(freqRaw || resultaat).toLowerCase().trim();
 
   // Check one-off patterns first (highest priority)
   if (freqStr.includes('eenmalig') || freqStr === '0' || freqStr === 'e') {
