@@ -25,7 +25,6 @@ interface ReportViewSectionProps {
   reportageOverrides?: ReportageWeeklyOverride[];
   isLoading: boolean;
   onExportToExcel: () => void;
-  isExportBlocked?: boolean;
   isAdmin?: boolean;
 }
 
@@ -43,7 +42,6 @@ export function ReportViewSection({
   reportageOverrides = [],
   isLoading,
   onExportToExcel,
-  isExportBlocked = false,
   isAdmin = false,
 }: ReportViewSectionProps) {
   const isInboundProject = projectType === 'inbound';
@@ -153,10 +151,8 @@ export function ReportViewSection({
         </h3>
         <button
           onClick={onExportToExcel}
-          disabled={isExportBlocked}
           aria-label="Exporteer rapport naar Excel"
-          title={isExportBlocked ? 'Export is tijdelijk uitgeschakeld totdat de gegevens zijn gecontroleerd.' : undefined}
-          className="text-primary text-xs sm:text-sm font-medium hover:underline focus-visible:underline focus-visible:outline-none flex items-center gap-1 shrink-0 disabled:text-muted-foreground disabled:no-underline disabled:cursor-not-allowed"
+          className="text-primary text-xs sm:text-sm font-medium hover:underline focus-visible:underline focus-visible:outline-none flex items-center gap-1 shrink-0"
         >
           <FileSpreadsheet size={14} className="sm:w-4 sm:h-4" aria-hidden="true" /> <span className="hidden sm:inline">Exporteer naar</span> Excel
         </button>

@@ -15,8 +15,14 @@ interface KPICardProps {
   };
   isLoading?: boolean;
   popoverContent?: ReactNode;
-  blocked?: boolean;
-  blockedText?: string;
+  /**
+   * Het cijfer is nog niet definitief: er wordt data nagesynchroniseerd of een
+   * resultaatcode is nog niet ingedeeld. De waarde blijft altijd zichtbaar — een
+   * leeg vak leest als een storing en kost meer vertrouwen dan een cijfer dat nog
+   * kan bijstellen. De onzekerheid gaat naast de subtekst staan, niet ervoor in de plaats.
+   */
+  provisional?: boolean;
+  provisionalText?: string;
 }
 
 export const KPICard = ({
@@ -28,8 +34,8 @@ export const KPICard = ({
   trend,
   isLoading = false,
   popoverContent,
-  blocked = false,
-  blockedText = 'Wordt gecontroleerd',
+  provisional = false,
+  provisionalText = 'wordt nog aangevuld',
 }: KPICardProps) => {
   const variantStyles = {
     green: { bg: 'bg-kpi-green', text: 'text-kpi-green-text', iconBg: 'bg-kpi-green', iconText: 'text-kpi-green-text' },
@@ -49,8 +55,8 @@ export const KPICard = ({
         {isLoading ? (
           <Skeleton className="h-6 sm:h-9 w-24 sm:w-32 mb-0.5 sm:mb-2" />
         ) : (
-          <h3 className={`text-lg sm:text-3xl font-bold ${blocked ? 'text-muted-foreground' : styles.text} mb-0.5 sm:mb-2 truncate`}>
-            {blocked ? '—' : value}
+          <h3 className={`text-lg sm:text-3xl font-bold ${styles.text} mb-0.5 sm:mb-2 truncate`}>
+            {value}
           </h3>
         )}
         <div className="flex items-center gap-1.5">
@@ -59,9 +65,9 @@ export const KPICard = ({
               {trend.isPositive ? '▲' : '▼'} {Math.abs(trend.value)}%
             </span>
           )}
-          {(blocked || subtext) && (
+          {(provisional || subtext) && (
             <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-              {blocked ? blockedText : subtext}
+              {[subtext, provisional ? provisionalText : null].filter(Boolean).join(' · ')}
             </p>
           )}
         </div>
@@ -72,7 +78,7 @@ export const KPICard = ({
     </div>
   );
 
-  if (popoverContent && !blocked) {
+  if (popoverContent) {
     return (
       <Popover>
         <PopoverTrigger asChild>{cardContent}</PopoverTrigger>

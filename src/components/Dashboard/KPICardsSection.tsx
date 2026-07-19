@@ -47,7 +47,9 @@ export function KPICardsSection({
   annualValueBreakdown,
   blockedMetrics = [],
 }: KPICardsSectionProps) {
-  const blocked = (metric: QualityMetric) => blockedMetrics.includes(metric);
+  // Raakt een openstaand kwaliteitspunt dit cijfer? Dan blijft het cijfer staan met een
+  // aantekening erbij; het wordt nooit weggehaald.
+  const isProvisional = (metric: QualityMetric) => blockedMetrics.includes(metric);
   const showProgress = totalToCall && totalToCall > 0;
   const progressPercent = showProgress ? Math.min((totalRecords / totalToCall) * 100, 100) : 0;
 
@@ -112,7 +114,7 @@ export function KPICardsSection({
           icon={Headphones}
           variant="green"
           isLoading={isLoading}
-          blocked={blocked('service')}
+          provisional={isProvisional('service')}
         />
         <KPICard
           title="Totaal Calls"
@@ -121,7 +123,7 @@ export function KPICardsSection({
           icon={PhoneCall}
           variant="blue"
           isLoading={isLoading}
-          blocked={blocked('records')}
+          provisional={isProvisional('records')}
         />
         <KPICard
           title="Calls per Uur"
@@ -130,7 +132,7 @@ export function KPICardsSection({
           icon={TrendingUp}
           variant="purple"
           isLoading={isLoading}
-          blocked={blocked('service') || blocked('hours')}
+          provisional={isProvisional('service') || isProvisional('hours')}
         />
         <KPICard
           title="Inzet Uren"
@@ -139,7 +141,7 @@ export function KPICardsSection({
           icon={Users}
           variant="cyan"
           isLoading={isLoading}
-          blocked={blocked('hours')}
+          provisional={isProvisional('hours')}
         />
       </div>
     );
@@ -156,7 +158,7 @@ export function KPICardsSection({
           icon={Shield}
           variant="green"
           isLoading={isLoading}
-          blocked={blocked('retention')}
+          provisional={isProvisional('retention')}
         />
         <KPICard
           title="Behouden Waarde"
@@ -166,7 +168,7 @@ export function KPICardsSection({
           variant="blue"
           isLoading={isLoading}
           popoverContent={breakdownPopover}
-          blocked={blocked('annual_value')}
+          provisional={isProvisional('annual_value')}
         />
         <KPICard
           title="Retentie Ratio"
@@ -175,7 +177,7 @@ export function KPICardsSection({
           icon={TrendingUp}
           variant="purple"
           isLoading={isLoading}
-          blocked={blocked('retention')}
+          provisional={isProvisional('retention')}
         />
         <KPICard
           title="Inzet Uren"
@@ -184,7 +186,7 @@ export function KPICardsSection({
           icon={Users}
           variant="cyan"
           isLoading={isLoading}
-          blocked={blocked('hours')}
+          provisional={isProvisional('hours')}
         />
       </div>
     );
@@ -201,7 +203,7 @@ export function KPICardsSection({
           icon={CheckCircle}
           variant="green"
           isLoading={isLoading}
-          blocked={blocked('sales')}
+          provisional={isProvisional('sales')}
         />
         <KPICard
           title="Jaarwaarde"
@@ -211,7 +213,7 @@ export function KPICardsSection({
           variant="blue"
           isLoading={isLoading}
           popoverContent={breakdownPopover}
-          blocked={blocked('annual_value')}
+          provisional={isProvisional('annual_value')}
         />
         <KPICard
           title="Kosten per Donateur"
@@ -222,7 +224,7 @@ export function KPICardsSection({
           icon={TrendingUp}
           variant={costPerDonor > 50 ? 'pink' : 'orange'}
           isLoading={isLoading}
-          blocked={blocked('costs')}
+          provisional={isProvisional('costs')}
         />
         <KPICard
           title="Inzet Uren"
@@ -231,7 +233,7 @@ export function KPICardsSection({
           icon={Users}
           variant="cyan"
           isLoading={isLoading}
-          blocked={blocked('hours')}
+          provisional={isProvisional('hours')}
         />
       </div>
       

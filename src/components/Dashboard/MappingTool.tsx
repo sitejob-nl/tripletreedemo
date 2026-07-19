@@ -536,7 +536,10 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     if (suggestion.freq_col) setFreqCol(suggestion.freq_col);
     if (suggestion.reason_col) setReasonCol(suggestion.reason_col);
     if (suggestion.location_col) setLocationCol(suggestion.location_col);
-    setFreqMap((current) => ({ ...current, ...suggestion.freq_map }));
+    // Alleen frequenties aanvullen die nog niet zijn vastgelegd. De categorieën hieronder
+    // zijn via takeUnclaimed/merge al beschermd; zonder dezelfde bescherming zou een klik
+    // op "Voorstellen invullen" een handmatig gekozen vermenigvuldiger stil overschrijven.
+    setFreqMap((current) => ({ ...suggestion.freq_map, ...current }));
     setSaleResults((current) => merge(current, proposals.sale));
     setRetentionResults((current) => merge(current, proposals.retention));
     setLostResults((current) => merge(current, proposals.lost));

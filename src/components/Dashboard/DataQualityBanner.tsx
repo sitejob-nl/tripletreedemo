@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, History, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, History } from 'lucide-react';
 import type { ProjectDataQuality } from '@/types/database';
 import { cn } from '@/lib/utils';
 
@@ -31,10 +31,12 @@ export function DataQualityBanner({ quality, isLoading, isAdmin }: DataQualityBa
       title: `Gecontroleerd t/m ${formatDate(quality.verified_through)}`,
       className: 'border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100',
     },
+    // Geen alarmkleur: deze balk is beheerdersinformatie over de volledigheid van de
+    // synchronisatie, geen storing. De cijfers eronder blijven altijd gewoon staan.
     blocked: {
-      icon: ShieldAlert,
-      title: `Cijfers worden gecontroleerd — compleet t/m ${formatDate(quality.verified_through)}`,
-      className: 'border-destructive/30 bg-destructive/10 text-destructive',
+      icon: AlertTriangle,
+      title: `Definitief t/m ${formatDate(quality.verified_through)} — latere dagen worden nog aangevuld`,
+      className: 'border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-100',
     },
     historical: {
       icon: History,
@@ -60,19 +62,4 @@ export function DataQualityBanner({ quality, isLoading, isAdmin }: DataQualityBa
   );
 }
 
-interface QualityBlockedPanelProps {
-  message?: string;
-}
-
-export function QualityBlockedPanel({ message }: QualityBlockedPanelProps) {
-  return (
-    <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
-      <ShieldAlert className="h-8 w-8 text-destructive mx-auto mb-3" />
-      <h3 className="font-semibold text-foreground">Dit onderdeel wordt gecontroleerd</h3>
-      <p className="text-sm text-muted-foreground mt-2 max-w-xl mx-auto">
-        {message ?? 'Zodra de ontbrekende gegevens compleet en gecontroleerd zijn, verschijnt dit onderdeel automatisch weer.'}
-      </p>
-    </div>
-  );
-}
 

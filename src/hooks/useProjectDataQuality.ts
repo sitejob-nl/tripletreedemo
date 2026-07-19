@@ -6,7 +6,6 @@ import type {
   ProjectDataQuality,
   QualityMetric,
 } from '@/types/database';
-import { isMetricBlocked } from '@/lib/dataQuality';
 
 const parseMessages = (value: unknown): DataQualityMessage[] => {
   if (!Array.isArray(value)) return [];
@@ -54,7 +53,6 @@ export const useProjectDataQuality = (
   refetchInterval: 5 * 60_000,
 });
 
-export const isQualityMetricBlocked = (
-  quality: ProjectDataQuality | undefined,
-  metric: QualityMetric,
-) => isMetricBlocked(quality?.blocked_metrics, metric);
+// Bewust geen helper meer die een metric als "geblokkeerd" bestempelt: de kwaliteitsstatus
+// mag nooit een cijfer uit het klantbeeld halen. blocked_metrics geeft nog wel aan welke
+// cijfers een openstaand controlepunt raken, maar dat is uitsluitend beheerdersinformatie.

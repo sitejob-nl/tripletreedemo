@@ -35,8 +35,8 @@ import { useReportageOverrides } from '@/hooks/useReportageOverrides';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { errorLogger } from '@/lib/errorLogger';
-import { useProjectDataQuality, isQualityMetricBlocked } from '@/hooks/useProjectDataQuality';
-import { DataQualityBanner, QualityBlockedPanel } from '@/components/Dashboard/DataQualityBanner';
+import { useProjectDataQuality } from '@/hooks/useProjectDataQuality';
+import { DataQualityBanner } from '@/components/Dashboard/DataQualityBanner';
 import { DataTrustOnboarding } from '@/components/Dashboard/DataTrustOnboarding';
 
 const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis', 'project-data-quality'];
@@ -97,12 +97,9 @@ const Index = () => {
     qualityStartDate,
     qualityEndDate,
   );
-  const blocksRecords = isQualityMetricBlocked(dataQuality, 'records');
-  const blocksReport = dataQuality?.blocked_metrics.some(
-    (metric) => metric !== 'analysis' && metric !== 'export',
-  ) ?? false;
-  const blocksAnalysis = blocksRecords || isQualityMetricBlocked(dataQuality, 'analysis');
-  const blocksExport = isQualityMetricBlocked(dataQuality, 'export');
+  // Bewust geen afleidingen als blocksReport/blocksExport meer: geen enkel cijfer,
+  // paneel of knop wordt op grond van dataQuality verborgen of uitgeschakeld.
+  // dataQuality voedt alleen de beheerdersweergave.
 
   // Fetch call records for current project with server-side pagination
   const { 
@@ -546,11 +543,14 @@ const Index = () => {
           {/* Main Content - Only show when project is selected */}
           {!isLoading && !error && currentProject && (
             <>
-              {(currentProject.quality_enforcement_enabled || effectiveRole === 'admin') && (
+              {/* Kwaliteitssignalen zijn uitsluitend voor beheerders. Een klant hoort
+                  gewoon zijn cijfers te zien; een waarschuwing waar hij niets mee kan
+                  doet alleen afbreuk aan het vertrouwen in het hele dashboard. */}
+              {effectiveRole === 'admin' && (
                 <DataQualityBanner
                   quality={dataQuality}
                   isLoading={qualityLoading}
-                  isAdmin={effectiveRole === 'admin'}
+                  isAdmin
                 />
               )}
 
@@ -634,15 +634,13 @@ const Index = () => {
                     totalHandled={totalHandled}
                     totalNotHandled={totalNotHandled}
                     annualValueBreakdown={annualValueBreakdown}
-                    blockedMetrics={dataQuality?.blocked_metrics}
+                    blockedMetrics={effectiveRole === 'admin' ? dataQuality?.blocked_metrics : undefined}
                   />
 
-                  {!blocksRecords && <BatchProgress projectId={currentProject.id} />}
+                  <BatchProgress projectId={currentProject.id} />
 
                   {/* MAIN VIEW SWITCHER */}
-                  {viewMode === 'report' && blocksReport ? (
-                    <QualityBlockedPanel message={dataQuality?.messages[0]?.text} />
-                  ) : viewMode === 'report' ? (
+                  {viewMode === 'report' ? (
                     <ReportViewSection
                       projectId={currentProject?.id}
                       projectType={projectType}
@@ -657,11 +655,8 @@ const Index = () => {
                       reportageOverrides={reportageOverrides}
                       isLoading={reportMatrixLoading || reportageOverridesLoading}
                       onExportToExcel={handleExportToExcel}
-                      isExportBlocked={blocksExport}
                       isAdmin={isDbAdmin}
                     />
-                  ) : viewMode === 'dashboard' && blocksRecords ? (
-                    <QualityBlockedPanel message={dataQuality?.messages[0]?.text} />
                   ) : viewMode === 'dashboard' ? (
                     <DashboardView 
                       data={processedData} 
@@ -671,8 +666,6 @@ const Index = () => {
                       onPageChange={setDashboardPage}
                       onPageSizeChange={setDashboardPageSize}
                     />
-                  ) : blocksAnalysis ? (
-                    <QualityBlockedPanel message={dataQuality?.messages[0]?.text} />
                   ) : (
                     <AnalysisViewSection
                       data={analysisProcessedData}

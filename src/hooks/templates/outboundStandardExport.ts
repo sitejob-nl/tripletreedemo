@@ -253,11 +253,13 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       const isSale = isSaleResult(resultName, mappingConfig);
       const recordUnreachable = isUnreachable(resultName, mappingConfig);
 
-      // Frequency + amount (old)
-      const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequentie'] ?? rawData['Frequentie'];
+      // Frequency + amount. Zelfde volgorde als lib/recordValue.ts: de goedgekeurde
+      // projectmapping gaat voor de generieke velden, anders wijkt de export af van de
+      // KPI-kaarten zodra een bron beide levert.
+      const freqRaw = (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequency'] ?? rawData['frequentie'] ?? rawData['Frequentie'];
       const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
 
-      const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
+      const amountRaw = (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['amount'] ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
       const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
       const annualValue = isSale ? (flatSaleValue > 0 ? flatSaleValue : amount * freq.multiplier) : 0;
 
@@ -349,9 +351,9 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         const resultName = record.resultaat ?? (rawData['bc_result_naam'] as string) ?? 'Onbekend';
         const isSale = isSaleResult(resultName, mappingConfig);
         const recordUnreachable = isUnreachable(resultName, mappingConfig);
-        const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequentie'] ?? rawData['Frequentie'];
+        const freqRaw = (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequency'] ?? rawData['frequentie'] ?? rawData['Frequentie'];
         const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
-        const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
+        const amountRaw = (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['amount'] ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
         const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
         const annualValue = isSale ? (flatSaleValue > 0 ? flatSaleValue : amount * freq.multiplier) : 0;
         [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {
