@@ -33,15 +33,21 @@ import { useUserRole, useIsSuperAdmin } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 import { useExcelExport } from '@/hooks/useExcelExport';
 import { useReportageOverrides } from '@/hooks/useReportageOverrides';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { errorLogger } from '@/lib/errorLogger';
+import { useProjectDataQuality } from '@/hooks/useProjectDataQuality';
+import { DataQualityBanner } from '@/components/Dashboard/DataQualityBanner';
+import { DataTrustOnboarding } from '@/components/Dashboard/DataTrustOnboarding';
 import { friendlyError } from '@/lib/friendlyError';
 
-const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis'];
+const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis', 'project-data-quality'];
 
 const Index = () => {
-  const [selectedProjectKey, setSelectedProjectKeyState] = useState<string>('');
+  const [searchParams] = useSearchParams();
+  const [selectedProjectKey, setSelectedProjectKeyState] = useState<string>(
+    () => searchParams.get('project') ?? '',
+  );
   const [viewMode, setViewMode] = useState<ViewMode>('report');
   const [selectedWeek, setSelectedWeek] = useState<string | number>('all');
   const [viewAsClient, setViewAsClient] = useState(false);
@@ -97,6 +103,19 @@ const Index = () => {
     [projects, selectedProjectKey]
   );
 
+  const qualityStartDate = dateFilter.startDate
+    ?? currentProject?.created_at?.slice(0, 10)
+    ?? new Date().toISOString().slice(0, 10);
+  const qualityEndDate = dateFilter.endDate ?? new Date().toISOString().slice(0, 10);
+  const { data: dataQuality, isLoading: qualityLoading } = useProjectDataQuality(
+    currentProject?.id,
+    qualityStartDate,
+    qualityEndDate,
+  );
+  // Bewust geen afleidingen als blocksReport/blocksExport meer: geen enkel cijfer,
+  // paneel of knop wordt op grond van dataQuality verborgen of uitgeschakeld.
+  // dataQuality voedt alleen de beheerdersweergave.
+
   // Fetch call records for current project with server-side pagination
   const { 
     data: callRecords = [], 
@@ -150,9 +169,9 @@ const Index = () => {
     
   }, [selectedProjectKey, queryClient]);
 
-  // Auto-select first project when projects are loaded and none selected
+  // Auto-select first project when projects are loaded and no geldige selectie bestaat.
   useEffect(() => {
-    if (projects.length > 0 && !selectedProjectKey) {
+    if (projects.length > 0 && !projects.some((project) => project.project_key === selectedProjectKey)) {
       setSelectedProjectKey(projects[0].project_key);
     }
   }, [projects, selectedProjectKey, setSelectedProjectKey]);
@@ -539,6 +558,31 @@ const Index = () => {
           {/* Main Content - Only show when project is selected */}
           {!isLoading && !error && currentProject && (
             <>
+              {/* Kwaliteitssignalen zijn uitsluitend voor beheerders. Een klant hoort
+                  gewoon zijn cijfers te zien; een waarschuwing waar hij niets mee kan
+                  doet alleen afbreuk aan het vertrouwen in het hele dashboard. */}
+              {effectiveRole === 'admin' && (
+                <DataQualityBanner
+                  quality={dataQuality}
+                  isLoading={qualityLoading}
+                  isAdmin
+                />
+              )}
+
+              {effectiveRole === 'admin' && (
+                <DataTrustOnboarding
+                  projectName={currentProject.name}
+                  isAdmin
+                  quality={dataQuality}
+                  qualityVisible
+                  onOpenMapping={() => {
+                  const mappingTool = document.querySelector('[data-tour="mapping-tool"]');
+                  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                  mappingTool?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+                  }}
+                />
+              )}
+
               {/* Admin Mapping Tool */}
               {effectiveRole === 'admin' && (
                 <div className="mb-8">
@@ -605,6 +649,7 @@ const Index = () => {
                     totalHandled={totalHandled}
                     totalNotHandled={totalNotHandled}
                     annualValueBreakdown={annualValueBreakdown}
+                    blockedMetrics={effectiveRole === 'admin' ? dataQuality?.blocked_metrics : undefined}
                   />
 
                   <BatchProgress projectId={currentProject.id} />

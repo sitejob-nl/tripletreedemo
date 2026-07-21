@@ -259,7 +259,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined);
       const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
 
-      const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
+      const amountRaw = (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['amount'] ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
       const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
       const annualValue = isSale ? (flatSaleValue > 0 ? flatSaleValue : amount * freq.multiplier) : 0;
 
@@ -354,7 +354,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         // Frequency: configured freq_col only (RPC-aligned), not generic fallbacks — see recordValue.ts.
         const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined);
         const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
-        const amountRaw = rawData['amount'] ?? (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
+        const amountRaw = (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['amount'] ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
         const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
         const annualValue = isSale ? (flatSaleValue > 0 ? flatSaleValue : amount * freq.multiplier) : 0;
         [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {

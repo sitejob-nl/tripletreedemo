@@ -15,9 +15,28 @@ interface KPICardProps {
   };
   isLoading?: boolean;
   popoverContent?: ReactNode;
+  /**
+   * Het cijfer is nog niet definitief: er wordt data nagesynchroniseerd of een
+   * resultaatcode is nog niet ingedeeld. De waarde blijft altijd zichtbaar — een
+   * leeg vak leest als een storing en kost meer vertrouwen dan een cijfer dat nog
+   * kan bijstellen. De onzekerheid gaat naast de subtekst staan, niet ervoor in de plaats.
+   */
+  provisional?: boolean;
+  provisionalText?: string;
 }
 
-export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', trend, isLoading = false, popoverContent }: KPICardProps) => {
+export const KPICard = ({
+  title,
+  value,
+  subtext,
+  icon: Icon,
+  variant = 'green',
+  trend,
+  isLoading = false,
+  popoverContent,
+  provisional = false,
+  provisionalText = 'wordt nog aangevuld',
+}: KPICardProps) => {
   const variantStyles = {
     green: { bg: 'bg-kpi-green', text: 'text-kpi-green-text', iconBg: 'bg-kpi-green', iconText: 'text-kpi-green-text' },
     pink: { bg: 'bg-kpi-pink', text: 'text-kpi-pink-text', iconBg: 'bg-kpi-pink', iconText: 'text-kpi-pink-text' },
@@ -36,7 +55,9 @@ export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', 
         {isLoading ? (
           <Skeleton className="h-6 sm:h-9 w-24 sm:w-32 mb-0.5 sm:mb-2" />
         ) : (
-          <h3 className={`text-lg sm:text-3xl font-bold ${styles.text} mb-0.5 sm:mb-2 truncate`}>{value}</h3>
+          <h3 className={`text-lg sm:text-3xl font-bold ${styles.text} mb-0.5 sm:mb-2 truncate`}>
+            {value}
+          </h3>
         )}
         <div className="flex items-center gap-1.5">
           {trend && !isLoading && (
@@ -44,7 +65,11 @@ export const KPICard = ({ title, value, subtext, icon: Icon, variant = 'green', 
               {trend.isPositive ? '▲' : '▼'} {Math.abs(trend.value)}%
             </span>
           )}
-          {subtext && <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{subtext}</p>}
+          {(provisional || subtext) && (
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+              {[subtext, provisional ? provisionalText : null].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
       </div>
       <div className={`p-1.5 sm:p-4 rounded-lg sm:rounded-xl ${styles.iconBg} ${styles.iconText} shrink-0`}>

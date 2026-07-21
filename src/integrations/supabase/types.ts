@@ -164,6 +164,75 @@ export type Database = {
           },
         ]
       }
+      data_quality_issues: {
+        Row: {
+          admin_detail: string
+          affected_metrics: string[]
+          email_status: string
+          first_seen_at: string
+          id: string
+          issue_key: string
+          last_notified_at: string | null
+          last_seen_at: string
+          period_end: string | null
+          period_start: string | null
+          project_id: string
+          public_message: string
+          resolved_at: string | null
+          severity: string
+          source: string
+        }
+        Insert: {
+          admin_detail: string
+          affected_metrics?: string[]
+          email_status?: string
+          first_seen_at?: string
+          id?: string
+          issue_key: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          period_end?: string | null
+          period_start?: string | null
+          project_id: string
+          public_message: string
+          resolved_at?: string | null
+          severity: string
+          source: string
+        }
+        Update: {
+          admin_detail?: string
+          affected_metrics?: string[]
+          email_status?: string
+          first_seen_at?: string
+          id?: string
+          issue_key?: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          period_end?: string | null
+          period_start?: string | null
+          project_id?: string
+          public_message?: string
+          resolved_at?: string | null
+          severity?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "data_quality_issues_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "data_quality_issues_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_logged_time: {
         Row: {
           corrected_at: string | null
@@ -329,7 +398,10 @@ export type Database = {
           name: string
           project_key: string
           project_type: string | null
+          quality_enforcement_enabled: boolean
+          quality_tracking_started_at: string | null
           report_template: string | null
+          reporting_state: string
           total_to_call: number | null
           updated_at: string | null
           vat_rate: number | null
@@ -345,7 +417,10 @@ export type Database = {
           name: string
           project_key: string
           project_type?: string | null
+          quality_enforcement_enabled?: boolean
+          quality_tracking_started_at?: string | null
           report_template?: string | null
+          reporting_state?: string
           total_to_call?: number | null
           updated_at?: string | null
           vat_rate?: number | null
@@ -361,7 +436,10 @@ export type Database = {
           name?: string
           project_key?: string
           project_type?: string | null
+          quality_enforcement_enabled?: boolean
+          quality_tracking_started_at?: string | null
           report_template?: string | null
+          reporting_state?: string
           total_to_call?: number | null
           updated_at?: string | null
           vat_rate?: number | null
@@ -495,7 +573,10 @@ export type Database = {
         Row: {
           completed_at: string | null
           error_message: string | null
+          expected_records: number
+          failed_records: number
           id: string
+          kind: string | null
           project_id: string | null
           records_synced: number | null
           started_at: string | null
@@ -506,7 +587,10 @@ export type Database = {
         Insert: {
           completed_at?: string | null
           error_message?: string | null
+          expected_records?: number
+          failed_records?: number
           id?: string
+          kind?: string | null
           project_id?: string | null
           records_synced?: number | null
           started_at?: string | null
@@ -517,7 +601,10 @@ export type Database = {
         Update: {
           completed_at?: string | null
           error_message?: string | null
+          expected_records?: number
+          failed_records?: number
           id?: string
+          kind?: string | null
           project_id?: string | null
           records_synced?: number | null
           started_at?: string | null
@@ -578,17 +665,23 @@ export type Database = {
       }
       projects_public: {
         Row: {
+          basicall_project_id: number | null
           created_at: string | null
           hours_factor: number | null
           id: string | null
           is_active: boolean | null
+          hourly_rate: number | null
           mapping_config: Json | null
           name: string | null
           project_key: string | null
           project_type: string | null
+          quality_enforcement_enabled: boolean | null
+          quality_tracking_started_at: string | null
+          reporting_state: string | null
           report_template: string | null
           total_to_call: number | null
           updated_at: string | null
+          vat_rate: number | null
         }
         Insert: {
           created_at?: string | null
@@ -599,6 +692,9 @@ export type Database = {
           name?: string | null
           project_key?: string | null
           project_type?: string | null
+          quality_enforcement_enabled?: boolean | null
+          quality_tracking_started_at?: string | null
+          reporting_state?: string | null
           report_template?: string | null
           total_to_call?: number | null
           updated_at?: string | null
@@ -612,6 +708,9 @@ export type Database = {
           name?: string | null
           project_key?: string | null
           project_type?: string | null
+          quality_enforcement_enabled?: boolean | null
+          quality_tracking_started_at?: string | null
+          reporting_state?: string | null
           report_template?: string | null
           total_to_call?: number | null
           updated_at?: string | null
@@ -670,6 +769,37 @@ export type Database = {
           cnt: number
           resultaat: string
         }[]
+      }
+      approve_project_mapping: {
+        Args: {
+          p_config: Json
+          p_hourly_rate?: number
+          p_hours_factor?: number
+          p_project_id: string
+          p_project_type?: string
+        }
+        Returns: number
+      }
+      get_project_data_quality: {
+        Args: {
+          p_end_date: string
+          p_project_id: string
+          p_start_date: string
+        }
+        Returns: {
+          blocked_metrics: string[]
+          messages: Json
+          status: string
+          verified_through: string
+        }[]
+      }
+      get_project_mapping_candidates: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      rollback_project_mapping: {
+        Args: { p_project_id: string; p_version: number }
+        Returns: number
       }
       get_result_code_distribution: {
         Args: Record<PropertyKey, never>

@@ -1,7 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw, Info } from 'lucide-react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw, Sparkles, ChevronDown, Info } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { DBProjectBase, MappingConfig, ProjectType, HoursSource } from '@/types/database';
-import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isSale, isUnreachable, categorizeNegativeResult, categorizeInboundResult, detectFrequencyFromConfig, classifyResultCoverage } from '@/lib/statsHelpers';
+import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType, isUnreachable, categorizeNegativeResult, detectFrequencyFromConfig, classifyResultCoverage } from '@/lib/statsHelpers';
 import { useResultDistribution } from '@/hooks/useResultDistribution';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -25,6 +32,8 @@ import {
 } from '@/components/ui/select';
 import { useProjectFieldOptions } from '@/hooks/useProjectFieldOptions';
 import { useConfigPreview } from '@/hooks/useConfigPreview';
+import { useMappingCandidates } from '@/hooks/useMappingCandidates';
+import { buildMappingSuggestion } from '@/lib/mappingTrust';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -57,6 +66,35 @@ const stableStringify = (v: unknown): string => {
   return JSON.stringify(v ?? null);
 };
 
+// Schoont een resultaat-lijst op vóór opslaan: trim, lege waarden eruit en
+// case-insensitief ontdubbelen (eerste spelling wint). Een trailing spatie in een
+// opgeslagen code ("Financiële reden ", Hersenstichting 849) brak de substring-match
+// en liet 102 records stil buiten elke categorie vallen — dat kan hiermee niet meer.
+const cleanResultList = (values: string[]): string[] => {
+  const seen = new Set<string>();
+  const clean: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    clean.push(trimmed);
+  }
+  return clean;
+};
+
+const cleanReasonCategories = (categories: Record<string, string[]>): Record<string, string[]> =>
+  Object.fromEntries(Object.entries(categories).map(([name, list]) => [name, cleanResultList(list)]));
+
+const cleanFreqMap = (freqMap: Record<string, number>): Record<string, number> => {
+  const clean: Record<string, number> = {};
+  for (const [key, value] of Object.entries(freqMap)) {
+    const trimmed = key.trim();
+    if (trimmed && !(trimmed.toLowerCase() in clean)) clean[trimmed.toLowerCase()] = value;
+  }
+  return clean;
+};
+
 // Kleuren per dekkings-categorie (Tailwind bar-classes). 'todo' = nog niet ingedeeld.
 const COVERAGE_COLORS: Record<string, string> = {
   positief: 'bg-emerald-500',
@@ -68,6 +106,7 @@ const COVERAGE_COLORS: Record<string, string> = {
   neg_notarg: 'bg-orange-500',
   verloren: 'bg-rose-500',
   niet_afgehandeld: 'bg-rose-500',
+  overig: 'bg-sky-500',
   todo: 'bg-fuchsia-500',
 };
 
@@ -80,6 +119,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [reasonCol, setReasonCol] = useState(project.mapping_config.reason_col || EMPTY_VALUE);
   const [locationCol, setLocationCol] = useState(project.mapping_config.location_col || AUTO_VALUE);
   const [saleResults, setSaleResults] = useState<string[]>(project.mapping_config.sale_results || []);
+  const [otherResults, setOtherResults] = useState<string[]>(project.mapping_config.other_results || []);
   const [freqMap, setFreqMap] = useState<Record<string, number>>(project.mapping_config.freq_map || {});
   const [newFreqKey, setNewFreqKey] = useState('');
   const [newFreqValue, setNewFreqValue] = useState('');
@@ -157,6 +197,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const [baselineKey, setBaselineKey] = useState<string | null>(null);
 
   const { availableFields, availableResults, availableFrequencyValues, isLoading } = useProjectFieldOptions(project.id, freqCol);
+  const { data: mappingCandidates, isLoading: candidatesLoading } = useMappingCandidates(project.id);
 
   // Projects that never saved unreachable/negative configs use the runtime
   // fallback in isUnreachable() / categorizeNegativeResult(). For the admin UI
@@ -196,7 +237,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   const amountColMissing = hasData && !!amountCol && !availableFields.includes(amountCol);
   const freqColMissing = hasData && !!freqCol && !availableFields.includes(freqCol);
   const freqMapMissingCount = availableFrequencyValues.filter(
-    (v) => !Object.keys(freqMap).some((k) => v.includes(k.toLowerCase()) || k.toLowerCase().includes(v))
+    (value) => !Object.keys(freqMap).some(
+      (key) => key.trim().toLowerCase() === value.trim().toLowerCase(),
+    ),
   ).length;
 
   // Build clean weekday_rates (filter out undefined)
@@ -208,40 +251,44 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     return Object.keys(clean).length > 0 ? clean : undefined;
   };
 
-  // Build current mapping config for preview.
+  // Build current mapping config (preview ÉN opslaan — één bron, zie handleSave).
   // Spread de bestaande config eerst zodat velden die deze tool NIET beheert (bv.
   // flat_sale_value op 827) niet stilletjes gewist worden bij opslaan; de beheerde
-  // velden hieronder overschrijven ze.
-  const currentMappingConfig: MappingConfig = {
+  // velden hieronder overschrijven ze. Alle resultaat-lijsten gaan door
+  // cleanResultList zodat er nooit rommel (spaties, lege of dubbele waarden) in
+  // de opgeslagen config terechtkomt.
+  const composeMappingConfig = (): MappingConfig => ({
     ...project.mapping_config,
     amount_col: amountCol,
     freq_col: freqCol,
     reason_col: reasonCol === EMPTY_VALUE ? '' : reasonCol,
     location_col: locationCol === AUTO_VALUE ? '' : locationCol,
-    freq_map: freqMap,
-    sale_results: saleResults,
-    retention_results: retentionResults,
-    lost_results: lostResults,
-    partial_success_results: partialSuccessResults,
-    unreachable_results: unreachableResults,
-    negative_argumentated: negativeArgumentated,
-    negative_not_argumentated: negativeNotArgumentated,
-    exclude_from_net: excludeFromNet,
-    exclude_from_retention: excludeFromRetention,
+    freq_map: cleanFreqMap(freqMap),
+    sale_results: cleanResultList(saleResults),
+    other_results: cleanResultList(otherResults),
+    retention_results: cleanResultList(retentionResults),
+    lost_results: cleanResultList(lostResults),
+    partial_success_results: cleanResultList(partialSuccessResults),
+    unreachable_results: cleanResultList(unreachableResults),
+    negative_argumentated: cleanResultList(negativeArgumentated),
+    negative_not_argumentated: cleanResultList(negativeNotArgumentated),
+    exclude_from_net: cleanResultList(excludeFromNet),
+    exclude_from_retention: cleanResultList(excludeFromRetention),
     weekday_rates: cleanWeekdayRates(),
-    handled_results: handledResults,
-    not_handled_results: notHandledResults,
-    flat_voicemail_results: flatVoicemailResults,
-    flat_nawt_results: flatNawtResults,
+    handled_results: cleanResultList(handledResults),
+    not_handled_results: cleanResultList(notHandledResults),
+    flat_voicemail_results: cleanResultList(flatVoicemailResults),
+    flat_nawt_results: cleanResultList(flatNawtResults),
     service_targets: {
       bereikbaarheid: serviceTargetBereikbaarheid,
       service_level: serviceTargetServiceLevel,
       service_level_sec: serviceTargetSeconds,
     },
-    reason_categories: reasonCategories,
+    reason_categories: cleanReasonCategories(reasonCategories),
     cost_per_sale: costPerSale > 0 ? costPerSale : undefined,
     hours_source: hoursSource,
-  };
+  });
+  const currentMappingConfig = composeMappingConfig();
 
   const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
     projectId: project.id,
@@ -257,6 +304,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setReasonCol(project.mapping_config.reason_col || EMPTY_VALUE);
     setLocationCol(project.mapping_config.location_col || AUTO_VALUE);
     setSaleResults(project.mapping_config.sale_results || []);
+    setOtherResults(project.mapping_config.other_results || []);
     setFreqMap(project.mapping_config.freq_map || {});
     setRetentionResults(project.mapping_config.retention_results || []);
     setLostResults(project.mapping_config.lost_results || []);
@@ -291,39 +339,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   }, [project.id, loadFromProject]);
 
   const handleSave = async () => {
-    // Spread bestaande config eerst (zie currentMappingConfig): behoudt niet-beheerde
-    // velden zoals flat_sale_value op 827 zodat opslaan ze niet wist.
-    const mappingConfig: MappingConfig = {
-      ...project.mapping_config,
-      amount_col: amountCol,
-      freq_col: freqCol,
-      reason_col: reasonCol === EMPTY_VALUE ? '' : reasonCol,
-      location_col: locationCol === AUTO_VALUE ? '' : locationCol,
-      freq_map: freqMap,
-      sale_results: saleResults,
-      retention_results: retentionResults,
-      lost_results: lostResults,
-      partial_success_results: partialSuccessResults,
-      unreachable_results: unreachableResults,
-      negative_argumentated: negativeArgumentated,
-      negative_not_argumentated: negativeNotArgumentated,
-      exclude_from_net: excludeFromNet,
-      exclude_from_retention: excludeFromRetention,
-      weekday_rates: cleanWeekdayRates(),
-      handled_results: handledResults,
-      not_handled_results: notHandledResults,
-      flat_voicemail_results: flatVoicemailResults,
-      flat_nawt_results: flatNawtResults,
-      service_targets: {
-        bereikbaarheid: serviceTargetBereikbaarheid,
-        service_level: serviceTargetServiceLevel,
-        service_level_sec: serviceTargetSeconds,
-      },
-      reason_categories: reasonCategories,
-      cost_per_sale: costPerSale > 0 ? costPerSale : undefined,
-      hours_source: hoursSource,
-    };
-    await onSave(project.id, hourlyRate, mappingConfig, projectType, hoursFactor);
+    // Zelfde bouwer als de preview (composeMappingConfig): wat je in het
+    // rechterpaneel ziet is exact wat er wordt opgeslagen — inclusief opschoning.
+    await onSave(project.id, hourlyRate, composeMappingConfig(), projectType, hoursFactor);
   };
 
   const addFreqMapping = () => {
@@ -359,7 +377,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   // een andere dimensie (waarom een donateur verloren is, niet of het positief/
   // negatief telt). Dezelfde code kan dus tegelijk in lost_results én in
   // reason_categories.Overleden voorkomen.
-  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults, ...flatVoicemailResults, ...flatNawtResults];
+  const allSelected = [...saleResults, ...retentionResults, ...lostResults, ...partialSuccessResults, ...handledResults, ...notHandledResults, ...unreachableResults, ...negativeArgumentated, ...negativeNotArgumentated, ...otherResults, ...flatVoicemailResults, ...flatNawtResults];
   const availableResultsFiltered = availableResults.filter((r) => !allSelected.includes(r));
   // Dropdown-filter specifiek voor reason-categorieën: elke code mag in
   // precies één reason-categorie zitten, maar onafhankelijk van de outcome-
@@ -382,6 +400,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       check('Gedeeltelijk Succes', partialSuccessResults) ||
       check('Afgehandeld', handledResults) ||
       check('Niet Afgehandeld', notHandledResults) ||
+      check('Overig', otherResults) ||
       check('Max voicemail', flatVoicemailResults) ||
       check('NAWT fout', flatNawtResults)
       // reason_categories bewust niet meegenomen: reden is een orthogonale
@@ -508,6 +527,55 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     setBaselineKey(null);
   };
 
+  const handleApplySuggestions = () => {
+    if (!mappingCandidates) return;
+    const suggestion = buildMappingSuggestion(mappingCandidates, projectType);
+    const merge = (current: string[], proposed: string[] | undefined) =>
+      [...new Set([...current, ...(proposed ?? [])])];
+    const claimed = new Set(allSelected.map((value) => value.trim().toLowerCase()));
+    const takeUnclaimed = (proposed: string[] | undefined) => (proposed ?? []).filter((value) => {
+      const key = value.trim().toLowerCase();
+      if (claimed.has(key)) return false;
+      claimed.add(key);
+      return true;
+    });
+    const proposals = {
+      sale: takeUnclaimed(suggestion.categories.sale_results),
+      retention: takeUnclaimed(suggestion.categories.retention_results),
+      lost: takeUnclaimed(suggestion.categories.lost_results),
+      partial: takeUnclaimed(suggestion.categories.partial_success_results),
+      handled: takeUnclaimed(suggestion.categories.handled_results),
+      notHandled: takeUnclaimed(suggestion.categories.not_handled_results),
+      unreachable: takeUnclaimed(suggestion.categories.unreachable_results),
+      negativeArgumentated: takeUnclaimed(suggestion.categories.negative_argumentated),
+      negativeNotArgumentated: takeUnclaimed(suggestion.categories.negative_not_argumentated),
+      other: takeUnclaimed(suggestion.categories.other_results),
+    };
+
+    if (suggestion.amount_col) setAmountCol(suggestion.amount_col);
+    if (suggestion.freq_col) setFreqCol(suggestion.freq_col);
+    if (suggestion.reason_col) setReasonCol(suggestion.reason_col);
+    if (suggestion.location_col) setLocationCol(suggestion.location_col);
+    // Alleen frequenties aanvullen die nog niet zijn vastgelegd. De categorieën hieronder
+    // zijn via takeUnclaimed/merge al beschermd; zonder dezelfde bescherming zou een klik
+    // op "Voorstellen invullen" een handmatig gekozen vermenigvuldiger stil overschrijven.
+    setFreqMap((current) => ({ ...suggestion.freq_map, ...current }));
+    setSaleResults((current) => merge(current, proposals.sale));
+    setRetentionResults((current) => merge(current, proposals.retention));
+    setLostResults((current) => merge(current, proposals.lost));
+    setPartialSuccessResults((current) => merge(current, proposals.partial));
+    setHandledResults((current) => merge(current, proposals.handled));
+    setNotHandledResults((current) => merge(current, proposals.notHandled));
+    setUnreachableResults((current) => merge(current, proposals.unreachable));
+    setNegativeArgumentated((current) => merge(current, proposals.negativeArgumentated));
+    setNegativeNotArgumentated((current) => merge(current, proposals.negativeNotArgumentated));
+    setOtherResults((current) => merge(current, proposals.other));
+    toast({
+      title: 'Voorstellen ingevuld',
+      description: 'Controleer de categorieën en frequenties. Ze worden pas actief nadat je de mapping goedkeurt.',
+    });
+  };
+
   // Categorie-dekking: classificeer elke resultaat-code (gewogen naar volume) precies
   // zoals het dashboard dat doet, met de HUIDIGE config. De 'todo'-bucket = codes die
   // nog in geen enkele categorie vallen — dé onboarding-signaalwaarde.
@@ -523,6 +591,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         { key: 'onbereikbaar', label: 'Niet bereikbaar' },
         { key: 'neg_arg', label: 'Negatief beargumenteerd' },
         { key: 'neg_notarg', label: 'Negatief niet bearg.' },
+        { key: 'overig', label: 'Overig (bewust)' },
         { key: 'todo', label: 'Nog niet ingedeeld' },
       ],
       inbound: [
@@ -530,22 +599,24 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
         { key: 'partial', label: 'Gedeeltelijk succes' },
         { key: 'verloren', label: 'Verloren' },
         { key: 'onbereikbaar', label: 'Niet bereikbaar' },
+        { key: 'overig', label: 'Overig (bewust)' },
         { key: 'todo', label: 'Nog niet ingedeeld' },
       ],
       inbound_service: [
         { key: 'afgehandeld', label: 'Afgehandeld' },
         { key: 'niet_afgehandeld', label: 'Niet afgehandeld' },
+        { key: 'overig', label: 'Overig (bewust)' },
         { key: 'todo', label: 'Nog niet ingedeeld' },
       ],
     };
 
     const counts: Record<string, number> = {};
-    const codes: Record<string, string[]> = {};
+    const codes: Record<string, { value: string; cnt: number }[]> = {};
     let total = 0;
     for (const { resultaat, cnt } of resultDist) {
       const k = classify(resultaat);
       counts[k] = (counts[k] || 0) + cnt;
-      (codes[k] ||= []).push(resultaat);
+      (codes[k] ||= []).push({ value: resultaat, cnt });
       total += cnt;
     }
     const rows = labels[projectType].map(({ key, label }) => ({
@@ -554,9 +625,34 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       count: counts[key] || 0,
       pct: total > 0 ? ((counts[key] || 0) / total) * 100 : 0,
     }));
-    return { total, rows, todoCount: counts['todo'] || 0, todoCodes: codes['todo'] || [] };
+    // Hoogste volume eerst: de code die het cijfer het meest scheeftrekt bovenaan.
+    const todoCodes = (codes['todo'] || []).sort((a, b) => b.cnt - a.cnt);
+    return { total, rows, todoCount: counts['todo'] || 0, todoCodes };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resultDist, projectType, saleResults, unreachableResults, negativeArgumentated, negativeNotArgumentated, retentionResults, lostResults, partialSuccessResults, handledResults, notHandledResults]);
+  }, [resultDist, projectType, saleResults, unreachableResults, negativeArgumentated, negativeNotArgumentated, retentionResults, lostResults, partialSuccessResults, handledResults, notHandledResults, otherResults]);
+
+  // Categorieën waarin een nog-niet-ingedeelde code direct geklikt kan worden
+  // (zelfde indeling als classify() hierboven, per projecttype). Na een klik
+  // verdwijnt de code uit "Nog niet ingedeeld" en wordt de mapping 'dirty' —
+  // opslaan gebeurt zoals altijd via "Mapping goedkeuren".
+  const todoAssignTargets: { label: string; add: (code: string) => void }[] =
+    projectType === 'outbound' ? [
+      { label: '✅ Positief', add: (c) => setSaleResults((prev) => [...prev, c]) },
+      { label: '📵 Niet bereikbaar', add: (c) => setUnreachableResults((prev) => [...prev, c]) },
+      { label: '💬 Negatief beargumenteerd', add: (c) => setNegativeArgumentated((prev) => [...prev, c]) },
+      { label: '🛡️ Negatief niet beargumenteerd', add: (c) => setNegativeNotArgumentated((prev) => [...prev, c]) },
+      { label: '📎 Overig (bewust neutraal)', add: (c) => setOtherResults((prev) => [...prev, c]) },
+    ] : projectType === 'inbound' ? [
+      { label: '✅ Behouden', add: (c) => setRetentionResults((prev) => [...prev, c]) },
+      { label: '🔄 Gedeeltelijk succes', add: (c) => setPartialSuccessResults((prev) => [...prev, c]) },
+      { label: '❌ Verloren', add: (c) => setLostResults((prev) => [...prev, c]) },
+      { label: '📵 Niet bereikbaar', add: (c) => setUnreachableResults((prev) => [...prev, c]) },
+      { label: '📎 Overig (bewust neutraal)', add: (c) => setOtherResults((prev) => [...prev, c]) },
+    ] : [
+      { label: '✅ Afgehandeld', add: (c) => setHandledResults((prev) => [...prev, c]) },
+      { label: '❌ Niet afgehandeld', add: (c) => setNotHandledResults((prev) => [...prev, c]) },
+      { label: '📎 Overig (bewust neutraal)', add: (c) => setOtherResults((prev) => [...prev, c]) },
+    ];
 
   return (
     <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
@@ -568,7 +664,17 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
           </h2>
           <p className="text-muted-foreground text-sm">Beheer veldmappings, tarieven en resultaat categorieën.</p>
         </div>
-        {isLoading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleApplySuggestions}
+          disabled={isLoading || candidatesLoading || !mappingCandidates}
+          className="gap-2"
+        >
+          {isLoading || candidatesLoading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+          Voorstellen invullen
+        </Button>
       </div>
 
       {/* Project Type Selector */}
@@ -748,6 +854,17 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             </AccordionItem>
           </>
         )}
+
+        <AccordionItem value="other_results" className="border border-border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-semibold">📎 Overig — bewust neutraal ({otherResults.length})</AccordionTrigger>
+          <AccordionContent className="space-y-4 pt-4">
+            <p className="text-xs text-muted-foreground">
+              Codes die bewust geen positieve, negatieve, retentie- of servicecategorie zijn. Nieuwe codes blijven als controlepunt zichtbaar totdat je ze hier of elders indeelt.
+            </p>
+            {renderResultBadges(otherResults, (r) => setOtherResults(otherResults.filter((x) => x !== r)))}
+            {renderResultSelect((r) => setOtherResults([...otherResults, r]))}
+          </AccordionContent>
+        </AccordionItem>
 
         {/* Inbound-retention-template: reden-breakdown voor opzeggers.
             Alleen zichtbaar als het project-template 'inbound_retention' is.
@@ -1158,7 +1275,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
                         const amount = typeof record.amountRaw === 'number'
                           ? record.amountRaw
                           : record.amountRaw
-                            ? parseFloat(String(record.amountRaw).replace(',', '.').replace(/[^0-9.\-]/g, '')) || 0
+                            ? parseFloat(String(record.amountRaw).replace(',', '.').replace(/[^0-9.-]/g, '')) || 0
                             : 0;
                         return (
                           <TableRow key={record.recordId}>
@@ -1273,7 +1390,7 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             </div>
             <Button onClick={handleSave} disabled={isSaving} className="w-full flex items-center gap-2">
               {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-              {isSaving ? 'Opslaan...' : 'Configuratie opslaan'}
+              {isSaving ? 'Goedkeuren...' : 'Mapping goedkeuren'}
             </Button>
             {isDirty && (
               <button
@@ -1344,12 +1461,36 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             {coverage.todoCount > 0 && (
               <div className="mt-3 rounded-md border border-fuchsia-300 dark:border-fuchsia-900 bg-fuchsia-50 dark:bg-fuchsia-950/30 p-2 text-[11px] text-fuchsia-800 dark:text-fuchsia-200">
                 <div className="flex items-center gap-1 font-semibold mb-1"><AlertTriangle size={12} /> {coverage.todoCount.toLocaleString('nl-NL')} records nog niet ingedeeld</div>
-                <p className="mb-1 opacity-90">Deel deze codes in via de categorieën links:</p>
+                <p className="mb-1 opacity-90">Klik op een code en kies een categorie. Sla daarna op via <strong>Mapping goedkeuren</strong>.</p>
                 <div className="flex flex-wrap gap-1">
-                  {coverage.todoCodes.slice(0, 10).map((c) => (
-                    <span key={c} className="rounded bg-fuchsia-500/15 px-1.5 py-0.5">{c}</span>
+                  {coverage.todoCodes.slice(0, 30).map((c) => (
+                    <DropdownMenu key={c.value}>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded bg-fuchsia-500/15 px-1.5 py-0.5 hover:bg-fuchsia-500/30 transition-colors inline-flex items-center gap-1"
+                          title={`${c.cnt.toLocaleString('nl-NL')} records — klik om in te delen`}
+                        >
+                          {c.value}
+                          <span className="opacity-70 tabular-nums">({c.cnt.toLocaleString('nl-NL')})</span>
+                          <ChevronDown size={10} className="opacity-70" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuLabel className="text-xs">"{c.value}" indelen als…</DropdownMenuLabel>
+                        {todoAssignTargets.map((target) => (
+                          <DropdownMenuItem
+                            key={target.label}
+                            className="text-xs cursor-pointer"
+                            onClick={() => target.add(c.value)}
+                          >
+                            {target.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ))}
-                  {coverage.todoCodes.length > 10 && <span className="opacity-70">+{coverage.todoCodes.length - 10} meer</span>}
+                  {coverage.todoCodes.length > 30 && <span className="opacity-70">+{coverage.todoCodes.length - 30} meer (deel eerst bovenstaande in)</span>}
                 </div>
               </div>
             )}

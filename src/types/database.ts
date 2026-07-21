@@ -2,6 +2,35 @@
 
 export type ProjectType = 'outbound' | 'inbound' | 'inbound_service';
 
+export type ReportingState = 'live' | 'paused' | 'ended';
+
+export type DataQualityStatus = 'verified' | 'attention' | 'blocked' | 'historical';
+
+export type QualityMetric =
+  | 'records'
+  | 'sales'
+  | 'annual_value'
+  | 'conversion'
+  | 'retention'
+  | 'service'
+  | 'hours'
+  | 'costs'
+  | 'analysis'
+  | 'export';
+
+export interface DataQualityMessage {
+  code: string;
+  severity: 'info' | 'warning' | 'critical';
+  text: string;
+}
+
+export interface ProjectDataQuality {
+  status: DataQualityStatus;
+  verified_through: string | null;
+  blocked_metrics: QualityMetric[];
+  messages: DataQualityMessage[];
+}
+
 // Optional report template per project. NULL = legacy behavior.
 // Set by admin to switch UI + Excel export to historical rapportage layout.
 export type ReportTemplate =
@@ -53,6 +82,9 @@ export interface MappingConfig {
   location_col?: string; // Veld voor locatie/stad data
   freq_map: Record<string, number>;
   sale_results: string[];
+  // Bewust neutrale resultaatcodes. Door deze expliciet vast te leggen kan een
+  // nieuwe BasiCall-code niet stilzwijgend als "overig" in KPI's belanden.
+  other_results?: string[];
   // Vast bedrag per sale (excl. btw) voor lead-/aanmeldcampagnes die per sale betaald
   // worden i.p.v. een donatie met termijnbedrag×frequentie.
   // Indien gezet (>0) telt elke sale exact dit bedrag als (jaar)WAARDE (bv. ANBO Tipgids 827).
@@ -142,6 +174,9 @@ export interface DBProject {
   total_to_call: number | null;
   hours_factor: number;
   report_template: ReportTemplate | null;
+  reporting_state: ReportingState;
+  quality_enforcement_enabled: boolean;
+  quality_tracking_started_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -154,7 +189,7 @@ export interface DBCallRecord {
   beltijd: string | null;
   gesprekstijd_sec: number;
   resultaat: string | null;
-  raw_data: Record<string, any> | null;
+  raw_data: Record<string, string | number | boolean | null> | null;
   week_number: number | null;
   synced_at: string;
 }
@@ -164,8 +199,10 @@ export interface DBSyncLog {
   project_id: string;
   started_at: string;
   completed_at: string | null;
-  status: 'running' | 'success' | 'failed';
+  status: 'running' | 'success' | 'warning' | 'failed';
   records_synced: number;
+  expected_records: number;
+  failed_records: number;
   error_message: string | null;
   sync_from: string | null;
   sync_to: string | null;
@@ -210,6 +247,9 @@ export interface DBProjectPublic {
   total_to_call: number | null;
   hours_factor: number;
   report_template: ReportTemplate | null;
+  reporting_state: ReportingState;
+  quality_enforcement_enabled: boolean;
+  quality_tracking_started_at: string | null;
   created_at: string;
   updated_at: string;
   // GEEN basicall_token - dit is het verschil met DBProject

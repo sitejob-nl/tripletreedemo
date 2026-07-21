@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PhoneOutgoing, PhoneIncoming, Headphones } from "lucide-react";
-import type { MappingConfig, ProjectType, ReportTemplate } from "@/types/database";
+import type { MappingConfig, ProjectType, ReportingState, ReportTemplate } from "@/types/database";
 
 export interface ProjectFormData {
   name: string;
@@ -14,6 +14,8 @@ export interface ProjectFormData {
   hourly_rate: string;
   vat_rate: string;
   is_active: boolean;
+  reporting_state: ReportingState;
+  quality_enforcement_enabled: boolean;
   project_type: ProjectType;
   mapping_config: MappingConfig;
   total_to_call: string;
@@ -49,7 +51,7 @@ export function ProjectDialog({
   isSaving,
   isEditing
 }: ProjectDialogProps) {
-  const updateMappingConfig = (key: keyof MappingConfig, value: any) => {
+  const updateMappingConfig = <K extends keyof MappingConfig>(key: K, value: MappingConfig[K]) => {
     setFormData(prev => ({
       ...prev,
       mapping_config: {
@@ -115,6 +117,35 @@ export function ProjectDialog({
                 onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
               />
               <Label>Project actief</Label>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="reporting_state">Rapportagestatus</Label>
+              <Select
+                value={formData.reporting_state}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, reporting_state: value as ReportingState }))}
+              >
+                <SelectTrigger id="reporting_state"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="live">Live — dagelijks synchroniseren en bewaken</SelectItem>
+                  <SelectItem value="paused">Gepauzeerd — historie zichtbaar, geen nieuwe data verwacht</SelectItem>
+                  <SelectItem value="ended">Beëindigd — alleen historische rapportage</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg border p-3">
+              <Switch
+                id="quality-enforcement"
+                checked={formData.quality_enforcement_enabled}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, quality_enforcement_enabled: checked }))}
+              />
+              <div>
+                <Label htmlFor="quality-enforcement">Onbetrouwbare cijfers gericht blokkeren</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pas activeren nadat de mappingvoorstellen en nulmeting voor dit project zijn goedgekeurd.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-2">

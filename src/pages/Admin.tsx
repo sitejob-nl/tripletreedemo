@@ -45,6 +45,8 @@ const emptyFormData: ProjectFormData = {
   hourly_rate: "35.00",
   vat_rate: "21",
   is_active: true,
+  reporting_state: "live",
+  quality_enforcement_enabled: false,
   project_type: "outbound",
   mapping_config: defaultMappingConfig,
   total_to_call: "",
@@ -84,6 +86,8 @@ export default function Admin() {
       hourly_rate: String(project.hourly_rate),
       vat_rate: String(project.vat_rate),
       is_active: project.is_active,
+      reporting_state: project.reporting_state ?? "live",
+      quality_enforcement_enabled: project.quality_enforcement_enabled ?? false,
       project_type: project.project_type ?? "outbound",
       mapping_config: project.mapping_config,
       total_to_call: project.total_to_call ? String(project.total_to_call) : "",
@@ -113,8 +117,12 @@ export default function Admin() {
       hourly_rate: parseFloat(formData.hourly_rate),
       vat_rate: parseInt(formData.vat_rate),
       is_active: formData.is_active,
+      reporting_state: formData.reporting_state,
+      quality_enforcement_enabled: formData.quality_enforcement_enabled,
+      quality_tracking_started_at: formData.quality_enforcement_enabled
+        ? (editingProject?.quality_tracking_started_at ?? new Date().toISOString().slice(0, 10))
+        : null,
       project_type: formData.project_type,
-      mapping_config: JSON.parse(JSON.stringify(formData.mapping_config)),
       total_to_call: formData.total_to_call ? parseInt(formData.total_to_call) : null,
       hours_factor: parseFloat(formData.hours_factor) || 1.0,
       report_template: formData.report_template
@@ -125,6 +133,19 @@ export default function Admin() {
       let justCreated = false;
 
       if (editingProject) {
+        const mappingNeedsApproval = JSON.stringify(formData.mapping_config) !== JSON.stringify(editingProject.mapping_config)
+          || formData.project_type !== editingProject.project_type;
+        if (mappingNeedsApproval) {
+          const { error: mappingError } = await supabase.rpc("approve_project_mapping", {
+            p_project_id: editingProject.id,
+            p_config: JSON.parse(JSON.stringify(formData.mapping_config)),
+            p_project_type: formData.project_type,
+            p_hourly_rate: parseFloat(formData.hourly_rate),
+            p_hours_factor: parseFloat(formData.hours_factor) || 1.0,
+          });
+          if (mappingError) throw mappingError;
+        }
+
         const { error } = await supabase
           .from("projects")
           .update(projectData)
@@ -132,9 +153,13 @@ export default function Admin() {
         if (error) throw error;
         projectId = editingProject.id;
       } else {
+        const newProjectData = {
+          ...projectData,
+          mapping_config: JSON.parse(JSON.stringify(formData.mapping_config)),
+        };
         const { data, error } = await supabase
           .from("projects")
-          .insert(projectData)
+          .insert(newProjectData)
           .select("id")
           .single();
         if (error) throw error;
@@ -167,6 +192,23 @@ export default function Admin() {
           throw new Error(
             `Token opslaan mislukt: ${tokenError.message}. Project niet aangemaakt.`
           );
+        }
+      }
+
+      if (justCreated) {
+        const { error: mappingError } = await supabase.rpc("approve_project_mapping", {
+          p_project_id: projectId,
+          p_config: JSON.parse(JSON.stringify(formData.mapping_config)),
+          p_project_type: formData.project_type,
+          p_hourly_rate: parseFloat(formData.hourly_rate),
+          p_hours_factor: parseFloat(formData.hours_factor) || 1.0,
+        });
+        if (mappingError) {
+          const { error: cleanupError } = await supabase.from("projects").delete().eq("id", projectId);
+          if (cleanupError) {
+            throw new Error(`Mappingvalidatie mislukt (${mappingError.message}); verwijder het onvolledige project handmatig.`);
+          }
+          throw new Error(`Mappingvalidatie mislukt: ${mappingError.message}. Project niet aangemaakt.`);
         }
       }
 
