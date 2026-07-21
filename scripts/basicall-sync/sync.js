@@ -595,12 +595,29 @@ async function syncLoggedTimeSingleDay(project, start, end) {
     }
 }
 
+// Haalt de kalenderdag uit een BasiCall-timestamp ("2026-07-14 18:45:31" → "2026-07-14").
+// BasiCall gebruikt "0000-00-00 00:00:00" als "leeg"; die mag nooit als datum gelden.
+function dateFromTimestamp(value) {
+    if (!value) return null;
+    const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    const [, y, m, d] = match;
+    if (y === '0000' || m === '00' || d === '00') return null;
+    return `${y}-${m}-${d}`;
+}
+
 // --- FETCH ENKEL RECORD (met retry) ---
-// fallbackDate (YYYY-MM-DD) vangt records op waarvan BasiCall bc_beldatum leeg laat. Dat
-// gebeurt structureel bij dialer-uitkomsten als 'Geen gehoor'. Het ID kwam uit
-// Record.getAfgehandeldIds voor precies die dag, dus die dag is de juiste beldatum.
-// Zonder deze fallback verdwenen zulke records stilzwijgend uit het dashboard — bij KIA
-// ging het om bijna de helft van alle belpogingen.
+// Datumbepaling, in volgorde van betrouwbaarheid:
+//   1. bc_beldatum — leeg bij dialer-uitkomsten ('Geen gehoor', 'In gesprek', 'Blacklisted').
+//   2. bc_starttijd_script — het moment dat het belscript startte. Altijd gevuld en correct,
+//      OOK bij die dialer-uitkomsten. Dit is de eigenlijke bron van waarheid.
+//   3. fallbackDate — de bevraagde kalenderdag; alleen bruikbaar bij een sync van één dag.
+//
+// Stap 2 is toegevoegd 21-07-2026 na aantoonbaar dataverlies (1367 records in week 29).
+// Voorheen bestond alleen 1 en 3, waardoor élke meerdaagse backfill (fallbackDate = null)
+// records zonder bc_beldatum stil weggooide — precies de records die hersteld moesten worden.
+// bc_starttijd_gesprek is BEWUST niet gebruikt: dat staat op "0000-00-00 00:00:00" zodra er
+// geen gesprek tot stand kwam, wat bij deze categorie juist de regel is.
 async function fetchRecordDetail(id, project, fallbackDate = null) {
     const respBody = await soapCall(
         'Record.get',
@@ -623,6 +640,7 @@ async function fetchRecordDetail(id, project, fallbackDate = null) {
         isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
 
+    if (!isoDate) isoDate = dateFromTimestamp(cleanRecord.bc_starttijd_script);
     if (!isoDate) isoDate = fallbackDate;
     if (!isoDate) return null;
 
