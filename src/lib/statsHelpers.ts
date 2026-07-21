@@ -299,24 +299,33 @@ export const UNREACHABLE_RESULTS = [
   'leeg',
 ];
 
+// Substring-match tegen een config-lijst. Trimt óók de config-entry: een per
+// ongeluk opgeslagen "Financiële reden " (trailing spatie, Hersenstichting 849)
+// matcht anders stil op niets en de code valt buiten elke categorie.
+const matchesAny = (lower: string, entries: string[]): boolean =>
+  entries.some(r => {
+    const entry = r.toLowerCase().trim();
+    return entry !== '' && lower.includes(entry);
+  });
+
 export const categorizeNegativeResult = (
   resultName: string,
   config?: MappingConfig
 ): 'argumentated' | 'not_argumentated' | 'unknown' => {
   const lower = resultName.toLowerCase().trim();
-  
+
   // Union: project-config vult de hardcoded defaults AAN i.p.v. ze te vervangen.
   const argumentated = [...(config?.negative_argumentated ?? []), ...NEGATIVE_ARGUMENTATED];
   const notArgumentated = [...(config?.negative_not_argumentated ?? []), ...NEGATIVE_NOT_ARGUMENTATED];
-  
-  if (argumentated.some(r => lower.includes(r.toLowerCase()))) {
+
+  if (matchesAny(lower, argumentated)) {
     return 'argumentated';
   }
-  
-  if (notArgumentated.some(r => lower.includes(r.toLowerCase()))) {
+
+  if (matchesAny(lower, notArgumentated)) {
     return 'not_argumentated';
   }
-  
+
   return 'unknown';
 };
 
@@ -325,7 +334,7 @@ export const isUnreachable = (resultName: string, config?: MappingConfig): boole
   // Union: project-config vult de defaults AAN i.p.v. ze te vervangen, zodat een
   // project met een eigen (incomplete) lijst de universele niet-bereikt-codes niet mist.
   const unreachable = [...(config?.unreachable_results ?? []), ...UNREACHABLE_RESULTS];
-  return unreachable.some(r => lower.includes(r.toLowerCase()));
+  return matchesAny(lower, unreachable);
 };
 
 // Marks a result-code as "do not count in netto conversion denominator"
@@ -333,14 +342,14 @@ export const isUnreachable = (resultName: string, config?: MappingConfig): boole
 export const isExcludedFromNet = (resultName: string, config?: MappingConfig): boolean => {
   if (!config?.exclude_from_net?.length) return false;
   const lower = resultName.toLowerCase().trim();
-  return config.exclude_from_net.some(r => lower.includes(r.toLowerCase()));
+  return matchesAny(lower, config.exclude_from_net);
 };
 
 // Marks a result-code as "do not count in retention ratio denominator"
 export const isExcludedFromRetention = (resultName: string, config?: MappingConfig): boolean => {
   if (!config?.exclude_from_retention?.length) return false;
   const lower = resultName.toLowerCase().trim();
-  return config.exclude_from_retention.some(r => lower.includes(r.toLowerCase()));
+  return matchesAny(lower, config.exclude_from_retention);
 };
 
 // Positieve/sale-resultaten. Net als UNREACHABLE_RESULTS een UNION van project-config
@@ -410,17 +419,17 @@ export const categorizeInboundResult = (
   }
   
   // Check retention results
-  if (config.retention_results?.some(r => lower.includes(r.toLowerCase()))) {
+  if (matchesAny(lower, config.retention_results ?? [])) {
     return 'retained';
   }
-  
+
   // Check lost results
-  if (config.lost_results?.some(r => lower.includes(r.toLowerCase()))) {
+  if (matchesAny(lower, config.lost_results ?? [])) {
     return 'lost';
   }
-  
+
   // Check partial success results
-  if (config.partial_success_results?.some(r => lower.includes(r.toLowerCase()))) {
+  if (matchesAny(lower, config.partial_success_results ?? [])) {
     return 'partial';
   }
   

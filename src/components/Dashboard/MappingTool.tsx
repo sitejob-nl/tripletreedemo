@@ -1,5 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw, Sparkles } from 'lucide-react';
+import { Settings, CheckCircle, Plus, X, Loader2, PhoneIncoming, PhoneOutgoing, Headphones, Eye, RefreshCw, AlertTriangle, ShieldOff, MessageSquareOff, PhoneOff, Ban, RotateCcw, Sparkles, ChevronDown } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { DBProjectBase, MappingConfig, ProjectType, HoursSource } from '@/types/database';
 import { UNREACHABLE_RESULTS, NEGATIVE_ARGUMENTATED, NEGATIVE_NOT_ARGUMENTATED, getFrequencyLabel, FrequencyType } from '@/lib/statsHelpers';
 import { useResultDistribution } from '@/hooks/useResultDistribution';
@@ -55,6 +62,35 @@ const stableStringify = (v: unknown): string => {
       .join(',')}}`;
   }
   return JSON.stringify(v ?? null);
+};
+
+// Schoont een resultaat-lijst op vóór opslaan: trim, lege waarden eruit en
+// case-insensitief ontdubbelen (eerste spelling wint). Een trailing spatie in een
+// opgeslagen code ("Financiële reden ", Hersenstichting 849) brak de substring-match
+// en liet 102 records stil buiten elke categorie vallen — dat kan hiermee niet meer.
+const cleanResultList = (values: string[]): string[] => {
+  const seen = new Set<string>();
+  const clean: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    clean.push(trimmed);
+  }
+  return clean;
+};
+
+const cleanReasonCategories = (categories: Record<string, string[]>): Record<string, string[]> =>
+  Object.fromEntries(Object.entries(categories).map(([name, list]) => [name, cleanResultList(list)]));
+
+const cleanFreqMap = (freqMap: Record<string, number>): Record<string, number> => {
+  const clean: Record<string, number> = {};
+  for (const [key, value] of Object.entries(freqMap)) {
+    const trimmed = key.trim();
+    if (trimmed && !(trimmed.toLowerCase() in clean)) clean[trimmed.toLowerCase()] = value;
+  }
+  return clean;
 };
 
 // Kleuren per dekkings-categorie (Tailwind bar-classes). 'todo' = nog niet ingedeeld.
@@ -213,41 +249,44 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     return Object.keys(clean).length > 0 ? clean : undefined;
   };
 
-  // Build current mapping config for preview.
+  // Build current mapping config (preview ÉN opslaan — één bron, zie handleSave).
   // Spread de bestaande config eerst zodat velden die deze tool NIET beheert (bv.
   // flat_sale_value op 827) niet stilletjes gewist worden bij opslaan; de beheerde
-  // velden hieronder overschrijven ze.
-  const currentMappingConfig: MappingConfig = {
+  // velden hieronder overschrijven ze. Alle resultaat-lijsten gaan door
+  // cleanResultList zodat er nooit rommel (spaties, lege of dubbele waarden) in
+  // de opgeslagen config terechtkomt.
+  const composeMappingConfig = (): MappingConfig => ({
     ...project.mapping_config,
     amount_col: amountCol,
     freq_col: freqCol,
     reason_col: reasonCol === EMPTY_VALUE ? '' : reasonCol,
     location_col: locationCol === AUTO_VALUE ? '' : locationCol,
-    freq_map: freqMap,
-    sale_results: saleResults,
-    other_results: otherResults,
-    retention_results: retentionResults,
-    lost_results: lostResults,
-    partial_success_results: partialSuccessResults,
-    unreachable_results: unreachableResults,
-    negative_argumentated: negativeArgumentated,
-    negative_not_argumentated: negativeNotArgumentated,
-    exclude_from_net: excludeFromNet,
-    exclude_from_retention: excludeFromRetention,
+    freq_map: cleanFreqMap(freqMap),
+    sale_results: cleanResultList(saleResults),
+    other_results: cleanResultList(otherResults),
+    retention_results: cleanResultList(retentionResults),
+    lost_results: cleanResultList(lostResults),
+    partial_success_results: cleanResultList(partialSuccessResults),
+    unreachable_results: cleanResultList(unreachableResults),
+    negative_argumentated: cleanResultList(negativeArgumentated),
+    negative_not_argumentated: cleanResultList(negativeNotArgumentated),
+    exclude_from_net: cleanResultList(excludeFromNet),
+    exclude_from_retention: cleanResultList(excludeFromRetention),
     weekday_rates: cleanWeekdayRates(),
-    handled_results: handledResults,
-    not_handled_results: notHandledResults,
-    flat_voicemail_results: flatVoicemailResults,
-    flat_nawt_results: flatNawtResults,
+    handled_results: cleanResultList(handledResults),
+    not_handled_results: cleanResultList(notHandledResults),
+    flat_voicemail_results: cleanResultList(flatVoicemailResults),
+    flat_nawt_results: cleanResultList(flatNawtResults),
     service_targets: {
       bereikbaarheid: serviceTargetBereikbaarheid,
       service_level: serviceTargetServiceLevel,
       service_level_sec: serviceTargetSeconds,
     },
-    reason_categories: reasonCategories,
+    reason_categories: cleanReasonCategories(reasonCategories),
     cost_per_sale: costPerSale > 0 ? costPerSale : undefined,
     hours_source: hoursSource,
-  };
+  });
+  const currentMappingConfig = composeMappingConfig();
 
   const { data: previewRecords, isLoading: previewLoading, refetch: refetchPreview } = useConfigPreview({
     projectId: project.id,
@@ -298,40 +337,9 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
   }, [project.id, loadFromProject]);
 
   const handleSave = async () => {
-    // Spread bestaande config eerst (zie currentMappingConfig): behoudt niet-beheerde
-    // velden zoals flat_sale_value op 827 zodat opslaan ze niet wist.
-    const mappingConfig: MappingConfig = {
-      ...project.mapping_config,
-      amount_col: amountCol,
-      freq_col: freqCol,
-      reason_col: reasonCol === EMPTY_VALUE ? '' : reasonCol,
-      location_col: locationCol === AUTO_VALUE ? '' : locationCol,
-      freq_map: freqMap,
-      sale_results: saleResults,
-      other_results: otherResults,
-      retention_results: retentionResults,
-      lost_results: lostResults,
-      partial_success_results: partialSuccessResults,
-      unreachable_results: unreachableResults,
-      negative_argumentated: negativeArgumentated,
-      negative_not_argumentated: negativeNotArgumentated,
-      exclude_from_net: excludeFromNet,
-      exclude_from_retention: excludeFromRetention,
-      weekday_rates: cleanWeekdayRates(),
-      handled_results: handledResults,
-      not_handled_results: notHandledResults,
-      flat_voicemail_results: flatVoicemailResults,
-      flat_nawt_results: flatNawtResults,
-      service_targets: {
-        bereikbaarheid: serviceTargetBereikbaarheid,
-        service_level: serviceTargetServiceLevel,
-        service_level_sec: serviceTargetSeconds,
-      },
-      reason_categories: reasonCategories,
-      cost_per_sale: costPerSale > 0 ? costPerSale : undefined,
-      hours_source: hoursSource,
-    };
-    await onSave(project.id, hourlyRate, mappingConfig, projectType, hoursFactor);
+    // Zelfde bouwer als de preview (composeMappingConfig): wat je in het
+    // rechterpaneel ziet is exact wat er wordt opgeslagen — inclusief opschoning.
+    await onSave(project.id, hourlyRate, composeMappingConfig(), projectType, hoursFactor);
   };
 
   const addFreqMapping = () => {
@@ -609,12 +617,12 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
     };
 
     const counts: Record<string, number> = {};
-    const codes: Record<string, string[]> = {};
+    const codes: Record<string, { value: string; cnt: number }[]> = {};
     let total = 0;
     for (const { resultaat, cnt } of resultDist) {
       const k = classify(resultaat);
       counts[k] = (counts[k] || 0) + cnt;
-      (codes[k] ||= []).push(resultaat);
+      (codes[k] ||= []).push({ value: resultaat, cnt });
       total += cnt;
     }
     const rows = labels[projectType].map(({ key, label }) => ({
@@ -623,9 +631,34 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
       count: counts[key] || 0,
       pct: total > 0 ? ((counts[key] || 0) / total) * 100 : 0,
     }));
-    return { total, rows, todoCount: counts['todo'] || 0, todoCodes: codes['todo'] || [] };
+    // Hoogste volume eerst: de code die het cijfer het meest scheeftrekt bovenaan.
+    const todoCodes = (codes['todo'] || []).sort((a, b) => b.cnt - a.cnt);
+    return { total, rows, todoCount: counts['todo'] || 0, todoCodes };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resultDist, projectType, saleResults, unreachableResults, negativeArgumentated, negativeNotArgumentated, retentionResults, lostResults, partialSuccessResults, handledResults, notHandledResults, otherResults]);
+
+  // Categorieën waarin een nog-niet-ingedeelde code direct geklikt kan worden
+  // (zelfde indeling als classify() hierboven, per projecttype). Na een klik
+  // verdwijnt de code uit "Nog niet ingedeeld" en wordt de mapping 'dirty' —
+  // opslaan gebeurt zoals altijd via "Mapping goedkeuren".
+  const todoAssignTargets: { label: string; add: (code: string) => void }[] =
+    projectType === 'outbound' ? [
+      { label: '✅ Positief', add: (c) => setSaleResults((prev) => [...prev, c]) },
+      { label: '📵 Niet bereikbaar', add: (c) => setUnreachableResults((prev) => [...prev, c]) },
+      { label: '💬 Negatief beargumenteerd', add: (c) => setNegativeArgumentated((prev) => [...prev, c]) },
+      { label: '🛡️ Negatief niet beargumenteerd', add: (c) => setNegativeNotArgumentated((prev) => [...prev, c]) },
+      { label: '📎 Overig (bewust neutraal)', add: (c) => setOtherResults((prev) => [...prev, c]) },
+    ] : projectType === 'inbound' ? [
+      { label: '✅ Behouden', add: (c) => setRetentionResults((prev) => [...prev, c]) },
+      { label: '🔄 Gedeeltelijk succes', add: (c) => setPartialSuccessResults((prev) => [...prev, c]) },
+      { label: '❌ Verloren', add: (c) => setLostResults((prev) => [...prev, c]) },
+      { label: '📵 Niet bereikbaar', add: (c) => setUnreachableResults((prev) => [...prev, c]) },
+      { label: '📎 Overig (bewust neutraal)', add: (c) => setOtherResults((prev) => [...prev, c]) },
+    ] : [
+      { label: '✅ Afgehandeld', add: (c) => setHandledResults((prev) => [...prev, c]) },
+      { label: '❌ Niet afgehandeld', add: (c) => setNotHandledResults((prev) => [...prev, c]) },
+      { label: '📎 Overig (bewust neutraal)', add: (c) => setOtherResults((prev) => [...prev, c]) },
+    ];
 
   return (
     <div className="bg-card rounded-xl shadow-sm border border-border p-6 mb-6">
@@ -1372,12 +1405,36 @@ export const MappingTool = ({ project, onSave, isSaving = false }: MappingToolPr
             {coverage.todoCount > 0 && (
               <div className="mt-3 rounded-md border border-fuchsia-300 dark:border-fuchsia-900 bg-fuchsia-50 dark:bg-fuchsia-950/30 p-2 text-[11px] text-fuchsia-800 dark:text-fuchsia-200">
                 <div className="flex items-center gap-1 font-semibold mb-1"><AlertTriangle size={12} /> {coverage.todoCount.toLocaleString('nl-NL')} records nog niet ingedeeld</div>
-                <p className="mb-1 opacity-90">Deel deze codes in via de categorieën links:</p>
+                <p className="mb-1 opacity-90">Klik op een code en kies een categorie. Sla daarna op via <strong>Mapping goedkeuren</strong>.</p>
                 <div className="flex flex-wrap gap-1">
-                  {coverage.todoCodes.slice(0, 10).map((c) => (
-                    <span key={c} className="rounded bg-fuchsia-500/15 px-1.5 py-0.5">{c}</span>
+                  {coverage.todoCodes.slice(0, 30).map((c) => (
+                    <DropdownMenu key={c.value}>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded bg-fuchsia-500/15 px-1.5 py-0.5 hover:bg-fuchsia-500/30 transition-colors inline-flex items-center gap-1"
+                          title={`${c.cnt.toLocaleString('nl-NL')} records — klik om in te delen`}
+                        >
+                          {c.value}
+                          <span className="opacity-70 tabular-nums">({c.cnt.toLocaleString('nl-NL')})</span>
+                          <ChevronDown size={10} className="opacity-70" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuLabel className="text-xs">"{c.value}" indelen als…</DropdownMenuLabel>
+                        {todoAssignTargets.map((target) => (
+                          <DropdownMenuItem
+                            key={target.label}
+                            className="text-xs cursor-pointer"
+                            onClick={() => target.add(c.value)}
+                          >
+                            {target.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ))}
-                  {coverage.todoCodes.length > 10 && <span className="opacity-70">+{coverage.todoCodes.length - 10} meer</span>}
+                  {coverage.todoCodes.length > 30 && <span className="opacity-70">+{coverage.todoCodes.length - 30} meer (deel eerst bovenstaande in)</span>}
                 </div>
               </div>
             )}
