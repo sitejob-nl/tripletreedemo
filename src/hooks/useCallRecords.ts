@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { DBProjectBase, ProcessedDBCallRecord } from '@/types/database';
 import { FrequencyType } from '@/lib/statsHelpers';
 import { calculateValuesFromRaw, getDayName } from '@/lib/recordValue';
-import { ResolvedDateFilter } from './useDateFilter';
+import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
 
 interface UseCallRecordsOptions {
   projectId?: string;
@@ -26,7 +26,7 @@ export const useCallRecords = (
   const { dateFilter, page = 1, pageSize = 100 } = options;
 
   return useQuery({
-    queryKey: ['call_records', project?.id, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, page, pageSize],
+    queryKey: ['call_records', project?.id, dateFilter?.startDate, dateFilter?.endDate, dateFilter?.weekNumber, dateFilter?.maxDate, page, pageSize],
     queryFn: async (): Promise<ProcessedDBCallRecordWithFreq[]> => {
       if (!project) return [];
 
@@ -54,6 +54,9 @@ export const useCallRecords = (
             .lte('beldatum_date', dateFilter.endDate);
         }
       }
+
+      // Embargo upper bound (admin view-as-client preview only; no-op otherwise).
+      query = applyMaxDate(query, dateFilter?.maxDate);
 
       const { data, error } = await query;
 

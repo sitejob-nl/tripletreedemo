@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { friendlyError } from '@/lib/friendlyError';
 import { isSale as isSaleResult } from '@/lib/statsHelpers';
 import { metricNumber } from '@/lib/reportageOverrideUtils';
 import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
@@ -268,7 +269,7 @@ export async function exportFlatYear(args: ExportArgs): Promise<void> {
     console.error('Flat year export failed:', err);
     onToast?.({
       title: 'Export mislukt',
-      description: err instanceof Error ? err.message : 'Onbekende fout',
+      description: friendlyError(err, 'Het jaarrapport kon niet gegenereerd worden. Probeer het opnieuw.'),
       variant: 'destructive',
     });
   }

@@ -1,9 +1,86 @@
 // Translate technical errors (Supabase auth, Postgres, Resend, network) into
 // Dutch one-liners that a project manager at a call center can act on.
 //
+// - Postgres/PostgREST errors arrive as plain objects ({ code, message, details })
+//   — we read those fields, not just Error instances.
 // - Known technical patterns → friendly Dutch.
 // - Empty / unknown → fallback (caller-provided context).
 // - Already-Dutch messages from our own backend → pass through unchanged.
+
+interface ExtractedError {
+  message: string;
+  code?: string;
+  details?: string;
+}
+
+// Supabase PostgrestError / FunctionsError are plain objects, not Error instances,
+// so `error instanceof Error` misses them. Read message/code/details defensively.
+function extractError(error: unknown): ExtractedError {
+  if (error instanceof Error) return { message: error.message };
+  if (typeof error === 'string') return { message: error };
+  if (error && typeof error === 'object') {
+    const e = error as Record<string, unknown>;
+    return {
+      message: typeof e.message === 'string' ? e.message : '',
+      code: typeof e.code === 'string' ? e.code : undefined,
+      details: typeof e.details === 'string' ? e.details : undefined,
+    };
+  }
+  return { message: '' };
+}
+
+// Column name (from Postgres "Key (col)=(val) already exists" detail) → Dutch label.
+const UNIQUE_FIELD_LABELS: Record<string, string> = {
+  project_key: 'project key',
+  basicall_project_id: 'BasiCall project-ID',
+  email: 'e-mailadres',
+  name: 'naam',
+};
+
+// Constraint name (from "unique constraint \"X\"") → Dutch label, for when the
+// detail line is absent.
+const UNIQUE_CONSTRAINT_LABELS: Record<string, string> = {
+  projects_project_key_key: 'project key',
+  projects_basicall_project_id_key: 'BasiCall project-ID',
+};
+
+// Build a field-aware message for a unique-violation (23505). Falls back to a
+// generic "already exists" when we can't identify the field.
+function uniqueMessage(message: string, details?: string): string {
+  const column = /Key \(([^)]+)\)=/.exec(details ?? '')?.[1]?.split(',')[0]?.trim();
+  const constraint = /unique constraint "([^"]+)"/.exec(message)?.[1];
+  const label =
+    (column && UNIQUE_FIELD_LABELS[column]) ||
+    (constraint && UNIQUE_CONSTRAINT_LABELS[constraint]) ||
+    null;
+  return label
+    ? `Er bestaat al een record met deze ${label}. Kies een unieke waarde.`
+    : 'Dit bestaat al in het systeem.';
+}
+
+// Postgres SQLSTATE / PostgREST codes → friendly Dutch. More reliable than regex
+// because it doesn't depend on the (English, version-specific) message text.
+function messageForCode(code: string, message: string, details?: string): string | null {
+  switch (code) {
+    case '23505': // unique_violation
+      return uniqueMessage(message, details);
+    case '23503': // foreign_key_violation
+      return 'Deze actie kan niet uitgevoerd worden omdat er nog andere gegevens aan gekoppeld zijn.';
+    case '23502': // not_null_violation
+      return 'Niet alle verplichte velden zijn ingevuld.';
+    case '23514': // check_violation
+      return 'Eén van de ingevoerde waarden klopt niet.';
+    case '42501': // insufficient_privilege
+      return 'Je hebt geen rechten voor deze actie.';
+    case 'PGRST301':
+    case 'PGRST302':
+      return 'Je sessie is verlopen. Log opnieuw in.';
+    case 'PGRST116': // no rows for single()
+      return 'Er is geen resultaat gevonden.';
+    default:
+      return null;
+  }
+}
 
 const TECHNICAL_PATTERNS: Array<{ match: RegExp; message: string }> = [
   // Auth
@@ -26,8 +103,7 @@ const TECHNICAL_PATTERNS: Array<{ match: RegExp; message: string }> = [
   { match: /timeout|timed out|etimedout/i, message: 'De server reageert niet. Probeer het zo opnieuw.' },
   { match: /aborted|abortcontroller/i, message: 'De aanvraag is afgebroken. Probeer het opnieuw.' },
 
-  // Postgres / database
-  { match: /duplicate key|unique constraint|already exists/i, message: 'Dit bestaat al in het systeem.' },
+  // Postgres / database (text fallback when no code is present)
   { match: /foreign key|violates foreign/i, message: 'Deze actie kan niet uitgevoerd worden omdat er andere gegevens aan gekoppeld zijn.' },
   { match: /not.null|null value/i, message: 'Niet alle verplichte velden zijn ingevuld.' },
   { match: /check constraint|violates check/i, message: 'Eén van de ingevoerde waarden klopt niet.' },
@@ -45,22 +121,30 @@ const TECHNICAL_PATTERNS: Array<{ match: RegExp; message: string }> = [
 const DUTCH_HINTS = /\b(niet|geen|deze|moet|kan|wordt|aangemaakt|verstuurd|verwijderd|opnieuw|controleer|probeer|ingesteld|bestaat|nodig|sessie|toegang|rechten|systeem|gebruiker|uitnodiging|wachtwoord)\b/i;
 
 export function friendlyError(error: unknown, fallback: string): string {
-  const raw =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
+  const { message, code, details } = extractError(error);
+  const trimmed = message.trim();
 
-  const trimmed = raw.trim();
-  if (!trimmed) return fallback;
-
-  for (const { match, message } of TECHNICAL_PATTERNS) {
-    if (match.test(trimmed)) return message;
+  // 1. Structured Postgres/PostgREST code — most reliable, works for plain-object
+  //    Supabase errors even when the message text is empty or English.
+  if (code) {
+    const byCode = messageForCode(code, trimmed, details);
+    if (byCode) return byCode;
   }
 
-  // Backend-side Dutch messages flow through unchanged so we don't override
-  // the helpful context they already provide.
+  if (!trimmed) return fallback;
+
+  // 2. Unique-violation by message text (no code, e.g. a rethrown Error).
+  if (/duplicate key|unique constraint|already exists/i.test(trimmed)) {
+    return uniqueMessage(trimmed, details);
+  }
+
+  // 3. Other known technical patterns.
+  for (const { match, message: friendly } of TECHNICAL_PATTERNS) {
+    if (match.test(trimmed)) return friendly;
+  }
+
+  // 4. Backend-side Dutch messages flow through unchanged so we don't override
+  //    the helpful context they already provide.
   if (DUTCH_HINTS.test(trimmed)) return trimmed;
 
   return fallback;

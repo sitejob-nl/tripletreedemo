@@ -4,6 +4,7 @@ import { useCustomersWithProjects } from "@/hooks/useCustomerProjects";
 import { useUsers } from "@/hooks/useUsers";
 import { useSyncJobs } from "@/hooks/useSyncJobs";
 import { DataQualityCenter } from "@/components/Admin/DataQualityCenter";
+import { useUnmappedResultCodes } from "@/hooks/useUnmappedResultCodes";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,7 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
   const { data: customers, isLoading: customersLoading } = useCustomersWithProjects();
   const { data: users, isLoading: usersLoading } = useUsers();
   const { data: syncJobs, isLoading: jobsLoading } = useSyncJobs(undefined, 5);
+  const { unmapped: unmappedCodes, isLoading: unmappedLoading } = useUnmappedResultCodes(projects);
 
   const activeProjects = projects.filter(p => p.is_active).length;
   const recentJobs = syncJobs?.slice(0, 5) || [];
@@ -133,6 +135,68 @@ export function AdminDashboard({ onNavigate, onOpenAddProject, onOpenAddCustomer
       </div>
 
       <DataQualityCenter onNavigate={onNavigate} />
+
+      {/* Niet-ingedeelde resultaatcodes — nieuwe BasiCall-codes vallen zo direct op,
+          i.p.v. pas wanneer iemand de cijfers naast BasiCall legt (EO Muziekspel, juli 2026).
+          Classificatie = classifyResultCoverage, identiek aan de rekenpaden. */}
+      {!unmappedLoading && unmappedCodes.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <h3 className="font-semibold">
+                Niet-ingedeelde resultaatcodes ({unmappedCodes.reduce((s, p) => s + p.codes.length, 0)}
+                {" "}bij {unmappedCodes.length} {unmappedCodes.length === 1 ? "project" : "projecten"})
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Deze codes vallen buiten elke categorie. Risico: een gemiste sale telt niet mee als positief,
+              een gemiste niet-bereikbaar-code drukt de netto-conversie, en bij inbound telt een
+              niet-ingedeelde code niet mee in de retentie-ratio. Deel ze in via de project-configuratie;
+              nieuwste codes staan bovenaan — een nieuwe BasiCall-code verschijnt hier vanzelf.
+            </p>
+            <div className="space-y-2">
+              {unmappedCodes.map((proj) => (
+                <div
+                  key={proj.projectId}
+                  className="flex items-start justify-between gap-3 p-3 rounded-lg bg-background text-sm"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">
+                      {proj.name} <span className="text-xs text-muted-foreground">#{proj.basicallProjectId}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {proj.codes.slice(0, 8).map((c) => (
+                        <span
+                          key={c.resultaat}
+                          className="inline-flex items-center rounded bg-amber-500/15 px-1.5 py-0.5 text-xs"
+                          title={c.lastDate ? `Laatst gezien: ${c.lastDate}` : undefined}
+                        >
+                          {c.resultaat}
+                          <span className="ml-1 text-muted-foreground">({c.cnt}×)</span>
+                        </span>
+                      ))}
+                      {proj.codes.length > 8 && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 text-xs text-muted-foreground">
+                          +{proj.codes.length - 8} meer
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onNavigate("projecten")}
+                    className="flex-shrink-0"
+                  >
+                    Configureer
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Sync Jobs */}
       <Card data-tour="admin-recent-jobs">

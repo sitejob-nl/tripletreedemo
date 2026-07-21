@@ -5,6 +5,7 @@ import { detectFrequencyFromConfig, FrequencyType, isUnreachable, isSale as isSa
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { friendlyError } from '@/lib/friendlyError';
 import { deriveCalls, deriveUnreachable, metricNumber, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
 import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
 
@@ -253,10 +254,9 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       const isSale = isSaleResult(resultName, mappingConfig);
       const recordUnreachable = isUnreachable(resultName, mappingConfig);
 
-      // Frequency + amount. Zelfde volgorde als lib/recordValue.ts: de goedgekeurde
-      // projectmapping gaat voor de generieke velden, anders wijkt de export af van de
-      // KPI-kaarten zodra een bron beide levert.
-      const freqRaw = (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequency'] ?? rawData['frequentie'] ?? rawData['Frequentie'];
+      // Frequency + amount (old). Frequency: configured freq_col only (RPC-aligned),
+      // not the generic 'frequentie'/'Frequentie' fallbacks — see recordValue.ts.
+      const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined);
       const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
 
       const amountRaw = (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['amount'] ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
@@ -351,7 +351,8 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         const resultName = record.resultaat ?? (rawData['bc_result_naam'] as string) ?? 'Onbekend';
         const isSale = isSaleResult(resultName, mappingConfig);
         const recordUnreachable = isUnreachable(resultName, mappingConfig);
-        const freqRaw = (mappingConfig ? rawData[mappingConfig.freq_col] : undefined) ?? rawData['frequency'] ?? rawData['frequentie'] ?? rawData['Frequentie'];
+        // Frequency: configured freq_col only (RPC-aligned), not generic fallbacks — see recordValue.ts.
+        const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined);
         const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
         const amountRaw = (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['amount'] ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
         const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
@@ -492,7 +493,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
     console.error('Outbound year export failed:', err);
     onToast?.({
       title: 'Export mislukt',
-      description: err instanceof Error ? err.message : 'Onbekende fout',
+      description: friendlyError(err, 'Het jaarrapport kon niet gegenereerd worden. Probeer het opnieuw.'),
       variant: 'destructive',
     });
   }

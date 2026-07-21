@@ -69,10 +69,12 @@ export const useConfigPreview = ({
           || rawData?.['Bedrag']
           || null;
         
+        // Frequency comes only from the configured freq_col (+ normalised 'frequency'),
+        // never the generic 'frequentie'/'Frequentie' columns — those diverge from the
+        // get_project_annual_value RPC (see recordValue.ts). Empty freq_col → the
+        // detection falls back to the result name.
         const freqRaw = rawData?.['frequency']
           || rawData?.[mappingConfig.freq_col]
-          || rawData?.['frequentie']
-          || rawData?.['Frequentie']
           || null;
 
         // Detect frequency using centralized function

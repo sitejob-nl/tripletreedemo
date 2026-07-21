@@ -56,13 +56,19 @@ export const calculateValuesFromRaw = (
     };
   }
 
-  // De expliciet goedgekeurde projectmapping heeft voorrang. Generieke velden
-  // kunnen bij winback-projecten nog de oude donatiefrequentie bevatten.
-  const freqRaw = rawData[mappingConfig.freq_col]
-    || rawData['frequency']
-    || rawData['frequentie']
-    || rawData['Frequentie'];
+  // Frequency source mirrors get_project_annual_value: ONLY the configured freq_col
+  // (plus the normalised 'frequency' key). Deliberately NOT the generic 'frequentie'/
+  // 'Frequentie' columns — for projects whose freq_col is a different field those hold
+  // unrelated codes (e.g. 869 Hersenstichting: freq_col=Ntermijn empty while 'Frequentie'
+  // held "1" for monthly machtigingen → the matrix read ×1 i.p.v. ×12). When freq_col is
+  // empty the detection falls back to the result name, exactly like the RPC.
+  const freqRaw = rawData['frequency'] || rawData[mappingConfig.freq_col];
 
+  // Pass `resultaat` so the frequency can be derived from the result name when the
+  // frequency column is empty (e.g. 919 "Machtiging per Maand" with an empty
+  // Ntermijn). Mirrors get_project_annual_value's freq_map(resultaat) fallback, so
+  // the report matrix/analysis agree with the dashboard KPI. Without it these paths
+  // fell back to ×1 while the RPC used ×12.
   const freqResult = detectFrequencyFromConfig(freqRaw, mappingConfig.freq_map, resultaat);
 
   if (!isSale) {

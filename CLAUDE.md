@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Export**: xlsx-js-style (Excel-weekrapportage per project_type)
 - **Hosting frontend**: Vercel, CNAME `app.ttcallcenters.nl` → Vercel (DNS bij Meetwerk ICT)
 - **DB**: Supabase project `tvsdbztjqksxybxjwtrf` (Frankfurt eu-central-2, Postgres 17.6)
-- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`. Twee cron-regels in de `sitejob-tt` crontab (Europe/Amsterdam): **04:00** = volledige ronde, **13:30** = `node sync.js retry` (alleen gemiste-dagen-backfill — vangt de projecten op die in BasiCalls nachtelijke 500-venster vielen). Sinds 2026-06-01 draait de sync als `sitejob-tt`, niet meer als root.
+- **Sync**: Node.js script gespiegeld in `scripts/basicall-sync/sync.js`; productie draait op VPS Hetzner `85.10.132.126` (user `sitejob-tt`) als `/opt/basicall-sync/sync.js`. Drie cron-regels in de `sitejob-tt` crontab (Europe/Amsterdam): **04:00** = volledige ronde (haalt *gisteren* op), **13:30** = `node sync.js retry` (alleen gemiste-dagen-backfill — vangt de projecten op die in BasiCalls nachtelijke 500-venster vielen), **21:30** = `node sync.js today` (haalt *vandaag* op zodra iedereen om 21:00 stopt met bellen — geeft de admin ruim correctietijd vóór de 09:00-publicatie/embargo). Sinds 2026-06-01 draait de sync als `sitejob-tt`, niet meer als root.
 - **Origin**: project is extern gescaffold, eerste live-schema wijzigingen belandden daardoor niet allemaal in `supabase/migrations/`. Altijd live schema checken via MCP voor je lokale migrations baseert op wat er in de repo staat.
 
 ## Architectuur
@@ -102,7 +102,7 @@ BasiCall `project_id` → dashboard naam:
 
 ## BasiCall API (s06.basicall.nl/BasiCall/bc_WebApi/v2.0/, SOAP)
 
-Header per request: `Token` (string, per project) + `Project` (int). IP-whitelist 85.10.132.126 verplicht. Token-opslag: `project_secrets.basicall_token`.
+Header per request: `Token` (string) + `Project` (int). IP-whitelist 85.10.132.126 verplicht. Token-opslag: `project_secrets.basicall_token` (één rij per project, maar **account-breed dezelfde waarde**: alle echte Triple Tree-projecten delen hetzelfde BasiCall account-token; per request verschilt alleen het `Project`-ID). Daarom heeft het project-formulier sinds 24-06-2026 **geen tokenveld meer** — bij het aanmaken van een nieuw project zet de `project-secret` edge function automatisch het gedeelde account-token (= meest voorkomende waarde in `project_secrets` via `mostFrequentToken`). Een afwijkend token per project (bv. een toekomstige klant met eigen BasiCall-account) kan alleen nog handmatig via de edge function/SQL.
 
 Endpoints relevant:
 - `Record.getAfgehandeldIds(datum_van, datum_tot)` — afgehandelde record-ids (API ≥2.9, 22-01-2026)
@@ -225,6 +225,7 @@ Zie [AUDIT-2026-04-16.md](./AUDIT-2026-04-16.md) + [AUDIT-VPS-SYNC-2026-04-16.md
   - *Klantenservice* (bijv. Sligro tintelingen, project_type=`inbound_service`): geen geldwaarde, alleen "afgehandeld" vs. "niet-afgehandeld" ratio. Dashboard-labels switchen automatisch.
 - **Uur-bedrag berekening**: `(totaal_seconden / 3600) × hourly_rate` per dag. `weekday_rates` in `mapping_config` overruled `hourly_rate` voor specifieke weekdagen (bijv. zaterdag-tarief).
 - **Uren-correctie door admin**: handmatig per-dag override via `daily_logged_time.corrected_seconds` (met `corrected_by` + `correction_note` voor audit-trail). Factor-correctie via `projects.hours_factor` is beschikbaar maar minder gewenst.
+- **Embargo / publicatievenster** (25-06-2026, PR #19): klanten zien de cijfers van kalenderdag D pas vanaf **09:00 op D+1**; admin/superadmin zien alles **real-time**. Geeft TT een correctievenster tussen de 04:00-import en de 09:00-publicatie. **Afgedwongen in RLS** — de klant-tak van de SELECT-policies op `call_records` (`beldatum_date`) en `daily_logged_time` (`date`) AND't een conditie `<= public.client_visible_cutoff()` (de 09:00/Europe-Amsterdam-regel; vóór 09:00 → vandaag−2, anders vandaag−1). Omdat álle KPI-RPC's `SECURITY INVOKER` zijn, erven KPI-kaart, matrix, jaarwaarde én Excel-export dit automatisch — verklaart waarom een **klant minder data ziet dan de admin**. Admin-preview ("bekijk als klant") cap't client-side via `maxDate` op `ResolvedDateFilter` + `applyMaxDate()` (helper `src/lib/embargo.ts` spiegelt de SQL); echte klanten leunen op RLS (`maxDate=null`). Mini-beperking: jaar-Excel-templates fetchen zelf → echte klanten via RLS gecapt (ok), admin-preview-export niet.
 - **PII-filtering**: IBAN, namen, telefoon, e-mail worden **vóór import** uit `raw_data` verwijderd door VPS-script (`stripPIIFromRawData`, regel 73-86). Whitelist: plaatsnaam (voor Mapbox-geografie) + agentnaam (voor TT-interne toetsing). Alles via regex-patterns; bij nieuwe PII-velden uitbreiden in blacklist.
 
 ## UI-beslissingen (uit feb 2026 meeting)

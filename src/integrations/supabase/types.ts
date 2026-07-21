@@ -801,6 +801,15 @@ export type Database = {
         Args: { p_project_id: string; p_version: number }
         Returns: number
       }
+      get_result_code_distribution: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          cnt: number
+          last_date: string
+          project_id: string
+          resultaat: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

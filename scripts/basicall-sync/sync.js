@@ -38,6 +38,10 @@ const ALERT_AFTER_FAILED_NIGHTS = 3;
 // (geen 'gisteren'-stap), bedoeld als tweede cron BUITEN BasiCalls 02:00-04:00-venster,
 // zodat projecten die 's nachts 500'en (734/827/864/924) overdag alsnog binnenkomen.
 const RETRY_MODE = process.argv.slice(2).some(a => a === 'retry' || a === '--retry');
+// Avondronde: `node sync.js today` haalt VANDAAG op (i.p.v. 'gisteren'), bedoeld als derde cron
+// om 21:30 — net nadat iedereen om 21:00 stopt met bellen. Zo staat de complete dag 's avonds al
+// klaar en heeft de admin ruim tijd om te corrigeren vóór de 09:00-publicatie (embargo). De
+// 04:00-nachtronde haalt 'gisteren' daarna nog eens op als vangnet.
 const TODAY_MODE = process.argv.slice(2).some(a => a === 'today' || a === '--today');
 const QUALITY_ALERT_EMAILS = (process.env.QUALITY_ALERT_EMAILS || '')
     .split(',')

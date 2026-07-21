@@ -19,6 +19,8 @@ import { UsersTable } from "@/components/Admin/UsersTable";
 import { SyncManager } from "@/components/Admin/SyncManager";
 import { BatchManager } from "@/components/Admin/BatchManager";
 import { ProjectDialog, ProjectFormData } from "@/components/Admin/ProjectDialog";
+import { friendlyError } from "@/lib/friendlyError";
+import { errorLogger } from "@/lib/errorLogger";
 
 const defaultMappingConfig: MappingConfig = {
   amount_col: "termijnbedrag",
@@ -40,7 +42,6 @@ const emptyFormData: ProjectFormData = {
   name: "",
   project_key: "",
   basicall_project_id: "",
-  basicall_token: "",
   hourly_rate: "35.00",
   vat_rate: "21",
   is_active: true,
@@ -76,14 +77,12 @@ export default function Admin() {
   };
 
   const handleOpenEditProject = (project: DBProject) => {
-    // Token-veld start leeg bij edit: de bestaande waarde is onzichtbaar omdat
-    // project_secrets service-role-only is. Admin laat leeg om te houden, of tikt
-    // nieuwe waarde om te roteren.
+    // Het BasiCall account-token wordt automatisch beheerd (project_secrets is
+    // service-role-only en account-breed gedeeld); het formulier toont het niet.
     setFormData({
       name: project.name,
       project_key: project.project_key,
       basicall_project_id: String(project.basicall_project_id),
-      basicall_token: "",
       hourly_rate: String(project.hourly_rate),
       vat_rate: String(project.vat_rate),
       is_active: project.is_active,
@@ -100,10 +99,7 @@ export default function Admin() {
   };
 
   const handleSaveProject = async () => {
-    // Token is alleen verplicht bij een NIEUW project. Bij edit mag het leeg blijven
-    // (betekent: behoud bestaande token in project_secrets).
-    const tokenRequired = !editingProject;
-    if (!formData.name || !formData.project_key || !formData.basicall_project_id || (tokenRequired && !formData.basicall_token)) {
+    if (!formData.name || !formData.project_key || !formData.basicall_project_id) {
       toast({
         title: "Validatie fout",
         description: "Vul alle verplichte velden in.",
@@ -171,35 +167,30 @@ export default function Admin() {
         justCreated = true;
       }
 
-      // Token apart wegschrijven via edge function (project_secrets is service-role-only).
-      // Alleen oproepen als de admin een waarde heeft ingevoerd; een leeg veld op edit-modus
-      // betekent "behoud bestaande".
-      if (formData.basicall_token) {
+      // Bij een nieuw project zetten we het gedeelde BasiCall account-token via de
+      // edge function (project_secrets is service-role-only). Geen token meegeven →
+      // de backend hergebruikt het account-token. Bij edit laten we de bestaande rij
+      // ongemoeid.
+      if (justCreated) {
         const { error: tokenError } = await supabase.functions.invoke("project-secret", {
-          body: { project_id: projectId, token: formData.basicall_token }
+          body: { project_id: projectId }
         });
         if (tokenError) {
-          // Atomic create: als token-save faalt bij een nieuw project, verwijderen
-          // we de zojuist aangemaakte projects-rij zodat we geen half-aangemaakt
-          // project achterlaten zonder werkende sync.
-          if (justCreated) {
-            const { error: cleanupError } = await supabase
-              .from("projects")
-              .delete()
-              .eq("id", projectId);
-            if (cleanupError) {
-              console.error("Cleanup after failed token-save also failed:", cleanupError);
-              throw new Error(
-                `Token opslaan mislukt (${tokenError.message}). Project staat ONGELDIG in DB — verwijder handmatig via beheer.`
-              );
-            }
+          // Atomic create: als het account-token niet weggeschreven kan worden,
+          // verwijderen we de zojuist aangemaakte projects-rij zodat we geen
+          // half-aangemaakt project achterlaten zonder werkende sync.
+          const { error: cleanupError } = await supabase
+            .from("projects")
+            .delete()
+            .eq("id", projectId);
+          if (cleanupError) {
+            console.error("Cleanup after failed token-save also failed:", cleanupError);
             throw new Error(
-              `Token opslaan mislukt: ${tokenError.message}. Project niet aangemaakt.`
+              `Token opslaan mislukt (${tokenError.message}). Project staat ONGELDIG in DB — verwijder handmatig via beheer.`
             );
           }
-          // Bij edit: project blijft bestaan, alleen token-rotatie faalde.
           throw new Error(
-            `Token opslaan mislukt: ${tokenError.message}. Bestaande token ongewijzigd.`
+            `Token opslaan mislukt: ${tokenError.message}. Project niet aangemaakt.`
           );
         }
       }
@@ -230,10 +221,18 @@ export default function Admin() {
       setIsProjectDialogOpen(false);
       setEditingProject(null);
       setFormData(emptyFormData);
-    } catch (error: unknown) {
+    } catch (error: any) {
+      // Leg de mislukte poging + de ingevoerde waarden vast in error_logs, zodat
+      // een fout (bv. dubbele project key / BasiCall-ID) achteraf te herleiden is.
+      errorLogger.logApiError("projects.save", error, {
+        mode: editingProject ? "update" : "insert",
+        name: projectData.name,
+        project_key: projectData.project_key,
+        basicall_project_id: projectData.basicall_project_id,
+      });
       toast({
         title: "Fout",
-        description: error instanceof Error ? error.message : "Er is iets misgegaan.",
+        description: friendlyError(error, "Het project kon niet opgeslagen worden. Controleer de gegevens en probeer opnieuw."),
         variant: "destructive"
       });
     } finally {
