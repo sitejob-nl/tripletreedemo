@@ -37,3 +37,4 @@ API/
 *.sln
 *.sw?
 .vercel
+.playwright-mcp/

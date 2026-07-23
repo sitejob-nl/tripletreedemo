@@ -53,7 +53,10 @@ export default function Welcome() {
     <div className="min-h-screen bg-background p-4 sm:p-8">
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="text-center">
-          <img src={tripleTreeLogo} alt="Triple Tree" className="h-14 mx-auto mb-6" />
+          {/* Wit logo op donker vlak — op de lichte achtergrond is de PNG zelf onleesbaar */}
+          <div className="mx-auto mb-6 inline-flex items-center justify-center rounded-xl bg-black px-6 py-4">
+            <img src={tripleTreeLogo} alt="Triple Tree" className="h-12" />
+          </div>
           <h1 className="text-3xl font-bold mb-2">Welkom bij je Triple Tree dashboard</h1>
           <p className="text-muted-foreground max-w-xl mx-auto">
             Je account is geactiveerd. Voordat je begint: pin het dashboard op je telefoon of laptop,

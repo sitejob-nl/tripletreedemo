@@ -132,13 +132,13 @@ export function DataTrustOnboarding({
       icon: ShieldCheck,
       eyebrow: 'Stap 4 · Bescherming',
       title: 'Je ziet direct waarop je kunt vertrouwen',
-      description: 'Groen betekent gecontroleerd. Oranje vraagt aandacht, maar laat betrouwbare historische gegevens staan. Rood verbergt alleen geraakte cijfers met een “—” en schakelt de Excel-export tijdelijk uit.',
+      description: 'Groen betekent gecontroleerd. Oranje vraagt aandacht, maar laat betrouwbare historische gegevens staan. Rood betekent dat een controle loopt: de geraakte cijfers kunnen nog wijzigen totdat die is afgerond.',
       visual: (
         <div className="w-full max-w-sm space-y-2">
           <div className="grid grid-cols-3 gap-2 text-[11px] sm:text-xs">
             <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-center font-medium text-emerald-800 dark:text-emerald-200">Groen<br />gecontroleerd</div>
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-center font-medium text-amber-900 dark:text-amber-100">Oranje<br />aandacht</div>
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-2 text-center font-medium text-destructive">Rood<br />tijdelijk beschermd</div>
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-2 text-center font-medium text-destructive">Rood<br />in controle</div>
           </div>
           {qualityVisible && quality && (
             <div className="flex items-center justify-between gap-3 rounded-lg border bg-background/80 px-3 py-2 text-xs">
