@@ -74,7 +74,10 @@ export function SyncManager() {
 
   // Check if "all projects" is selected
   const isAllProjects = selectedProjectId === "all";
-  const activeProjects = projects.filter(p => p.is_active);
+  // Mirror van de VPS-selectie (is_active AND reporting_state = 'live'): een gepauzeerd
+  // of beeindigd project — zoals het demoproject — heeft geen bruikbare BasiCall-bron,
+  // dus een fan-out-job daarop levert alleen gegarandeerde failures op.
+  const activeProjects = projects.filter(p => p.is_active && p.reporting_state === 'live');
 
   const filteredJobs = useMemo(() => {
     return syncJobs?.filter(job => {
