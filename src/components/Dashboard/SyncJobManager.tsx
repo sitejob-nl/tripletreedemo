@@ -14,24 +14,28 @@ import { useToast } from "@/hooks/use-toast";
 import { friendlyError } from "@/lib/friendlyError";
 import { RefreshCw, Clock, CheckCircle, XCircle, Loader2, Play } from "lucide-react";
 
-type PresetPeriod = "2024" | "2025" | "this-quarter" | "last-quarter" | "last-month" | "custom";
+type PresetPeriod = "last-year" | "this-year" | "this-quarter" | "last-quarter" | "last-month" | "custom";
 
 const getPresetDates = (preset: PresetPeriod): { start: Date; end: Date } => {
   const now = new Date();
   
   switch (preset) {
-    case "2024":
-      return { start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) };
-    case "2025":
-      return { start: new Date(2025, 0, 1), end: now };
+    case "last-year": {
+      const year = now.getFullYear() - 1;
+      return { start: new Date(year, 0, 1), end: new Date(year, 11, 31) };
+    }
+    case "this-year":
+      return { start: startOfYear(now), end: now };
     case "this-quarter":
       return { start: startOfQuarter(now), end: endOfQuarter(now) };
-    case "last-quarter":
+    case "last-quarter": {
       const lastQ = subQuarters(now, 1);
       return { start: startOfQuarter(lastQ), end: endOfQuarter(lastQ) };
-    case "last-month":
+    }
+    case "last-month": {
       const lastMonth = subMonths(now, 1);
       return { start: new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1), end: new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0) };
+    }
     default:
       return { start: startOfYear(now), end: now };
   }
@@ -63,7 +67,7 @@ export function SyncJobManager() {
   const { user } = useAuth();
   const { projects, isLoading: projectsLoading } = useProjects(false, user?.id);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [preset, setPreset] = useState<PresetPeriod>("2024");
+  const [preset, setPreset] = useState<PresetPeriod>("this-year");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [isCreatingMultiple, setIsCreatingMultiple] = useState(false);
@@ -191,12 +195,12 @@ export function SyncJobManager() {
           <Label>Periode</Label>
           <RadioGroup value={preset} onValueChange={(v) => setPreset(v as PresetPeriod)} className="grid grid-cols-3 gap-2">
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="2024" id="2024" />
-              <Label htmlFor="2024" className="font-normal cursor-pointer">Heel 2024</Label>
+              <RadioGroupItem value="this-year" id="this-year" />
+              <Label htmlFor="this-year" className="font-normal cursor-pointer">{new Date().getFullYear()} t/m nu</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="2025" id="2025" />
-              <Label htmlFor="2025" className="font-normal cursor-pointer">2025 t/m nu</Label>
+              <RadioGroupItem value="last-year" id="last-year" />
+              <Label htmlFor="last-year" className="font-normal cursor-pointer">Heel {new Date().getFullYear() - 1}</Label>
             </div>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="this-quarter" id="this-quarter" />

@@ -102,7 +102,7 @@ export const DateFilterSelector = ({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="week">Per Week</SelectItem>
-            <SelectItem value="range">Datum Range</SelectItem>
+            <SelectItem value="range">Datumbereik</SelectItem>
           </SelectContent>
         </Select>
       </div>

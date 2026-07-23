@@ -129,7 +129,7 @@ export default function Auth() {
         <CardContent className="pt-[20px]">
           <form onSubmit={handleSignIn} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="login-email">Email</Label>
+              <Label htmlFor="login-email">E-mail</Label>
               <Input 
                 id="login-email" 
                 type="email" 
@@ -187,7 +187,7 @@ export default function Auth() {
           ) : (
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="reset-email">Email</Label>
+                <Label htmlFor="reset-email">E-mail</Label>
                 <Input
                   id="reset-email"
                   type="email"

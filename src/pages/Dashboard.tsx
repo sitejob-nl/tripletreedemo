@@ -468,8 +468,8 @@ const Index = () => {
     }
   }, [signOut, queryClient]);
 
-  // Project keys for sidebar (from database)
-  const projectKeys = projects.map((p) => p.project_key);
+  // Sidebar entries: key drives selection, name is what users see (never the slug)
+  const sidebarProjects = projects.map((p) => ({ key: p.project_key, name: p.name }));
 
   // Redirect to auth if not logged in
   if (!authLoading && !user) {
@@ -499,7 +499,7 @@ const Index = () => {
       <Sidebar
         selectedProject={selectedProjectKey}
         onProjectChange={(key) => setSelectedProjectKey(key)}
-        projects={projectKeys}
+        projects={sidebarProjects}
         role={effectiveRole}
         onLogout={handleLogout}
         isSuperAdmin={isSuperAdmin}
@@ -509,6 +509,7 @@ const Index = () => {
       <main className="flex-1 overflow-y-auto">
         <Header
           project={selectedProjectKey}
+          projectName={currentProject?.name}
           role={effectiveRole}
           selectedWeek={selectedWeek}
           availableWeeks={availableWeeks}
@@ -670,7 +671,7 @@ const Index = () => {
                       reportageOverrides={reportageOverrides}
                       isLoading={reportMatrixLoading || reportageOverridesLoading}
                       onExportToExcel={handleExportToExcel}
-                      isAdmin={isDbAdmin}
+                      isAdmin={isDbAdmin && !viewAsClient}
                     />
                   ) : viewMode === 'dashboard' ? (
                     <DashboardView 

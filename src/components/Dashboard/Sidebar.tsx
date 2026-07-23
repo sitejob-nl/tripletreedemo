@@ -7,10 +7,15 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import logo from '@/assets/triple-tree-logo.png';
 
+export interface SidebarProject {
+  key: Project;
+  name: string;
+}
+
 interface SidebarProps {
   selectedProject: Project;
   onProjectChange: (project: Project) => void;
-  projects: Project[];
+  projects: SidebarProject[];
   role: Role;
   onLogout: () => void;
   isSuperAdmin?: boolean;
@@ -120,20 +125,20 @@ export const Sidebar = ({
         </div>
         {projects.map((proj, idx) => (
           <button
-            key={proj}
-            onClick={() => handleProjectChange(proj)}
-            aria-label={`Selecteer campagne ${proj}`}
-            aria-current={selectedProject === proj ? 'true' : undefined}
+            key={proj.key}
+            onClick={() => handleProjectChange(proj.key)}
+            aria-label={`Selecteer campagne ${proj.name}`}
+            aria-current={selectedProject === proj.key ? 'true' : undefined}
             className={cn(
               "w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar-background",
-              selectedProject === proj
+              selectedProject === proj.key
                 ? 'bg-primary text-primary-foreground shadow-sm'
                 : 'text-sidebar-foreground hover:bg-sidebar-accent'
             )}
           >
             <div aria-hidden="true" className={`w-2 h-2 rounded-full ${projectColors[idx % projectColors.length]}`}></div>
-            <span className="capitalize font-medium text-sm sm:text-base">{proj}</span>
-            {selectedProject === proj && <ChevronRight size={16} className="ml-auto" aria-hidden="true" />}
+            <span className="font-medium text-sm sm:text-base">{proj.name}</span>
+            {selectedProject === proj.key && <ChevronRight size={16} className="ml-auto" aria-hidden="true" />}
           </button>
         ))}
       </nav>
