@@ -61,11 +61,12 @@ export const InboundReportMatrix = ({
 
       const rawData = record as unknown as { raw_data?: Record<string, unknown> };
       const attempts = rawData.raw_data?.bc_belpogingen ? Number(rawData.raw_data.bc_belpogingen) : 1;
-      const amount = rawData.raw_data?.[amountCol] ? parseDutchFloat(rawData.raw_data[amountCol]) : 0;
       const resultName = rawData.raw_data?.bc_result_naam as string || record.bc_result_naam || 'Onbekend';
       
-      // Calculate annual value based on frequency
-      const annualValue = record.annual_value || amount * 12;
+      // Jaarwaarde komt uit calculateValuesFromRaw (bedrag × freq_map, mirror van de
+      // RPC). De oude ×12-fallback negeerde de freq_map en telde jaarlijkse donateurs
+      // (Ntermijn "J") als maandelijks — €300 waar het €25 moest zijn (QA 23-07, A2).
+      const annualValue = record.annual_value ?? 0;
 
       // Basic counts - ensure numeric conversion for safety
       const durationSec = Number(record.bc_gesprekstijd) || 0;

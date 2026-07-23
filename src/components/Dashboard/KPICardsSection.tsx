@@ -69,7 +69,7 @@ export function KPICardsSection({
 
   const breakdownPopover = annualValueBreakdown ? (
     <div className="space-y-3 min-w-[280px]">
-      <h4 className="font-semibold text-sm text-foreground">Opbouw Jaarwaarde</h4>
+      <h4 className="font-semibold text-sm text-foreground">{isInboundProject ? 'Opbouw Behouden Waarde' : 'Opbouw Jaarwaarde'}</h4>
       <div className="space-y-3">
         {(['monthly', 'biMonthly', 'quarterly', 'halfYearly', 'yearly', 'oneoff'] as const).map((key) => {
           const item = annualValueBreakdown[key];

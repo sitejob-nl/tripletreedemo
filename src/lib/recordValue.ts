@@ -1,6 +1,6 @@
 import { MappingConfig } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
-import { detectFrequencyFromConfig, FrequencyType, isSale as isSaleResult } from '@/lib/statsHelpers';
+import { categorizeInboundResult, detectFrequencyFromConfig, FrequencyType, isSale as isSaleResult } from '@/lib/statsHelpers';
 
 export interface CalculatedRecordValues {
   annualValue: number;
@@ -71,7 +71,23 @@ export const calculateValuesFromRaw = (
   // fell back to ×1 while the RPC used ×12.
   const freqResult = detectFrequencyFromConfig(freqRaw, mappingConfig.freq_map, resultaat);
 
-  if (!isSale) {
+  // Inbound (retentie): behouden/gedeeltelijk/verloren records dragen óók jaarwaarde
+  // (behouden waarde resp. verloren waarde in de retentie-matrix), ook al zijn ze geen
+  // sale. Zonder dit bleef annual_value 0 en viel de matrix terug op een hardcoded ×12
+  // die de freq_map negeerde (Ntermijn "J" = jaarlijks werd als maandelijks geteld).
+  const hasInboundLists =
+    (mappingConfig.retention_results?.length ?? 0) > 0 ||
+    (mappingConfig.partial_success_results?.length ?? 0) > 0 ||
+    (mappingConfig.lost_results?.length ?? 0) > 0;
+  const inboundCategory = !isSale && hasInboundLists
+    ? categorizeInboundResult(resultaat || '', mappingConfig)
+    : null;
+  const carriesValue = isSale
+    || inboundCategory === 'retained'
+    || inboundCategory === 'partial'
+    || inboundCategory === 'lost';
+
+  if (!carriesValue) {
     return {
       ...defaultResult,
       isSale: false,
@@ -90,7 +106,7 @@ export const calculateValuesFromRaw = (
     return {
       annualValue: 0,
       isSale,
-      isRecurring: !freqResult.isOneOff,
+      isRecurring: isSale && !freqResult.isOneOff,
       frequencyType: freqResult.type,
       frequencyMultiplier: freqResult.multiplier,
       frequencyMatchedKey: freqResult.matchedKey,
@@ -103,7 +119,7 @@ export const calculateValuesFromRaw = (
   return {
     annualValue: amount * freqResult.multiplier,
     isSale,
-    isRecurring: !freqResult.isOneOff,
+    isRecurring: isSale && !freqResult.isOneOff,
     frequencyType: freqResult.type,
     frequencyMultiplier: freqResult.multiplier,
     frequencyMatchedKey: freqResult.matchedKey,

@@ -5,7 +5,7 @@ import { WeekComparison } from './WeekComparison';
 import { CallAttemptsAnalysis } from './CallAttemptsAnalysis';
 import { ResultsBreakdown } from './ResultsBreakdown';
 import { ProcessedCallRecord } from '@/types/dashboard';
-import { MappingConfig } from '@/types/database';
+import { MappingConfig, ProjectType } from '@/types/database';
 import { getCostPerSale } from '@/lib/cost';
 import { WeekYear } from '@/hooks/useCallRecords';
 
@@ -20,6 +20,9 @@ interface AnalysisViewSectionProps {
   hourlyRate: number;
   availableWeeks: WeekYear[];
   mappingConfig?: MappingConfig;
+  projectType?: ProjectType;
+  weeklyLoggedHours?: Record<string, number>;
+  isAdmin?: boolean;
 }
 
 export function AnalysisViewSection({
@@ -28,6 +31,9 @@ export function AnalysisViewSection({
   hourlyRate,
   availableWeeks,
   mappingConfig,
+  projectType,
+  weeklyLoggedHours,
+  isAdmin = false,
 }: AnalysisViewSectionProps) {
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -77,6 +83,9 @@ export function AnalysisViewSection({
             availableWeeks={availableWeeks}
             amountCol={mappingConfig?.amount_col}
             costPerSale={getCostPerSale(mappingConfig)}
+            mappingConfig={mappingConfig}
+            weeklyLoggedHours={weeklyLoggedHours}
+            isAdmin={isAdmin}
           />
         </TabsContent>
         
@@ -98,7 +107,7 @@ export function AnalysisViewSection({
         </TabsContent>
         
         <TabsContent value="results" className="mt-0">
-          <ResultsBreakdown data={data} />
+          <ResultsBreakdown data={data} mappingConfig={mappingConfig} projectType={projectType} />
         </TabsContent>
       </Tabs>
     </div>

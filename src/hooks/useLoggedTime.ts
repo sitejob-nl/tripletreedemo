@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getDay } from 'date-fns';
+import { getDay, getISOWeek, getISOWeekYear } from 'date-fns';
+import { ceilHours } from '@/lib/hours';
 import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
 
 // Daily breakdown of logged time per weekday
@@ -103,5 +104,36 @@ export const useLoggedTime = ({ projectId, dateFilter, hoursFactor = 1.0 }: UseL
       };
     },
     enabled: !!projectId
+  });
+};
+
+// Gelogde uren per week, key "YYYY-WW" (voor de Weekvergelijking in de Analyse-view).
+// Weektotaal = som van per-dag-afgeronde uren (dezelfde factuurregel als matrix/export).
+// Zonder deze bron viel de Weekvergelijking terug op gesprekstijd, die voor outbound
+// vrijwel altijd 0 is -> "Aantal beluren 0.00" (QA 23-07-2026, punt A4).
+// Klanten krijgen via RLS automatisch alleen vrijgegeven dagen; de client-side
+// admin-preview-cap (maxDate) wordt hier bewust niet toegepast.
+export const useLoggedTimeWeekly = (projectId: string | undefined, hoursFactor = 1.0) => {
+  return useQuery({
+    queryKey: ['logged_time_weekly', projectId, hoursFactor],
+    queryFn: async (): Promise<Record<string, number>> => {
+      if (!projectId) return {};
+      const { data, error } = await supabase
+        .from('daily_logged_time')
+        .select('total_seconds, corrected_seconds, date')
+        .eq('project_id', projectId);
+      if (error) throw error;
+      const factor = hoursFactor ?? 1.0;
+      const weekly: Record<string, number> = {};
+      (data ?? []).forEach((r) => {
+        if (!r.date) return;
+        const d = new Date(r.date);
+        const key = `${getISOWeekYear(d)}-${String(getISOWeek(d)).padStart(2, '0')}`;
+        const hours = ((r.corrected_seconds ?? r.total_seconds ?? 0) * factor) / 3600;
+        weekly[key] = (weekly[key] ?? 0) + ceilHours(hours);
+      });
+      return weekly;
+    },
+    enabled: !!projectId,
   });
 };

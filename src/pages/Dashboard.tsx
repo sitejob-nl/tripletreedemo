@@ -24,7 +24,7 @@ import { useCallRecords, useAvailableWeeks } from '@/hooks/useCallRecords';
 import { useAllCallRecordsForAnalysis } from '@/hooks/useAllCallRecordsForAnalysis';
 import { useTotalRecordCount } from '@/hooks/useTotalRecordCount';
 import { useKPIAggregates } from '@/hooks/useKPIAggregates';
-import { useLoggedTime } from '@/hooks/useLoggedTime';
+import { useLoggedTime, useLoggedTimeWeekly } from '@/hooks/useLoggedTime';
 import { useReportMatrixData } from '@/hooks/useReportMatrixData';
 import { useDateFilter, DateFilterType, DateRange } from '@/hooks/useDateFilter';
 import { getClientVisibleCutoff } from '@/lib/embargo';
@@ -34,14 +34,14 @@ import { useToast } from '@/hooks/use-toast';
 import { useExcelExport } from '@/hooks/useExcelExport';
 import { useReportageOverrides } from '@/hooks/useReportageOverrides';
 import { Navigate, useSearchParams } from 'react-router-dom';
-import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
+import { categorizeInboundResult, detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { errorLogger } from '@/lib/errorLogger';
 import { useProjectDataQuality } from '@/hooks/useProjectDataQuality';
 import { DataQualityBanner } from '@/components/Dashboard/DataQualityBanner';
 import { DataTrustOnboarding } from '@/components/Dashboard/DataTrustOnboarding';
 import { friendlyError } from '@/lib/friendlyError';
 
-const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis', 'project-data-quality'];
+const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'logged_time_weekly', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis', 'project-data-quality'];
 
 const Index = () => {
   const [searchParams] = useSearchParams();
@@ -196,6 +196,7 @@ const Index = () => {
   });
 
   // Fetch logged time for accurate cost calculation
+  const { data: weeklyLoggedHours } = useLoggedTimeWeekly(currentProject?.id, currentProject?.hours_factor ?? 1.0);
   const { data: loggedTime, isLoading: loggedTimeLoading } = useLoggedTime({
     projectId: currentProject?.id,
     dateFilter: effectiveDateFilter,
@@ -380,7 +381,12 @@ const Index = () => {
     };
 
     reportMatrixProcessedData.forEach((record) => {
-      if (!record.is_sale) return;
+      // Outbound telt sales; inbound telt behouden ∪ gedeeltelijk (mirror van de
+      // Behouden Waarde-KPI/RPC), anders blijft de opbouw-popover leeg bij inbound.
+      const counted = projectType === 'inbound'
+        ? ['retained', 'partial'].includes(categorizeInboundResult(record.bc_result_naam || '', currentProject.mapping_config))
+        : record.is_sale;
+      if (!counted) return;
       const rawData = record.raw_data;
       const freqRaw = rawData?.[freqCol];
       const result = detectFrequencyFromConfig(freqRaw, freqMap, record.bc_result_naam);
@@ -688,6 +694,9 @@ const Index = () => {
                       hourlyRate={hourlyRate}
                       availableWeeks={availableWeeks}
                       mappingConfig={currentProject?.mapping_config}
+                      projectType={projectType}
+                      weeklyLoggedHours={weeklyLoggedHours}
+                      isAdmin={isDbAdmin && !viewAsClient}
                     />
                   )}
                 </>
