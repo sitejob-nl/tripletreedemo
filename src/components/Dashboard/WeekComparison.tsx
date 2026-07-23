@@ -13,7 +13,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { createEmptyStats } from '@/lib/statsHelpers';
+import { createEmptyStats, isExcludedFromNet, isUnreachable } from '@/lib/statsHelpers';
+import { MappingConfig } from '@/types/database';
 import { ceilHours } from '@/lib/hours';
 
 import { WeekYear } from '@/hooks/useCallRecords';
@@ -24,6 +25,11 @@ interface WeekComparisonProps {
   availableWeeks: WeekYear[];
   amountCol?: string;
   costPerSale?: number | null; // per-sale facturatie (bv. ANBO 734): investering = sales × dit bedrag
+  mappingConfig?: MappingConfig;
+  /** Gelogde uren per week ("YYYY-WW"), som van per-dag-afgeronde uren (useLoggedTimeWeekly). */
+  weeklyLoggedHours?: Record<string, number>;
+  /** Bruto conversie is admin-only; klanten zien alleen Netto (juni-2026 afspraak). */
+  isAdmin?: boolean;
 }
 
 const parseDutchFloat = (val: unknown): number => {
@@ -39,7 +45,7 @@ interface WeekStats extends DayStats {
   weekYearKey: string; // "2026-01" format
 }
 
-export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = 'termijnbedrag', costPerSale = null }: WeekComparisonProps) => {
+export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = 'termijnbedrag', costPerSale = null, mappingConfig, weeklyLoggedHours, isAdmin = false }: WeekComparisonProps) => {
   const [selectedWeeks, setSelectedWeeks] = useState<string[]>(() => {
     // Default: select last 2 available weeks (by value, e.g., "2026-01")
     return availableWeeks.slice(0, Math.min(2, availableWeeks.length)).map(w => w.value);
@@ -105,10 +111,17 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
         stats[weekYearKey].negativeCount++;
         stats[weekYearKey].negativeResults[resultName] = (stats[weekYearKey].negativeResults[resultName] || 0) + 1;
       }
+
+      // Netto-noemer: mirror van ReportMatrix (onbereikbaar + expliciet uitgesloten codes).
+      if (isUnreachable(resultName, mappingConfig ?? {})) {
+        stats[weekYearKey].unreachableCount++;
+      } else if (isExcludedFromNet(resultName, mappingConfig ?? {})) {
+        stats[weekYearKey].excludedFromNetCount++;
+      }
     });
 
     return stats;
-  }, [data, amountCol]);
+  }, [data, amountCol, mappingConfig]);
 
   // Filter to selected weeks
   const filteredStats = useMemo(() => {
@@ -124,8 +137,14 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
   }, [selectedWeeks, weekStats, sortDirection]);
 
   // Calculation helpers — Triple Tree regel: per cel naar boven afronden op hele uren.
-  const calcHours = (stats: DayStats) => ceilHours(stats.durationSec / 3600);
-  const calcSalesPerHour = (stats: DayStats) => {
+  // Gelogde uren (daily_logged_time) hebben voorrang; gesprekstijd is de fallback —
+  // die is voor outbound vrijwel altijd 0 en toonde daardoor "Aantal beluren 0.00".
+  const calcHours = (stats: WeekStats) => {
+    const logged = weeklyLoggedHours?.[stats.weekYearKey];
+    if (logged !== undefined && logged > 0) return logged;
+    return ceilHours(stats.durationSec / 3600);
+  };
+  const calcSalesPerHour = (stats: WeekStats) => {
     const hours = calcHours(stats);
     return hours > 0 ? stats.sales / hours : 0;
   };
@@ -134,6 +153,10 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
     costPerSale != null ? stats.sales * costPerSale : calcHours(stats) * hourlyRate;
   const calcCostPerDonor = (stats: DayStats) =>
     stats.sales > 0 ? calcInvestment(stats) / stats.sales : 0;
+  const calcNettoConversion = (stats: DayStats) => {
+    const denom = stats.calls - stats.unreachableCount - stats.excludedFromNetCount;
+    return denom > 0 ? (stats.sales / denom) * 100 : 0;
+  };
   const calcConversion = (stats: DayStats) =>
     stats.calls > 0 ? (stats.sales / stats.calls) * 100 : 0;
   const calcAvgAmount = (stats: DayStats) =>
@@ -198,7 +221,8 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
     { key: 'avgAmount', label: 'Gemiddeld donatiebedrag', getValue: (s: WeekStats) => calcAvgAmount(s), format: 'currency', color: '#1d4ed8' },
     { key: 'hours', label: 'Aantal beluren', getValue: (s: WeekStats) => calcHours(s), format: 'decimal', color: '#8b5cf6' },
     { key: 'salesPerHour', label: 'Sales per uur', getValue: (s: WeekStats) => calcSalesPerHour(s), format: 'decimal', color: '#7c3aed' },
-    { key: 'conversion', label: 'Bruto Conversie', getValue: (s: WeekStats) => calcConversion(s), format: 'percent', color: '#6d28d9' },
+    { key: 'nettoConversion', label: 'Netto Conversie', getValue: (s: WeekStats) => calcNettoConversion(s), format: 'percent', color: '#6d28d9' },
+    ...(isAdmin ? [{ key: 'conversion', label: 'Bruto Conversie', getValue: (s: WeekStats) => calcConversion(s), format: 'percent' as const, color: '#5b21b6' }] : []),
     { key: 'investment', label: 'Investering (Excl BTW)', getValue: (s: WeekStats) => calcInvestment(s), format: 'currency', inverse: true, color: '#06b6d4' },
     { key: 'costPerDonor', label: 'Investering per donateur', getValue: (s: WeekStats) => calcCostPerDonor(s), format: 'currency', inverse: true, color: '#0891b2' },
     { key: 'roi', label: 'ROI', getValue: (s: WeekStats) => calcROI(s), format: 'multiplier', color: '#0e7490' },

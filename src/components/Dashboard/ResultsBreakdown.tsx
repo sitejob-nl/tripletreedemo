@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ProcessedCallRecord } from '@/types/dashboard';
+import { MappingConfig, ProjectType } from '@/types/database';
+import { classifyResultCoverage, CoverageCategory } from '@/lib/statsHelpers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart as PieChartIcon, Filter } from 'lucide-react';
 import {
@@ -26,45 +28,17 @@ import {
 
 interface ResultsBreakdownProps {
   data: ProcessedCallRecord[];
+  mappingConfig?: MappingConfig;
+  projectType?: ProjectType;
 }
 
-// Categorize results
-const categorizeResult = (result: string): 'positive' | 'neutral' | 'negative' => {
-  const lowerResult = result.toLowerCase();
-  
-  // Positive: sales, donations, agreements, frequencies (indicate sales)
-  if (
-    lowerResult.includes('sale') ||
-    lowerResult.includes('donateur') ||
-    lowerResult.includes('toezegging') ||
-    lowerResult.includes('akkoord') ||
-    lowerResult.includes('positief') ||
-    lowerResult.includes('machtiging') ||
-    lowerResult.includes('maandelijks') ||
-    lowerResult.includes('jaarlijks') ||
-    lowerResult.includes('kwartaal') ||
-    lowerResult.includes('wil lid') ||
-    lowerResult.includes('afspraak') ||
-    lowerResult.includes('behouden')
-  ) {
-    return 'positive';
-  }
-  
-  // Negative: refusals, cancellations
-  if (
-    lowerResult.includes('weiger') ||
-    lowerResult.includes('niet akkoord') ||
-    lowerResult.includes('geen interesse') ||
-    lowerResult.includes('opzeg') ||
-    lowerResult.includes('negatief') ||
-    lowerResult.includes('afwijzing') ||
-    lowerResult.includes('niet bereikt')
-  ) {
-    return 'negative';
-  }
-  
-  // Neutral: voicemail, callback, etc.
-  return 'neutral';
+// Engine-truth classificatie (UNION project-config + defaults) gemapt op drie buckets.
+// De oude losse substring-heuristiek telde bv. "terugbelafspraak" als positief (bevat
+// 'afspraak') → 17 "positief" waar het weekrapport er 3 telde (QA 23-07-2026, A4).
+const COVERAGE_TO_BUCKET: Record<CoverageCategory, 'positive' | 'neutral' | 'negative'> = {
+  positief: 'positive', behouden: 'positive', partial: 'positive', afgehandeld: 'positive',
+  neg_arg: 'negative', neg_notarg: 'negative', verloren: 'negative', niet_afgehandeld: 'negative',
+  onbereikbaar: 'neutral', todo: 'neutral',
 };
 
 const CATEGORY_COLORS = {
@@ -79,7 +53,7 @@ const CATEGORY_LABELS = {
   negative: 'Negatief',
 };
 
-export const ResultsBreakdown = ({ data }: ResultsBreakdownProps) => {
+export const ResultsBreakdown = ({ data, mappingConfig, projectType = 'outbound' }: ResultsBreakdownProps) => {
   const [showCount, setShowCount] = useState<string>('10');
   const isMobile = useIsMobile();
 
@@ -89,7 +63,7 @@ export const ResultsBreakdown = ({ data }: ResultsBreakdownProps) => {
 
     data.forEach((record) => {
       const result = record.bc_result_naam || 'Onbekend';
-      const category = categorizeResult(result);
+      const category = COVERAGE_TO_BUCKET[classifyResultCoverage(result, mappingConfig ?? {}, projectType)];
       
       if (!byResult[result]) {
         byResult[result] = { count: 0, annualValue: 0, category };
@@ -120,7 +94,7 @@ export const ResultsBreakdown = ({ data }: ResultsBreakdownProps) => {
     }));
 
     return { resultsArray, categoryData, total: data.length };
-  }, [data]);
+  }, [data, mappingConfig, projectType]);
 
   const displayLimit = showCount === 'all' ? resultsData.resultsArray.length : parseInt(showCount);
   const displayedResults = resultsData.resultsArray.slice(0, displayLimit);
