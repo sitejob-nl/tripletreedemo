@@ -18,6 +18,7 @@ import { CustomersTable } from "@/components/Admin/CustomersTable";
 import { UsersTable } from "@/components/Admin/UsersTable";
 import { SyncManager } from "@/components/Admin/SyncManager";
 import { BatchManager } from "@/components/Admin/BatchManager";
+import { DemoDataManager } from "@/components/Admin/DemoDataManager";
 import { ProjectDialog, ProjectFormData } from "@/components/Admin/ProjectDialog";
 import { friendlyError } from "@/lib/friendlyError";
 import { errorLogger } from "@/lib/errorLogger";
@@ -298,8 +299,9 @@ export default function Admin() {
             <BatchManager />
           </TabsContent>
 
-          <TabsContent value="sync">
+          <TabsContent value="sync" className="space-y-6">
             <SyncManager />
+            <DemoDataManager />
           </TabsContent>
         </Tabs>
 
