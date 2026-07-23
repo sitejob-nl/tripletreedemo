@@ -192,8 +192,8 @@ export const CallAttemptsAnalysis = ({ data }: CallAttemptsAnalysisProps) => {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="calls" fill="hsl(var(--primary))" name="Calls" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="sales" fill="hsl(142 76% 36%)" name="Sales" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="calls" fill="hsl(var(--primary))" name="Calls" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+                <Bar dataKey="sales" fill="hsl(142 76% 36%)" name="Sales" radius={[4, 4, 0, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -242,6 +242,7 @@ export const CallAttemptsAnalysis = ({ data }: CallAttemptsAnalysisProps) => {
                 />
                 <Legend />
                 <Bar 
+                  isAnimationActive={false}
                   yAxisId="right" 
                   dataKey="calls" 
                   fill="hsl(var(--muted))" 
@@ -250,6 +251,7 @@ export const CallAttemptsAnalysis = ({ data }: CallAttemptsAnalysisProps) => {
                   opacity={0.5}
                 />
                 <Line 
+                  isAnimationActive={false}
                   yAxisId="left" 
                   type="monotone" 
                   dataKey="conversion" 

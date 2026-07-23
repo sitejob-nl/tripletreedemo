@@ -103,6 +103,7 @@ export const DashboardView = ({
                   }}
                 />
                 <Area
+                  isAnimationActive={false}
                   type="monotone"
                   dataKey="annual_value"
                   name="Jaarwaarde"
@@ -121,6 +122,7 @@ export const DashboardView = ({
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
+                  isAnimationActive={false}
                   data={donationTypeData}
                   cx="50%"
                   cy="50%"

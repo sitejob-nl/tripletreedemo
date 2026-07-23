@@ -346,6 +346,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
                   return (
                     <Line
                       key={key}
+                      isAnimationActive={false}
                       type="monotone"
                       dataKey={key}
                       stroke={metric.color}
