@@ -230,7 +230,7 @@ export const TimeAnalysis = ({ data }: TimeAnalysisProps) => {
                     }}
                     formatter={(value: number) => [value, 'Calls']}
                   />
-                  <Bar dataKey="calls" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="calls" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                     {timeData.chartData.map((entry, index) => (
                       <Cell 
                         key={`cell-${index}`} 
@@ -276,7 +276,7 @@ export const TimeAnalysis = ({ data }: TimeAnalysisProps) => {
                     }}
                     formatter={(value: number) => [`${value.toFixed(1)}%`, 'Conversie']}
                   />
-                  <Bar dataKey="conversion" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="conversion" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                     {timeData.chartData.map((entry, index) => (
                       <Cell 
                         key={`cell-${index}`} 

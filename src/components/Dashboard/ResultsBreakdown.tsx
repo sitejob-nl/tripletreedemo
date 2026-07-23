@@ -147,6 +147,7 @@ export const ResultsBreakdown = ({ data }: ResultsBreakdownProps) => {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
+                    isAnimationActive={false}
                     data={resultsData.categoryData}
                     cx="50%"
                     cy="50%"
@@ -277,6 +278,7 @@ export const ResultsBreakdown = ({ data }: ResultsBreakdownProps) => {
                   }}
                 />
                 <Bar 
+                  isAnimationActive={false}
                   dataKey="count" 
                   radius={[0, 4, 4, 0]}
                   fill="hsl(var(--primary))"
