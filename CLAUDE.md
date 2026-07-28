@@ -58,7 +58,7 @@ Klant = user role + customer_projects join
 | `project_secrets` | 31 rijen. project_id → basicall_token. **Niet in repo-migrations** — live toegevoegd |
 | `batches` | 0 rijen. id, project_id, basicall_batch_id, name, status, **total, handled, remaining**, last_synced_at. **Niet in repo-migrations** — live toegevoegd. Voorraad-KPI bron |
 | `call_records` | 5.461 rijen. basicall_record_id (uniek), beldatum (TEXT DD-MM-YYYY) + beldatum_date (DATE via trigger), beltijd, gesprekstijd_sec, resultaat, week_number, raw_data JSONB, synced_at |
-| `sync_logs` | 177 rijen. Audit-trail per sync-attempt per project |
+| `sync_logs` | 177 rijen. Audit-trail per sync-attempt per project. `kind`: `records` \| `records_preview` \| `logged_time` \| `logged_time_preview` — `_preview` = avondronde over een dag die nog loopt. **Alleen `records` telt voor dekking**: `getMissedDays()` en de trustlaag-functies (`evaluate_project_quality`, `get_project_data_quality`) filteren op `coalesce(kind,'records')='records'`, dus urenrijen sturen nooit een backfill of klantblokkade aan |
 | `sync_jobs` | 0 rijen. Queue pending/processing/completed/failed (admin-only) |
 | `user_roles` | 5 rijen |
 | `customer_projects` | 4 rijen. user_id ↔ project_id multi-tenant join |
