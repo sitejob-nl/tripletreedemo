@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useSyncLogs, useDbStats } from "@/hooks/useSyncLogs";
+import { useSyncLogs, useDbStats, describeSyncKind } from "@/hooks/useSyncLogs";
 import { useAdminProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import { useErrorLogs, useUnresolvedErrorCount, useResolveError, useDeleteError } from "@/hooks/useErrorLogs";
@@ -159,6 +159,7 @@ export default function Developer() {
                       {syncLogs.map((log) => {
                         const status = log.status || 'pending';
                         const style = statusStyles[status] || statusStyles.pending;
+                        const kind = describeSyncKind(log.kind);
                         const isOpen = openLogs.has(log.id);
                         
                         return (
@@ -176,6 +177,7 @@ export default function Developer() {
                                       <span className="ml-1 capitalize">{status}</span>
                                     </Badge>
                                     <span className="font-medium">{log.project_name || 'Onbekend project'}</span>
+                                    <Badge variant="secondary">{kind.label}</Badge>
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm text-muted-foreground">
@@ -186,7 +188,7 @@ export default function Developer() {
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                   <div>
-                                    <span className="text-muted-foreground">Records:</span>
+                                    <span className="text-muted-foreground">{kind.countLabel}:</span>
                                     <p className="font-medium">{log.records_synced || 0}</p>
                                   </div>
                                   <div>

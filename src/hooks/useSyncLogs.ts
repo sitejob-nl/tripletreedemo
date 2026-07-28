@@ -7,6 +7,7 @@ interface SyncLog {
   started_at: string | null;
   completed_at: string | null;
   status: string | null;
+  kind: string | null;
   records_synced: number | null;
   error_message: string | null;
   sync_from: string | null;
@@ -15,6 +16,25 @@ interface SyncLog {
 
 interface SyncLogWithProject extends SyncLog {
   project_name: string | null;
+}
+
+/**
+ * Vertaalt sync_logs.kind naar wat een beheerder ervan moet weten. Sinds 28-07-2026 logt de
+ * urensync zichzelf ook (kind logged_time*), dus "een mislukte sync" kan nu over records óf
+ * over ingelogde uren gaan — zonder label leest dat als hetzelfde probleem.
+ * `_preview` = tussenstand uit de avondronde over een dag die nog liep; geen definitieve meting.
+ */
+export function describeSyncKind(kind: string | null) {
+  const normalized = kind ?? 'records';
+  const isHours = normalized.startsWith('logged_time');
+  const isPreview = normalized.endsWith('_preview');
+  return {
+    isHours,
+    isPreview,
+    label: `${isHours ? 'uren' : 'records'}${isPreview ? ' (tussenstand)' : ''}`,
+    /** records_synced telt records bij een records-sync, maar dagen bij een urensync. */
+    countLabel: isHours ? 'Dagen met uren' : 'Records',
+  };
 }
 
 export function useSyncLogs(projectId?: string, limit = 50) {

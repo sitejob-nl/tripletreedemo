@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle2, ShieldAlert, Wrench } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useDataQualityIssues } from '@/hooks/useDataQualityIssues';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
-import { useRecentSyncFailures } from '@/hooks/useSyncLogs';
+import { describeSyncKind, useRecentSyncFailures } from '@/hooks/useSyncLogs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -116,7 +116,7 @@ export function DataQualityCenter({ onNavigate }: DataQualityCenterProps) {
                   <div className="flex items-center gap-2">
                     <ShieldAlert className="h-4 w-4 text-destructive" />
                     <span className="font-medium text-sm">{failure.project_name ?? 'Onbekend project'}</span>
-                    <Badge variant="outline">sync</Badge>
+                    <Badge variant="outline">sync · {describeSyncKind(failure.kind).label}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 truncate" title={failure.error_message ?? undefined}>
                     {failure.error_message ?? 'Synchronisatie mislukt.'}

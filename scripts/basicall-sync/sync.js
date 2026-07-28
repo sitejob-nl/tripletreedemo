@@ -435,6 +435,11 @@ async function validateToken(project) {
 }
 
 // --- SYNC INGELOGDE TIJD: ENKELE DAG ---
+// Geeft een uitkomst-object terug i.p.v. seconden-of-null. Drie gevallen die uit elkaar
+// gehouden moeten worden, omdat ze in de audittrail verschillend wegen:
+//   'ok'     — BasiCall antwoordde; seconds is het totaal (mag 0 zijn).
+//   'nodata' — dag zonder ingelogde agents; BasiCall geeft daar HTTP 500 op (§B.5). Verwacht.
+//   'error'  — echte storing (timeout, auth, onbekende fout). Alleen dit telt als mislukt.
 async function syncLoggedTimeDay(project, dayDate) {
     const start = new Date(dayDate);
     start.setHours(0, 0, 0, 0);
@@ -453,20 +458,55 @@ async function syncLoggedTimeDay(project, dayDate) {
         const responseObj = respBody['Project.getIngelogdeTijdenResponse'];
         const items = unboxRecords(responseObj);
 
+        if (!items || items.length === 0) {
+            return { outcome: 'nodata', seconds: 0, message: 'Geen ingelogde tijd gerapporteerd' };
+        }
+
         let totalSeconds = 0;
         items.forEach(item => {
             const seconds = parseInt(item.aantal_seconden || '0', 10);
             if (!isNaN(seconds)) totalSeconds += seconds;
         });
 
-        return totalSeconds;
+        return { outcome: 'ok', seconds: totalSeconds, message: null };
     } catch (e) {
-        // Return null bij error zodat we onderscheid kunnen maken met 0 seconden.
         // "Geen data"-500's (lege dag) niet als fout loggen — dat is verwacht, geen storing.
-        if (!e.isNoData) {
-            console.error(`      ⚠️  Inlogtijd fout ${formatLocalDate(dayDate)}: ${e.message}`);
+        if (e.isNoData) {
+            return { outcome: 'nodata', seconds: 0, message: e.message };
         }
-        return null;
+        console.error(`      ⚠️  Inlogtijd fout ${formatLocalDate(dayDate)}: ${e.message}`);
+        return { outcome: 'error', seconds: 0, message: e.message };
+    }
+}
+
+// --- SYNC INGELOGDE TIJD: AUDITREGEL ---
+// Elke urenronde schrijft nu zelf een sync_logs-rij weg. Tot 28-07-2026 deed alleen
+// syncLoggedTimeRange dat, en die route draait uitsluitend bij een handmatige sync_jobs-job.
+// De nachtronde, de avondronde en de missed-days-backfill lopen via syncLoggedTimeSingleDay
+// en logden niets: bij een lege queue stond er wekenlang géén enkele 'logged_time'-rij in de
+// audittrail terwijl de uren wél binnenkwamen, dus een mislukte urenophaling was onzichtbaar.
+// De rij is puur audit — getMissedDays en de SQL-trustlaag filteren op kind='records', dus
+// deze rijen sturen geen backfill en geen klantblokkade aan.
+async function logLoggedTimeSync(project, start, end, {
+    status, savedDays, expectedDays, failedDays, message = null, isFinalForDay = true,
+}) {
+    const { error } = await supabase.from('sync_logs').insert({
+        project_id: project.id,
+        status,
+        // Mirror van de records/records_preview-splitsing: de avondronde kijkt naar een dag
+        // die nog loopt en mag niet als definitieve urenmeting van die dag gelden.
+        kind: isFinalForDay ? 'logged_time' : 'logged_time_preview',
+        records_synced: savedDays,
+        expected_records: expectedDays,
+        failed_records: failedDays,
+        sync_from: start.toISOString(),
+        sync_to: end.toISOString(),
+        error_message: message,
+        completed_at: new Date().toISOString(),
+    });
+    if (error) {
+        // Een falende auditregel mag de sync zelf nooit breken.
+        console.warn(`   ⚠️  Kon urenlog niet wegschrijven: ${error.message}`);
     }
 }
 
@@ -510,6 +550,7 @@ async function syncLoggedTimeRange(project, start, end) {
     let totalSaved = 0;
     let totalSeconds = 0;
     let errorDays = 0;
+    let noDataDays = 0;
     let skippedDays = 0;
 
     while (currentDate <= end) {
@@ -521,10 +562,14 @@ async function syncLoggedTimeRange(project, start, end) {
             continue;
         }
 
-        const seconds = await syncLoggedTimeDay(project, currentDate);
+        const { outcome, seconds } = await syncLoggedTimeDay(project, currentDate);
 
-        if (seconds === null) {
+        if (outcome === 'error') {
             errorDays++;
+        } else if (outcome === 'nodata') {
+            // Dag zonder ingelogde agents. Verwacht gedrag, geen mislukking: eerder telde dit
+            // mee als 'dag niet opgehaald' en kleurde de hele ronde onterecht 'warning'.
+            noDataDays++;
         } else if (seconds > 0) {
             const saved = await saveLoggedTime(project.id, dateStr, seconds);
             if (saved) {
@@ -532,6 +577,8 @@ async function syncLoggedTimeRange(project, start, end) {
                 totalSeconds += seconds;
                 const hours = Math.round(seconds / 36) / 100;
                 console.log(`   ${dateStr}: ${hours}u ✓`);
+            } else {
+                errorDays++;
             }
         }
 
@@ -546,57 +593,54 @@ async function syncLoggedTimeRange(project, start, end) {
     const totalHours = Math.round(totalSeconds / 36) / 100;
     console.log(`   ✅ ${totalSaved} dagen opgeslagen, totaal: ${totalHours} uur${errorDays > 0 ? ` (${errorDays} dagen mislukt)` : ''}`);
 
-    // Sync log voor inlogtijd
-    await supabase.from('sync_logs').insert({
-        project_id: project.id,
+    // Verwachting = dagen met records waarvoor BasiCall ook echt uren rapporteerde. Dagen
+    // zonder ingelogde agents tellen niet mee, anders leest elke rij als een tekort.
+    await logLoggedTimeSync(project, start, end, {
         status: errorDays > 0 ? 'warning' : 'success',
-        kind: 'logged_time',
-        records_synced: totalSaved,
-        expected_records: activeDaySet.size,
-        failed_records: errorDays,
-        sync_from: start.toISOString(),
-        sync_to: end.toISOString(),
-        error_message: errorDays > 0 ? `${errorDays} dagen konden niet opgehaald worden (inlogtijd)` : null,
-        completed_at: new Date().toISOString(),
+        savedDays: totalSaved,
+        expectedDays: Math.max(activeDaySet.size - noDataDays, totalSaved),
+        failedDays: errorDays,
+        message: errorDays > 0 ? `${errorDays} dagen konden niet opgehaald worden (inlogtijd)` : null,
     });
 }
 
-// --- SYNC INGELOGDE TIJD: SINGLE DAY (nachtelijke ronde) ---
-async function syncLoggedTimeSingleDay(project, start, end) {
+// --- SYNC INGELOGDE TIJD: SINGLE DAY (nacht-, avond- en backfill-ronde) ---
+// isFinalForDay=false voor de avondronde: die kijkt naar een dag die nog loopt en levert dus
+// een tussenstand, geen definitieve urenmeting. Zie logLoggedTimeSync().
+async function syncLoggedTimeSingleDay(project, start, end, isFinalForDay = true) {
     console.log(`\n⏱️  Inlogtijd ophalen: ${project.name}`);
-    try {
-        const body = `
-            <start_datum xsi:type="xsd:dateTime">${formatDateISO(start)}</start_datum>
-            <eind_datum xsi:type="xsd:dateTime">${formatDateISO(end)}</eind_datum>
-        `;
-        const respBody = await soapCall(
-            'Project.getIngelogdeTijden', body,
-            project.basicall_token, project.basicall_project_id
-        );
-        const responseObj = respBody['Project.getIngelogdeTijdenResponse'];
-        const items = unboxRecords(responseObj);
+    const dateStr = formatLocalDate(start);
+    const { outcome, seconds, message } = await syncLoggedTimeDay(project, start);
 
-        if (!items || items.length === 0) {
-            console.log('   ✅ Geen inlogtijd data.');
-            return;
-        }
-
-        let totalSeconds = 0;
-        items.forEach(item => {
-            const seconds = parseInt(item.aantal_seconden || '0', 10);
-            if (!isNaN(seconds)) totalSeconds += seconds;
+    if (outcome === 'error') {
+        console.error(`   ❌ Error inlogtijd: ${message}`);
+        await logLoggedTimeSync(project, start, end, {
+            status: 'failed', savedDays: 0, expectedDays: 1, failedDays: 1, message, isFinalForDay,
         });
-
-        const dateStr = formatLocalDate(start);
-        console.log(`   📊 ${items.length} entries, totaal: ${Math.round(totalSeconds / 3600 * 100) / 100} uur`);
-
-        if (totalSeconds > 0) {
-            const saved = await saveLoggedTime(project.id, dateStr, totalSeconds);
-            if (saved) console.log('   💾 Opgeslagen.');
-        }
-    } catch (e) {
-        if (!e.isNoData) console.error(`   ❌ Error inlogtijd:`, e.message);
+        return;
     }
+
+    if (outcome === 'nodata' || seconds === 0) {
+        console.log('   ✅ Geen inlogtijd data.');
+        await logLoggedTimeSync(project, start, end, {
+            status: 'success', savedDays: 0, expectedDays: 0, failedDays: 0,
+            message: message || 'Geen ingelogde tijd gerapporteerd', isFinalForDay,
+        });
+        return;
+    }
+
+    console.log(`   📊 Totaal: ${Math.round(seconds / 3600 * 100) / 100} uur`);
+    const saved = await saveLoggedTime(project.id, dateStr, seconds);
+    if (saved) console.log('   💾 Opgeslagen.');
+
+    await logLoggedTimeSync(project, start, end, {
+        status: saved ? 'success' : 'failed',
+        savedDays: saved ? 1 : 0,
+        expectedDays: 1,
+        failedDays: saved ? 0 : 1,
+        message: saved ? null : `Opslaan van ${dateStr} in daily_logged_time mislukt`,
+        isFinalForDay,
+    });
 }
 
 // Haalt de kalenderdag uit een BasiCall-timestamp ("2026-07-14 18:45:31" → "2026-07-14").
@@ -1278,7 +1322,7 @@ async function run() {
             console.log(`   ${todayEnriched.length} actieve projecten.\n`);
             for (const project of todayEnriched) {
                 await performSync(project, todayStart, todayEnd, null, false);
-                await syncLoggedTimeSingleDay(project, todayStart, todayEnd);
+                await syncLoggedTimeSingleDay(project, todayStart, todayEnd, false);
             }
 
             const elapsedToday = Math.round((Date.now() - startTime) / 1000);
