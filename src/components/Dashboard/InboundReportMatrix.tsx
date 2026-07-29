@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { parseDutchFloat } from '@/lib/dataProcessing';
 import { ProcessedCallRecord, InboundStats } from '@/types/dashboard';
 import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
 import { DailyLoggedTimeBreakdown } from '@/hooks/useLoggedTime';
@@ -26,12 +27,6 @@ interface InboundReportMatrixProps {
   reportageOverrides?: ReportageWeeklyOverride[];
 }
 
-const parseDutchFloat = (val: unknown): number => {
-  if (typeof val === 'number') return val;
-  if (!val) return 0;
-  const str = String(val).replace(/[^\d,.-]/g, '').replace(',', '.');
-  return parseFloat(str) || 0;
-};
 
 export const InboundReportMatrix = ({ 
   data, 

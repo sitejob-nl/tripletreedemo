@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { parseDutchFloat } from '@/lib/dataProcessing';
 import { ProcessedCallRecord, DayStats } from '@/types/dashboard';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -32,12 +33,6 @@ interface WeekComparisonProps {
   isAdmin?: boolean;
 }
 
-const parseDutchFloat = (val: unknown): number => {
-  if (typeof val === 'number') return val;
-  if (!val) return 0;
-  const str = String(val).replace(/[^\d,.-]/g, '').replace(',', '.');
-  return parseFloat(str) || 0;
-};
 
 interface WeekStats extends DayStats {
   weekNumber: number;

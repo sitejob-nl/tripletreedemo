@@ -1,9 +1,40 @@
 import { ProjectMapping, RawCallRecord, ProcessedCallRecord } from '@/types/dashboard';
 
-export const parseDutchFloat = (str: string | number): number => {
+/**
+ * Leest een bedrag uit vrije BasiCall-invoer. Exacte spiegel van `public.parse_amount_text`
+ * in SQL (migration 20260729103000) — de KPI-kaart rekent via de RPC en matrix/export via
+ * deze functie, dus elk verschil laat dezelfde campagne twee bedragen tonen.
+ *
+ * Regels:
+ *  1. alles behalve cijfers, punt, komma en minteken weggooien;
+ *  2. bij twee scheidingstekens is de RECHTSE de decimaal ("1.234,56" NL, "1,234.56" EN);
+ *  3. alleen een komma -> decimaalteken;
+ *  4. herhaalde punten uit typefouten samenvouwen ("5,.00" -> "5.00");
+ *  5. de eerste geldige numerieke token pakken, anders 0.
+ *
+ * Nooit NaN: de oude versie gaf voor onleesbare invoer NaN terug, wat via optellingen de
+ * hele jaarwaarde-kolom op NaN zette.
+ */
+export const parseDutchFloat = (str: string | number | null | undefined): number => {
+  if (typeof str === 'number') return Number.isFinite(str) ? str : 0;
   if (!str) return 0;
-  if (typeof str === 'number') return str;
-  return parseFloat(str.replace(',', '.').replace(/[^0-9.]/g, ''));
+
+  let value = String(str).replace(/[^0-9.,-]/g, '');
+  if (!value) return 0;
+
+  const lastComma = value.lastIndexOf(',');
+  const lastDot = value.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    value = lastComma > lastDot
+      ? value.replace(/\./g, '').replace(/,/g, '.')
+      : value.replace(/,/g, '');
+  } else if (lastComma >= 0) {
+    value = value.replace(/,/g, '.');
+  }
+
+  value = value.replace(/\.{2,}/g, '.');
+  const match = value.match(/-?\d+(?:\.\d+)?/);
+  return match ? parseFloat(match[0]) : 0;
 };
 
 export const getWeekNumber = (date: Date): number => {
