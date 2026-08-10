@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { friendlyError } from '@/lib/friendlyError';
 
 export interface ResultCount {
   resultaat: string;
@@ -19,7 +20,7 @@ export const useResultDistribution = (projectId?: string) =>
       const { data, error } = await supabase.rpc('get_project_result_distribution', {
         p_project_id: projectId,
       });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(friendlyError(error, 'De resultaatcodes konden niet geladen worden. Herlaad de pagina en probeer het opnieuw.'));
       return (data || []).map((r: { resultaat: string; cnt: number }) => ({
         resultaat: r.resultaat,
         cnt: Number(r.cnt),

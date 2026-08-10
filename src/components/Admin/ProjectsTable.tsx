@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { friendlyError } from "@/lib/friendlyError";
+import { describeError, friendlyError } from "@/lib/friendlyError";
 import { Plus, Search, Settings, Trash2 } from "lucide-react";
 import type { DBProject } from "@/types/database";
 
@@ -65,8 +65,7 @@ export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
       });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "Kon het project niet activeren of deactiveren."),
+        ...describeError(error, "Het project kon niet aan- of uitgezet worden. Herlaad de pagina en probeer het opnieuw.", "Wijziging niet opgeslagen"),
         variant: "destructive"
       });
     }
@@ -91,8 +90,7 @@ export function ProjectsTable({ onOpenAdd, onOpenEdit }: ProjectsTableProps) {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "Het project kon niet verwijderd worden. Er zijn mogelijk nog gegevens aan gekoppeld."),
+        ...describeError(error, "Het project kon niet verwijderd worden. Ontkoppel eerst de klanten en gegevens die er nog aan hangen.", "Project niet verwijderd"),
         variant: "destructive"
       });
     }

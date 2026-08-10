@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { QualityMetric, ReportingState } from '@/types/database';
+import { friendlyError } from '@/lib/friendlyError';
 
 export interface DataQualityIssue {
   id: string;
@@ -32,7 +33,7 @@ export const useDataQualityIssues = () => useQuery({
       .is('resolved_at', null)
       .order('severity')
       .order('last_seen_at', { ascending: false });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(friendlyError(error, 'De kwaliteitscontroles konden niet geladen worden. Herlaad de pagina en probeer het opnieuw.'));
 
     return (data ?? []).map((row) => ({
       ...row,

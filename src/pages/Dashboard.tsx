@@ -39,7 +39,7 @@ import { errorLogger } from '@/lib/errorLogger';
 import { useProjectDataQuality } from '@/hooks/useProjectDataQuality';
 import { DataQualityBanner } from '@/components/Dashboard/DataQualityBanner';
 import { DataTrustOnboarding } from '@/components/Dashboard/DataTrustOnboarding';
-import { friendlyError } from '@/lib/friendlyError';
+import { describeError, friendlyError } from '@/lib/friendlyError';
 
 const PROJECT_DATA_KEYS = ['call_records', 'available_weeks', 'kpi_aggregates', 'logged_time', 'logged_time_weekly', 'report_matrix_data', 'total_record_count', 'kpi_basic_aggregates', 'kpi_annual_value', 'all_call_records_analysis', 'project-data-quality'];
 
@@ -445,8 +445,11 @@ const Index = () => {
       });
     } catch (error) {
       toast({
-        title: 'Fout bij opslaan',
-        description: friendlyError(error, 'De configuratie kon niet opgeslagen worden. Probeer het opnieuw.'),
+        ...describeError(
+          error,
+          'De configuratie kon niet opgeslagen worden. Controleer de velden en probeer het opnieuw.',
+          'Opslaan mislukt',
+        ),
         variant: 'destructive',
       });
     }
@@ -539,15 +542,22 @@ const Index = () => {
 
         <div className="p-3 sm:p-8 max-w-7xl mx-auto">
           {/* Error State */}
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-4 flex items-start gap-3">
-              <AlertCircle className="text-destructive mt-0.5" size={20} />
-              <div>
-                <h4 className="text-destructive font-bold text-sm">Fout bij laden</h4>
-                <p className="text-destructive text-sm">{error.message}</p>
+          {error && (() => {
+            const uitleg = describeError(
+              error,
+              'De gegevens konden niet geladen worden. Herlaad de pagina en probeer het opnieuw.',
+              'Gegevens niet geladen',
+            );
+            return (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-4 flex items-start gap-3">
+                <AlertCircle className="text-destructive mt-0.5" size={20} />
+                <div>
+                  <h4 className="text-destructive font-bold text-sm">{uitleg.title}</h4>
+                  <p className="text-destructive text-sm">{uitleg.description}</p>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Welcome Screen - Show when no project selected */}
           {!currentProject && !isLoading && !error && (

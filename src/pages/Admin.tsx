@@ -20,7 +20,7 @@ import { SyncManager } from "@/components/Admin/SyncManager";
 import { BatchManager } from "@/components/Admin/BatchManager";
 import { DemoDataManager } from "@/components/Admin/DemoDataManager";
 import { ProjectDialog, ProjectFormData } from "@/components/Admin/ProjectDialog";
-import { friendlyError } from "@/lib/friendlyError";
+import { describeError, friendlyError } from "@/lib/friendlyError";
 import { errorLogger } from "@/lib/errorLogger";
 
 const defaultMappingConfig: MappingConfig = {
@@ -102,8 +102,8 @@ export default function Admin() {
   const handleSaveProject = async () => {
     if (!formData.name || !formData.project_key || !formData.basicall_project_id) {
       toast({
-        title: "Validatie fout",
-        description: "Vul alle verplichte velden in.",
+        title: "Verplichte velden leeg",
+        description: "Vul alle velden met een sterretje in voordat je opslaat.",
         variant: "destructive"
       });
       return;
@@ -232,8 +232,7 @@ export default function Admin() {
         basicall_project_id: projectData.basicall_project_id,
       });
       toast({
-        title: "Fout",
-        description: friendlyError(error, "Het project kon niet opgeslagen worden. Controleer de gegevens en probeer opnieuw."),
+        ...describeError(error, "Het project kon niet opgeslagen worden. Controleer de gegevens en probeer het opnieuw.", "Project niet opgeslagen"),
         variant: "destructive"
       });
     } finally {

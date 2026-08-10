@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { MappingConfig } from '@/types/database';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { detectFrequencyFromConfig, FrequencyDetectionResult } from '@/lib/statsHelpers';
+import { friendlyError } from '@/lib/friendlyError';
 
 export interface ConfigPreviewRecord {
   recordId: number;
@@ -50,7 +51,7 @@ export const useConfigPreview = ({
       const { data, error } = await query;
 
       if (error) {
-        throw new Error(`Fout bij ophalen preview records: ${error.message}`);
+        throw new Error(friendlyError(error, 'Het voorbeeld kon niet geladen worden. Kies een andere periode of probeer het opnieuw.'));
       }
 
       // Filter for sales and process

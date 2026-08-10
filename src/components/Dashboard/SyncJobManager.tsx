@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { friendlyError } from "@/lib/friendlyError";
+import { describeError, friendlyError } from "@/lib/friendlyError";
 import { RefreshCw, Clock, CheckCircle, XCircle, Loader2, Play } from "lucide-react";
 
 type PresetPeriod = "last-year" | "this-year" | "this-quarter" | "last-quarter" | "last-month" | "custom";
@@ -143,8 +143,7 @@ export function SyncJobManager() {
     } catch (error: any) {
       setIsCreatingMultiple(false);
       toast({
-        title: "Fout bij aanmaken job",
-        description: friendlyError(error, "De sync-opdracht kon niet aangemaakt worden. Probeer het opnieuw."),
+        ...describeError(error, "De sync-opdracht kon niet aangemaakt worden. Probeer het opnieuw; blijft het misgaan, meld het bij Kas (info@sitejob.nl).", "Sync-opdracht niet aangemaakt"),
         variant: "destructive"
       });
     }

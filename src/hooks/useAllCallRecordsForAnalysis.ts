@@ -4,6 +4,7 @@ import { DBProjectBase } from '@/types/database';
 import { ProcessedDBCallRecordWithFreq } from './useCallRecords';
 import { calculateValuesFromRaw, getDayName } from '@/lib/recordValue';
 import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
+import { friendlyError } from '@/lib/friendlyError';
 
 /**
  * Hook that fetches ALL call records for a project (no pagination limit)
@@ -52,7 +53,7 @@ export const useAllCallRecordsForAnalysis = (
         const { data, error } = await query;
 
         if (error) {
-          throw new Error(`Fout bij ophalen analyse records: ${error.message}`);
+          throw new Error(friendlyError(error, 'De analysegegevens konden niet geladen worden. Kies een kortere periode of probeer het opnieuw.'));
         }
 
         if (data && data.length > 0) {

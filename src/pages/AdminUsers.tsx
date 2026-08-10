@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useUsers, useUpdateUserRole, useDeleteUserRole, useAddUserRole } from "@/hooks/useUsers";
 import { useAuth } from "@/hooks/useAuth";
-import { friendlyError } from "@/lib/friendlyError";
+import { describeError, friendlyError } from "@/lib/friendlyError";
 import { errorLogger } from "@/lib/errorLogger";
 
 type AppRole = 'admin' | 'user' | 'superadmin';
@@ -50,8 +50,7 @@ export default function AdminUsers() {
     } catch (error: any) {
       errorLogger.logApiError("userRoles.update", error, { userId, newRole });
       toast({
-        title: "Fout",
-        description: friendlyError(error, "Kon rol niet bijwerken."),
+        ...describeError(error, "De rol kon niet bijgewerkt worden. Herlaad de pagina en probeer het opnieuw.", "Rol bijwerken mislukt"),
         variant: "destructive"
       });
     }
@@ -78,8 +77,7 @@ export default function AdminUsers() {
     } catch (error: any) {
       errorLogger.logApiError("userRoles.delete", error, { roleId, userId });
       toast({
-        title: "Fout",
-        description: friendlyError(error, "Kon rol niet verwijderen."),
+        ...describeError(error, "De rol kon niet verwijderd worden. Herlaad de pagina en probeer het opnieuw.", "Rol verwijderen mislukt"),
         variant: "destructive"
       });
     }
@@ -88,8 +86,8 @@ export default function AdminUsers() {
   const handleAddRole = async () => {
     if (!newUserId.trim()) {
       toast({
-        title: "Validatie fout",
-        description: "Vul een user ID in.",
+        title: "User ID ontbreekt",
+        description: "Vul de user ID in van de gebruiker die je een rol wilt geven.",
         variant: "destructive"
       });
       return;
@@ -107,8 +105,7 @@ export default function AdminUsers() {
     } catch (error: any) {
       errorLogger.logApiError("userRoles.add", error, { userId: newUserId, role: newUserRole });
       toast({
-        title: "Fout",
-        description: friendlyError(error, "Kon rol niet toevoegen."),
+        ...describeError(error, "De rol kon niet toegevoegd worden. Controleer of de user ID klopt.", "Rol toevoegen mislukt"),
         variant: "destructive"
       });
     }

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { DBProject } from '@/types/database';
 import { classifyResultCoverage } from '@/lib/statsHelpers';
+import { friendlyError } from '@/lib/friendlyError';
 
 export interface UnmappedCode {
   resultaat: string;
@@ -33,7 +34,7 @@ export const useUnmappedResultCodes = (projects: DBProject[]) => {
     queryKey: ['result_code_distribution'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_result_code_distribution');
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(friendlyError(error, 'De onbekende resultaatcodes konden niet geladen worden. Herlaad de pagina en probeer het opnieuw.'));
       return data || [];
     },
     staleTime: 5 * 60_000,

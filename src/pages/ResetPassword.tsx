@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { friendlyError } from '@/lib/friendlyError';
+import { describeError, friendlyError } from '@/lib/friendlyError';
 import { errorLogger } from '@/lib/errorLogger';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { z } from 'zod';
@@ -126,8 +126,7 @@ export default function ResetPassword() {
 
     if (error) {
       toast({
-        title: 'Er ging iets mis',
-        description: friendlyError(error, 'We konden het wachtwoord niet wijzigen. Probeer de link opnieuw te openen.'),
+        ...describeError(error, 'We konden het wachtwoord niet wijzigen. Open de link opnieuw of vraag een nieuwe aan bij Triple Tree.', 'Wachtwoord niet gewijzigd'),
         variant: 'destructive',
       });
     } else {

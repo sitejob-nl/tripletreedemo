@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle, Eye, EyeOff, KeyRound } from "lucide-react";
 import tripleTreeLogo from "@/assets/triple-tree-logo.png";
 import { errorLogger } from "@/lib/errorLogger";
-import { friendlyError } from "@/lib/friendlyError";
+import { describeError, friendlyError } from "@/lib/friendlyError";
 
 type ActivationLinkType = "invite" | "signup";
 
@@ -139,8 +139,7 @@ export default function SetPassword() {
     } catch (error: unknown) {
       errorLogger.logApiError('set_password', error);
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "We konden het wachtwoord niet instellen. Probeer de link opnieuw of vraag een nieuwe uitnodiging."),
+        ...describeError(error, "We konden het wachtwoord niet instellen. Open de link opnieuw of vraag Triple Tree om een nieuwe uitnodiging.", "Wachtwoord niet ingesteld"),
         variant: "destructive"
       });
     } finally {

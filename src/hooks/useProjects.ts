@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database, Json } from '@/integrations/supabase/types';
 import { DBProject, DBProjectPublic, MappingConfig, ProjectType, ReportingState } from '@/types/database';
+import { friendlyError } from '@/lib/friendlyError';
 
 type ProjectRow = Database['public']['Tables']['projects']['Row']
   | Database['public']['Views']['projects_public']['Row'];
@@ -41,7 +42,7 @@ export function useProjects(onlyActive = true, userId?: string, isAdmin = false)
       const { data, error } = result;
 
       if (error) {
-        throw new Error(`Fout bij ophalen projecten: ${error.message}`);
+        throw new Error(friendlyError(error, 'De projecten konden niet geladen worden. Herlaad de pagina en probeer het opnieuw.'));
       }
 
       return ((data || []) as ProjectRow[]).map(normalizeProject);
@@ -96,7 +97,7 @@ export const useUpdateProject = () => {
           p_hourly_rate: hourlyRate,
           p_hours_factor: hoursFactor,
         });
-        if (error) throw new Error(`Mapping kon niet worden goedgekeurd: ${error.message}`);
+        if (error) throw new Error(friendlyError(error, 'De mapping kon niet goedgekeurd worden. Probeer het opnieuw; blijft het misgaan, meld het bij Kas (info@sitejob.nl).'));
         return data;
       }
       if (projectType !== undefined) updates.project_type = projectType;
@@ -110,7 +111,7 @@ export const useUpdateProject = () => {
         .single();
 
       if (error) {
-        throw new Error(`Fout bij updaten project: ${error.message}`);
+        throw new Error(friendlyError(error, 'Het project kon niet bijgewerkt worden. Controleer de gegevens en probeer het opnieuw.'));
       }
 
       return data;

@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { friendlyError } from "@/lib/friendlyError";
+import { describeError, friendlyError } from "@/lib/friendlyError";
 import { Plus, Search, Link as LinkIcon, Unlink, UserPlus, Loader2, Mail, Clock, RefreshCw, Trash2 } from "lucide-react";
 
 interface CustomersTableProps {
@@ -85,8 +85,7 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
       setSelectedProjectIds([]);
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De uitnodiging kon niet verstuurd worden. Probeer het opnieuw."),
+        ...describeError(error, "De uitnodiging kon niet verstuurd worden. Controleer het e-mailadres en probeer het opnieuw.", "Uitnodiging niet verstuurd"),
         variant: "destructive"
       });
     }
@@ -106,8 +105,7 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
       });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De uitnodiging kon niet opnieuw verstuurd worden. Probeer het zo opnieuw."),
+        ...describeError(error, "De uitnodiging kon niet opnieuw verstuurd worden. Wacht even en probeer het nog een keer.", "Uitnodiging niet verstuurd"),
         variant: "destructive"
       });
     }
@@ -130,8 +128,7 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
       });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De inloglink kon niet verstuurd worden. Probeer het zo opnieuw."),
+        ...describeError(error, "De inloglink kon niet verstuurd worden. Wacht even en probeer het nog een keer.", "Inloglink niet verstuurd"),
         variant: "destructive"
       });
     }
@@ -146,8 +143,7 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
       });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De uitnodiging kon niet verwijderd worden."),
+        ...describeError(error, "De uitnodiging kon niet verwijderd worden. Herlaad de pagina en probeer het opnieuw.", "Uitnodiging niet verwijderd"),
         variant: "destructive"
       });
     }
@@ -169,8 +165,7 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
       setIsLinkDialogOpen(false);
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "Het project kon niet aan de klant gekoppeld worden."),
+        ...describeError(error, "Het project kon niet aan de klant gekoppeld worden. Herlaad de pagina en probeer het opnieuw.", "Koppelen mislukt"),
         variant: "destructive"
       });
     }
@@ -185,8 +180,7 @@ export function CustomersTable({ isAddDialogOpen, setIsAddDialogOpen }: Customer
       });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "Het project kon niet ontkoppeld worden."),
+        ...describeError(error, "Het project kon niet ontkoppeld worden. Herlaad de pagina en probeer het opnieuw.", "Ontkoppelen mislukt"),
         variant: "destructive"
       });
     }

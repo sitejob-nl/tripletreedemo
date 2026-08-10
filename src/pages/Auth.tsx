@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { friendlyError } from '@/lib/friendlyError';
+import { describeError, friendlyError } from '@/lib/friendlyError';
 import { Loader2 } from 'lucide-react';
 import { z } from 'zod';
 import tripleTreeLogo from '@/assets/triple-tree-logo.png';
@@ -103,8 +103,7 @@ export default function Auth() {
 
     if (error) {
       toast({
-        title: 'Er ging iets mis',
-        description: friendlyError(error, 'We konden de herstellink niet versturen. Probeer het zo opnieuw.'),
+        ...describeError(error, 'We konden de herstellink niet versturen. Controleer het e-mailadres en probeer het opnieuw.', 'Herstellink niet verstuurd'),
         variant: 'destructive',
       });
     } else {

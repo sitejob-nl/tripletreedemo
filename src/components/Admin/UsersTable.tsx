@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { friendlyError } from "@/lib/friendlyError";
+import { describeError, friendlyError } from "@/lib/friendlyError";
 import { Plus, Search, Trash2, Users, Shield, UserCog } from "lucide-react";
 
 type AppRole = 'admin' | 'user' | 'superadmin';
@@ -69,8 +69,7 @@ export function UsersTable() {
       });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De rol kon niet bijgewerkt worden. Probeer het opnieuw."),
+        ...describeError(error, "De rol kon niet bijgewerkt worden. Herlaad de pagina en probeer het opnieuw.", "Rol bijwerken mislukt"),
         variant: "destructive"
       });
     }
@@ -96,8 +95,7 @@ export function UsersTable() {
       });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De rol kon niet verwijderd worden. Probeer het opnieuw."),
+        ...describeError(error, "De rol kon niet verwijderd worden. Herlaad de pagina en probeer het opnieuw.", "Rol verwijderen mislukt"),
         variant: "destructive"
       });
     }
@@ -124,8 +122,7 @@ export function UsersTable() {
       setNewUserRole('user');
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De rol kon niet toegevoegd worden. Controleer de user ID."),
+        ...describeError(error, "De rol kon niet toegevoegd worden. Controleer of de user ID klopt.", "Rol toevoegen mislukt"),
         variant: "destructive"
       });
     }

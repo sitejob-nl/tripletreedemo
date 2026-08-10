@@ -4,6 +4,7 @@ import { DBProjectBase, ProcessedDBCallRecord } from '@/types/database';
 import { FrequencyType } from '@/lib/statsHelpers';
 import { calculateValuesFromRaw, getDayName } from '@/lib/recordValue';
 import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
+import { friendlyError } from '@/lib/friendlyError';
 
 interface UseCallRecordsOptions {
   projectId?: string;
@@ -61,7 +62,7 @@ export const useCallRecords = (
       const { data, error } = await query;
 
       if (error) {
-        throw new Error(`Fout bij ophalen call records: ${error.message}`);
+        throw new Error(friendlyError(error, 'De gespreksgegevens konden niet geladen worden. Kies een kortere periode of probeer het opnieuw.'));
       }
 
       return (data || []).map((record): ProcessedDBCallRecordWithFreq => {
@@ -108,7 +109,7 @@ export const useAvailableWeeks = (projectId?: string) => {
 
       if (error) {
         console.error('[useAvailableWeeks] RPC error:', error.message);
-        throw new Error(`Fout bij ophalen weeks: ${error.message}`);
+        throw new Error(friendlyError(error, 'De beschikbare weken konden niet geladen worden. Herlaad de pagina en probeer het opnieuw.'));
       }
 
       const result: WeekYear[] = (data || []).map((row: { week_number: number; iso_year: number; value: string }) => ({

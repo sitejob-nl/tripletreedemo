@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
+import { friendlyError } from '@/lib/friendlyError';
 
 export const useTotalRecordCount = (projectId?: string, dateFilter?: ResolvedDateFilter) => {
   return useQuery({
@@ -33,7 +34,7 @@ export const useTotalRecordCount = (projectId?: string, dateFilter?: ResolvedDat
       const { count, error } = await query;
 
       if (error) {
-        throw new Error(`Fout bij ophalen record count: ${error.message}`);
+        throw new Error(friendlyError(error, 'Het aantal records kon niet opgehaald worden. Herlaad de pagina en probeer het opnieuw.'));
       }
 
       return count || 0;

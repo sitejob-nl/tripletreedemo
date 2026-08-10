@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useDataQualityIssues } from '@/hooks/useDataQualityIssues';
 import { useOnboardingStatus } from '@/hooks/useOnboardingStatus';
 import { describeSyncKind, useRecentSyncFailures } from '@/hooks/useSyncLogs';
+import { describeError } from '@/lib/friendlyError';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -118,8 +119,12 @@ export function DataQualityCenter({ onNavigate }: DataQualityCenterProps) {
                     <span className="font-medium text-sm">{failure.project_name ?? 'Onbekend project'}</span>
                     <Badge variant="outline">sync · {describeSyncKind(failure.kind).label}</Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 truncate" title={failure.error_message ?? undefined}>
-                    {failure.error_message ?? 'Synchronisatie mislukt.'}
+                  <p className="text-xs text-muted-foreground mt-1" title={failure.error_message ?? undefined}>
+                    {describeError(
+                      failure.error_message,
+                      'De synchronisatie is mislukt. Start hem opnieuw via Beheer → Synchronisatie.',
+                      'Synchronisatie mislukt',
+                    ).description}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => onNavigate('sync')}>Open</Button>

@@ -4,6 +4,7 @@ import { DBProjectBase } from '@/types/database';
 import { ProcessedDBCallRecordWithFreq } from './useCallRecords';
 import { calculateValuesFromRaw, getDayName } from '@/lib/recordValue';
 import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
+import { friendlyError } from '@/lib/friendlyError';
 
 /**
  * Hook to fetch ALL call records for a specific date range (without pagination)
@@ -52,7 +53,7 @@ export const useReportMatrixData = (
         const { data, error } = await query;
 
         if (error) {
-          throw new Error(`Fout bij ophalen report matrix data: ${error.message}`);
+          throw new Error(friendlyError(error, 'De rapportagegegevens konden niet geladen worden. Kies een kortere periode of probeer het opnieuw.'));
         }
 
         if (data && data.length > 0) {

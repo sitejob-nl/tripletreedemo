@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { friendlyError } from '@/lib/friendlyError';
 
 export interface MappingIssue {
   project_id: string;
@@ -23,7 +24,7 @@ export const useMappingIssues = () =>
         .from('mapping_issues')
         .select('*')
         .order('basicall_project_id', { ascending: true });
-      if (error) throw new Error(error.message);
+      if (error) throw new Error(friendlyError(error, 'De mappingcontroles konden niet geladen worden. Herlaad de pagina en probeer het opnieuw.'));
       return (data || []) as MappingIssue[];
     },
     staleTime: 60_000,

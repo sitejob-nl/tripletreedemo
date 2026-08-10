@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useSyncLogs, useDbStats, describeSyncKind } from "@/hooks/useSyncLogs";
+import { describeError } from "@/lib/friendlyError";
 import { useAdminProjects } from "@/hooks/useProjects";
 import { useAuth } from "@/hooks/useAuth";
 import { useErrorLogs, useUnresolvedErrorCount, useResolveError, useDeleteError } from "@/hooks/useErrorLogs";
@@ -213,7 +214,13 @@ export default function Developer() {
                                 </div>
                                 {log.error_message && (
                                   <div className="mt-3 p-2 rounded bg-destructive/10 text-destructive text-sm text-left">
-                                    <strong>Error:</strong> {log.error_message.length > 100 ? log.error_message.slice(0, 100) + '...' : log.error_message}
+                                    {/* Uitleg + vervolgstap boven, de technische brontekst eronder:
+                                        de developerpagina is de plek waar die tekst wél nuttig is. */}
+                                    <strong>{describeError(log.error_message, 'Onbekende fout.', 'Fout').title}:</strong>{' '}
+                                    {describeError(log.error_message, 'Onbekende fout tijdens de synchronisatie.').description}
+                                    <p className="mt-1 font-mono text-[11px] opacity-70 break-all">
+                                      {log.error_message.length > 200 ? log.error_message.slice(0, 200) + '…' : log.error_message}
+                                    </p>
                                   </div>
                                 )}
                               </CollapsibleTrigger>

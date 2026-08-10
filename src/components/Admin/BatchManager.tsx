@@ -3,7 +3,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useBatches, useCreateBatch, useDeleteBatch } from "@/hooks/useBatches";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { friendlyError } from "@/lib/friendlyError";
+import { describeError, friendlyError } from "@/lib/friendlyError";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,8 +56,7 @@ export function BatchManager() {
       setBatchId("");
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De batch kon niet toegevoegd worden. Controleer het batch-ID."),
+        ...describeError(error, "De batch kon niet toegevoegd worden. Controleer of het batch-ID klopt en in BasiCall bestaat.", "Batch niet toegevoegd"),
         variant: "destructive",
       });
     }
@@ -69,8 +68,7 @@ export function BatchManager() {
       toast({ title: "Batch verwijderd" });
     } catch (error) {
       toast({
-        title: "Er ging iets mis",
-        description: friendlyError(error, "De batch kon niet verwijderd worden."),
+        ...describeError(error, "De batch kon niet verwijderd worden. Herlaad de pagina en probeer het opnieuw.", "Batch niet verwijderd"),
         variant: "destructive",
       });
     }

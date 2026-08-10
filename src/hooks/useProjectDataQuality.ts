@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { friendlyError } from '@/lib/friendlyError';
 import type {
   DataQualityMessage,
   DataQualityStatus,
@@ -34,7 +35,7 @@ export const useProjectDataQuality = (
       p_start_date: startDate ?? new Date().toISOString().slice(0, 10),
       p_end_date: endDate ?? new Date().toISOString().slice(0, 10),
     });
-    if (error) throw new Error(`Kwaliteitsstatus kon niet worden geladen: ${error.message}`);
+    if (error) throw new Error(friendlyError(error, 'De kwaliteitsstatus kon niet geladen worden. Herlaad de pagina en probeer het opnieuw.'));
 
     const row = data?.[0];
     if (!row) {

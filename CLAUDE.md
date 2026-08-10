@@ -209,6 +209,7 @@ Zie [AUDIT-2026-04-16.md](./AUDIT-2026-04-16.md) + [AUDIT-VPS-SYNC-2026-04-16.md
 ## Conventies
 
 - Dutch UI-strings (klanten lezen Nederlands). Code + comments: Engels.
+- **Foutmeldingen lopen altijd via [lib/friendlyError.ts](src/lib/friendlyError.ts)** — `describeError()` (kop + tekst, voor toasts en foutblokken) of `friendlyError()` (alleen tekst). Nooit `error.message` rechtstreeks tonen: dat is Engelse Supabase/Postgres/axios-tekst. Elke melding benoemt **wat er mis is én wat de gebruiker nu moet doen**; koppen als "Fout" of "Er ging iets mis" zeggen niets. Patroonvolgorde in dat bestand is betekenisvol (specifiek boven generiek) — een te ruime regex hogerop kaapt de melding, waardoor een verlopen inloglink ooit als "Dit e-mailadres is niet geldig" op het scherm kwam. Na een wijziging: `npx vite-node scripts/check-error-messages.mjs`.
 - Geen nieuwe migrations uploaden naar `supabase/migrations/` zonder ze eerst tegen live toe te passen (MCP `apply_migration`) — historische schema-drift maakt dat lokale migrations niet automatisch overeenkomen met productie.
 - `beldatum` is TEXT (VPS voert DD-MM-YYYY in of ISO YYYY-MM-DD; beide paths ondersteund in sync.js regel 411), trigger `sync_beldatum_to_date()` vult `beldatum_date` (DATE). Queries: **altijd** `beldatum_date` gebruiken, nooit string-sort op `beldatum`.
 - Tijdzone: TIMESTAMPTZ staat in UTC; frontend interpreteert via date-fns. VPS-script forceert `TZ=Europe/Amsterdam` bovenaan (sync.js regel 2). Geen expliciete `AT TIME ZONE 'Europe/Amsterdam'` in SQL-queries nodig.
