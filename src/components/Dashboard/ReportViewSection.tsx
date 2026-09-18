@@ -46,6 +46,10 @@ export function ReportViewSection({
 }: ReportViewSectionProps) {
   const isInboundProject = projectType === 'inbound';
   const isServiceProject = projectType === 'inbound_service';
+  const latestOverrideWeek = reportageOverrides.reduce(
+    (latest, override) => Math.max(latest, override.week_number),
+    0,
+  );
 
   // Template routing: when a report_template is set, route to template-specific matrix.
   // Templates are built incrementally (see plan); remaining values fall back to legacy
@@ -83,14 +87,11 @@ export function ReportViewSection({
         return (
           <InboundServiceMatrix
             data={data}
-            hourlyRate={hourlyRate}
-            vatRate={vatRate}
             selectedWeek={selectedWeek}
             mappingConfig={mappingConfig}
             loggedTimeHours={loggedTimeHours}
             dailyLoggedHours={dailyLoggedHours}
             reportageOverrides={reportageOverrides}
-            showInvestment={isAdmin}
           />
         );
       case 'inbound_retention':
@@ -145,7 +146,7 @@ export function ReportViewSection({
           {typeBadge()}
           {overrideHasExcelData(reportageOverrides) && (
             <span className="hidden sm:inline-flex rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-              Excel-correctie actief t/m week 15
+              Excel-aanvulling actief{latestOverrideWeek > 0 ? ` t/m week ${latestOverrideWeek}` : ''}
             </span>
           )}
         </h3>

@@ -2,7 +2,6 @@ import { ProcessedCallRecord } from '@/types/dashboard';
 import { ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
 
 export const REPORTAGE_OVERRIDE_YEAR = 2026;
-export const REPORTAGE_OVERRIDE_THROUGH_WEEK = 15;
 export const REPORTAGE_DAYS = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'] as const;
 
 export function metricNumber(metrics: ReportageOverrideMetrics | undefined, key: string, fallback = 0): number {

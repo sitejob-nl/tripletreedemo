@@ -5,7 +5,6 @@ import { DateFilterType } from './useDateFilter';
 import { ReportageWeeklyOverride } from '@/types/database';
 
 const OVERRIDE_YEAR = 2026;
-const OVERRIDE_THROUGH_WEEK = 15;
 
 function parseWeekValue(value: string | number): { year: number; week: number } | null {
   if (typeof value === 'number') {
@@ -33,7 +32,7 @@ export function useReportageOverrides({
       return { mode: 'all' as const, year: OVERRIDE_YEAR, week: null };
     }
     const parsed = parseWeekValue(selectedWeek);
-    if (!parsed || parsed.year !== OVERRIDE_YEAR || parsed.week > OVERRIDE_THROUGH_WEEK) {
+    if (!parsed || parsed.year !== OVERRIDE_YEAR) {
       return null;
     }
     return { mode: 'week' as const, year: parsed.year, week: parsed.week };
@@ -52,8 +51,6 @@ export function useReportageOverrides({
 
       if (request.mode === 'week' && request.week !== null) {
         query = query.eq('week_number', request.week);
-      } else {
-        query = query.lte('week_number', OVERRIDE_THROUGH_WEEK);
       }
 
       const { data, error } = await query;

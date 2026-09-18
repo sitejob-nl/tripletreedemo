@@ -133,6 +133,13 @@ export interface MappingConfig {
     service_level_sec?: number;   // Drempel in seconden (standaard 30)
   };
 
+  // Inbound-service-template: expliciete definitie van short abandoned en de
+  // gewenste rapportagerubrieken. Ontbrekende belredenen vallen terug op
+  // "Overig"; ontbrekende/afwijkende caller-groepen op "Algemeen".
+  short_abandoned_results?: string[];
+  service_reason_categories?: Record<string, string[]>;
+  service_caller_categories?: Record<string, string[]>;
+
   // Inbound-retention-template reden-breakdown (Hersenstichting).
   // Map van reden-categorie (bv. "Overleden", "Financiele redenen") naar
   // een lijst van BasiCall result-codes die in die categorie vallen.

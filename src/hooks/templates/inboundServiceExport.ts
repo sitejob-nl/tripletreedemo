@@ -1,75 +1,40 @@
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
-import { MappingConfig, ReportageOverrideMetrics, ReportageWeeklyOverride } from '@/types/database';
+import {
+  averageMetric,
+  buildInboundServiceBreakdown,
+  completeMetric,
+  SERVICE_DAYS,
+  type InboundServiceBreakdown,
+  type InboundServiceBucket,
+  type InboundServiceRecord,
+  type ServiceDay,
+} from '@/lib/inboundServiceMetrics';
+import type { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
-import { ceilHours } from '@/lib/hours';
 import { friendlyError } from '@/lib/friendlyError';
-import { metricNumber, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
 import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
 
 type RawRecord = {
-  basicall_record_id: number;
   beldatum: string | null;
   beldatum_date: string | null;
-  beltijd: string | null;
   gesprekstijd_sec: number;
   resultaat: string | null;
   week_number: number | null;
   raw_data: Record<string, unknown> | null;
 };
 
-type DayKey = 'maandag' | 'dinsdag' | 'woensdag' | 'donderdag' | 'vrijdag' | 'zaterdag' | 'zondag';
-
-interface ServiceStats {
-  calls: number;
-  handled: number;
-  notHandled: number;
-  durationSec: number;
-  fastAnswered: number;      // calls with gesprekstijd_sec < serviceLevelSec
-  after17Sec: number;        // duration of calls starting at/after 17:00
-  loggedSeconds: number;
-}
-
-interface DailyServiceStats {
-  perDay: Record<DayKey, ServiceStats>;
-  total: ServiceStats;
-}
-
-const DAYS: DayKey[] = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'];
-const DAY_LABELS = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
-
-const emptyStats = (): ServiceStats => ({
-  calls: 0,
-  handled: 0,
-  notHandled: 0,
-  durationSec: 0,
-  fastAnswered: 0,
-  after17Sec: 0,
-  loggedSeconds: 0,
-});
-
-const emptyWeek = (): DailyServiceStats => ({
-  perDay: {
-    maandag: emptyStats(),
-    dinsdag: emptyStats(),
-    woensdag: emptyStats(),
-    donderdag: emptyStats(),
-    vrijdag: emptyStats(),
-    zaterdag: emptyStats(),
-    zondag: emptyStats(),
-  },
-  total: emptyStats(),
-});
-
-const getDayKey = (date: Date): DayKey | null => {
-  const map: Record<number, DayKey> = {
-    0: 'zondag', 1: 'maandag', 2: 'dinsdag', 3: 'woensdag',
-    4: 'donderdag', 5: 'vrijdag', 6: 'zaterdag',
-  };
-  return map[date.getDay()] ?? null;
+type LoggedRow = {
+  date: string;
+  total_seconds: number | null;
+  corrected_seconds: number | null;
 };
 
-// ========== Styling ==========
+type Cell = string | number | null;
+type Formatter = (value: number) => string;
+
+const DAY_LABELS = ['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'];
+
 const THIN_BORDER = {
   top: { style: 'thin' as const, color: { rgb: 'CCCCCC' } },
   bottom: { style: 'thin' as const, color: { rgb: 'CCCCCC' } },
@@ -84,52 +49,20 @@ const STYLE_SECTION = (colorHex: string) => ({
   border: THIN_BORDER,
 });
 
-const STYLE_LABEL = {
-  alignment: { horizontal: 'left' as const },
-  border: THIN_BORDER,
-};
-
-const STYLE_TOTAL_COL = {
+const STYLE_LABEL = { alignment: { horizontal: 'left' as const }, border: THIN_BORDER };
+const STYLE_TOTAL = {
   font: { bold: true },
   fill: { fgColor: { rgb: 'F1F5F9' } },
   alignment: { horizontal: 'right' as const },
   border: THIN_BORDER,
 };
-
-const STYLE_TARGET_COL = {
+const STYLE_TARGET = {
   font: { italic: true, color: { rgb: '64748B' } },
   alignment: { horizontal: 'right' as const },
   border: THIN_BORDER,
 };
-
-const STYLE_CELL = { border: THIN_BORDER };
-
-const STYLE_TITLE = {
-  font: { bold: true, sz: 14 },
-  alignment: { horizontal: 'left' as const },
-};
-
-function styleCell(ws: XLSX.WorkSheet, ref: string, style: Record<string, unknown>) {
-  if (!ws[ref]) ws[ref] = { v: '', t: 's' };
-  ws[ref].s = style;
-}
-
-function colLetter(idx: number): string {
-  let n = idx;
-  let s = '';
-  while (true) {
-    s = String.fromCharCode(65 + (n % 26)) + s;
-    n = Math.floor(n / 26) - 1;
-    if (n < 0) break;
-  }
-  return s;
-}
-
-function styleRangeRow(ws: XLSX.WorkSheet, rowIdx: number, numCols: number, style: Record<string, unknown>) {
-  for (let c = 0; c < numCols; c++) {
-    styleCell(ws, `${colLetter(c)}${rowIdx + 1}`, style);
-  }
-}
+const STYLE_CELL = { alignment: { horizontal: 'right' as const }, border: THIN_BORDER };
+const STYLE_TITLE = { font: { bold: true, sz: 14 }, alignment: { horizontal: 'left' as const } };
 
 interface ExportArgs {
   projectId: string;
@@ -137,452 +70,364 @@ interface ExportArgs {
   mappingConfig?: MappingConfig;
   year?: number;
   reportageOverrides?: ReportageWeeklyOverride[];
-  onToast?: (msg: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void;
+  onToast?: (message: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void;
 }
 
-export async function exportInboundServiceYear(args: ExportArgs): Promise<void> {
-  const {
-    projectId,
-    projectName,
-    mappingConfig,
-    year = new Date().getFullYear(),
-    reportageOverrides = [],
-    onToast,
-  } = args;
+interface LoggedCoverage {
+  byWeek: Record<number, Partial<Record<ServiceDay, number>>>;
+}
 
+function styleCell(ws: XLSX.WorkSheet, ref: string, style: Record<string, unknown>) {
+  if (!ws[ref]) ws[ref] = { v: '', t: 's' };
+  ws[ref].s = style;
+}
+
+function colLetter(index: number): string {
+  let current = index;
+  let result = '';
+  while (true) {
+    result = String.fromCharCode(65 + (current % 26)) + result;
+    current = Math.floor(current / 26) - 1;
+    if (current < 0) return result;
+  }
+}
+
+function styleRangeRow(ws: XLSX.WorkSheet, rowIndex: number, columns: number, style: Record<string, unknown>) {
+  for (let column = 0; column < columns; column += 1) styleCell(ws, `${colLetter(column)}${rowIndex + 1}`, style);
+}
+
+function getDay(date: Date): ServiceDay | null {
+  const days: Record<number, ServiceDay> = {
+    0: 'zondag', 1: 'maandag', 2: 'dinsdag', 3: 'woensdag',
+    4: 'donderdag', 5: 'vrijdag', 6: 'zaterdag',
+  };
+  return days[date.getDay()] ?? null;
+}
+
+function getISOWeek(date: Date): number {
+  const current = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  current.setUTCDate(current.getUTCDate() + 4 - (current.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(current.getUTCFullYear(), 0, 1));
+  return Math.ceil(((current.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+function formatValue(value: number | null, formatter: Formatter): string {
+  return value === null ? '—' : formatter(value);
+}
+
+const formatNumber: Formatter = (value) => Math.round(value).toLocaleString('nl-NL');
+const formatDecimal: Formatter = (value) => value.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatPercent: Formatter = (value) => `${(value * 100).toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+function ratio(numerator: number, denominator: number): number {
+  return denominator > 0 ? numerator / denominator : 0;
+}
+
+function withinThreshold(bucket: InboundServiceBucket): number | null {
+  return completeMetric(bucket.answeredWithinThreshold, bucket.waitTimeKnown, bucket.answered);
+}
+
+function averageCallMinutes(bucket: InboundServiceBucket): number | null {
+  const seconds = averageMetric(bucket.durationSec, bucket.durationKnown, bucket.answered);
+  return seconds === null ? null : seconds / 60;
+}
+
+function averageAfterCallMinutes(bucket: InboundServiceBucket): number | null {
+  const seconds = averageMetric(bucket.afterCallSec, bucket.afterCallKnown, bucket.answered);
+  return seconds === null ? null : seconds / 60;
+}
+
+function serviceLevel(bucket: InboundServiceBucket): number | null {
+  const within = withinThreshold(bucket);
+  return within === null ? null : ratio(within, bucket.answered);
+}
+
+function reachability(bucket: InboundServiceBucket): number {
+  return ratio(bucket.answered, Math.max(0, bucket.offered - bucket.shortAbandoned));
+}
+
+function toServiceRecord(record: RawRecord): InboundServiceRecord | null {
+  const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
+  if (!date) return null;
+  const day = getDay(date);
+  if (!day) return null;
+  return {
+    week_number: record.week_number,
+    day_name: day,
+    bc_result_naam: record.resultaat,
+    bc_gesprekstijd: Number(record.gesprekstijd_sec) || 0,
+    raw_data: record.raw_data,
+  };
+}
+
+function getAgentHours(
+  report: InboundServiceBreakdown,
+  week: number,
+  logged: LoggedCoverage,
+  day?: ServiceDay,
+): number | null {
+  const bucket = day ? report.perDay[day] : report.total;
+  if (bucket.agentHoursKnown) return bucket.agentHours;
+  if (day) {
+    const value = logged.byWeek[week]?.[day];
+    return value !== undefined ? value : bucket.offered === 0 ? 0 : null;
+  }
+  const activeDays = SERVICE_DAYS.filter((item) => report.perDay[item].offered > 0);
+  if (activeDays.length === 0) return 0;
+  const values = activeDays.map((item) => getAgentHours(report, week, logged, item));
+  return values.every((value) => value !== null)
+    ? values.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+    : null;
+}
+
+function appendSection(rows: Cell[][], title: string) {
+  rows.push([title]);
+}
+
+function appendWeekRow(
+  rows: Cell[][],
+  report: InboundServiceBreakdown,
+  label: string,
+  value: (bucket: InboundServiceBucket, day?: ServiceDay) => number | null,
+  formatter: Formatter,
+  target: number | null = null,
+) {
+  rows.push([
+    label,
+    target === null ? '' : formatter(target),
+    ...SERVICE_DAYS.map((day) => formatValue(value(report.perDay[day], day), formatter)),
+    formatValue(value(report.total), formatter),
+  ]);
+}
+
+function buildWeekSheet({
+  week,
+  report,
+  logged,
+  serviceLevelSec,
+  targetReachability,
+  targetServiceLevel,
+}: {
+  week: number;
+  report: InboundServiceBreakdown;
+  logged: LoggedCoverage;
+  serviceLevelSec: number;
+  targetReachability: number;
+  targetServiceLevel: number;
+}): XLSX.WorkSheet {
+  const rows: Cell[][] = [[`Week ${String(week).padStart(2, '0')}`], [], ['Rapportage', 'Target', ...DAY_LABELS, 'Totaal'], []];
+
+  appendSection(rows, 'UREN');
+  appendWeekRow(rows, report, 'Inzet agenten (uren)', (_bucket, day) => getAgentHours(report, week, logged, day), formatDecimal);
+  appendWeekRow(rows, report, 'Inzet mail (uren)', (bucket) => bucket.mailHoursKnown ? bucket.mailHours : null, formatDecimal);
+  appendWeekRow(rows, report, 'Totaal uren', (bucket, day) => {
+    const agent = getAgentHours(report, week, logged, day);
+    const mail = bucket.mailHoursKnown ? bucket.mailHours : null;
+    return agent === null || mail === null ? null : agent + mail;
+  }, formatDecimal);
+
+  appendSection(rows, 'RECORDS');
+  appendWeekRow(rows, report, 'Aangeboden calls', (bucket) => bucket.offered, formatNumber);
+  appendWeekRow(rows, report, 'Aangenomen calls', (bucket) => bucket.answered, formatNumber);
+  appendWeekRow(rows, report, `Binnen ${serviceLevelSec} seconden`, withinThreshold, formatNumber);
+  appendWeekRow(rows, report, 'Short abandoned', (bucket) => bucket.shortAbandoned, formatNumber);
+
+  appendSection(rows, "KPI'S");
+  appendWeekRow(rows, report, 'Gemiddelde gesprekstijd (min)', averageCallMinutes, formatDecimal);
+  appendWeekRow(rows, report, 'Gemiddelde nawerktijd (min)', averageAfterCallMinutes, formatDecimal);
+  appendWeekRow(rows, report, 'Bereikbaarheid', reachability, formatPercent, targetReachability);
+  appendWeekRow(rows, report, 'Service level', serviceLevel, formatPercent, targetServiceLevel);
+  appendWeekRow(rows, report, 'Short abandoned %', (bucket) => ratio(bucket.shortAbandoned, bucket.offered), formatPercent);
+
+  if (report.reasonLabels.length > 0) {
+    appendSection(rows, 'CALLREASONS');
+    for (const label of report.reasonLabels) appendWeekRow(rows, report, label, (bucket) => bucket.reasons[label] ?? 0, formatNumber);
+    appendWeekRow(rows, report, 'Totaal callreasons', (bucket) => Object.values(bucket.reasons).reduce((sum, value) => sum + value, 0), formatNumber);
+  }
+
+  if (report.callerLabels.length > 0) {
+    appendSection(rows, 'GEBELD DOOR');
+    for (const label of report.callerLabels) appendWeekRow(rows, report, label, (bucket) => bucket.callers[label] ?? 0, formatNumber);
+    appendWeekRow(rows, report, 'Totaal gebeld door', (bucket) => Object.values(bucket.callers).reduce((sum, value) => sum + value, 0), formatNumber);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const columns = SERVICE_DAYS.length + 3;
+  ws['!cols'] = [{ wch: 38 }, { wch: 12 }, ...SERVICE_DAYS.map(() => ({ wch: 12 })), { wch: 14 }];
+  styleRangeRow(ws, 0, columns, STYLE_TITLE);
+  const sectionColors: Record<string, string> = {
+    UREN: '64748B', RECORDS: '22C55E', "KPI'S": '3B82F6', CALLREASONS: '06B6D4', 'GEBELD DOOR': '8B5CF6', Rapportage: '4A7C4E',
+  };
+  rows.forEach((row, rowIndex) => {
+    const first = String(row[0] ?? '');
+    if (sectionColors[first]) {
+      styleRangeRow(ws, rowIndex, columns, STYLE_SECTION(sectionColors[first]));
+      return;
+    }
+    if (!first || row.length <= 1) return;
+    styleCell(ws, `A${rowIndex + 1}`, STYLE_LABEL);
+    styleCell(ws, `B${rowIndex + 1}`, STYLE_TARGET);
+    for (let column = 2; column < columns - 1; column += 1) styleCell(ws, `${colLetter(column)}${rowIndex + 1}`, STYLE_CELL);
+    styleCell(ws, `${colLetter(columns - 1)}${rowIndex + 1}`, STYLE_TOTAL);
+  });
+  return ws;
+}
+
+function buildTotalSheet({
+  weeks,
+  reports,
+  logged,
+  year,
+  projectName,
+  serviceLevelSec,
+  targetReachability,
+  targetServiceLevel,
+}: {
+  weeks: number[];
+  reports: Record<number, InboundServiceBreakdown>;
+  logged: LoggedCoverage;
+  year: number;
+  projectName: string;
+  serviceLevelSec: number;
+  targetReachability: number;
+  targetServiceLevel: number;
+}): XLSX.WorkSheet {
+  const rows: Cell[][] = [[`Rapportage ${projectName} — ${year}`], [], ['Jaaroverzicht', 'Target', ...weeks.map((week) => `wk${String(week).padStart(2, '0')}`)], []];
+  const append = (label: string, getter: (report: InboundServiceBreakdown, week: number) => number | null, formatter: Formatter, target: number | null = null) => {
+    rows.push([label, target === null ? '' : formatter(target), ...weeks.map((week) => formatValue(getter(reports[week], week), formatter))]);
+  };
+
+  appendSection(rows, 'UREN');
+  append('Inzet agenten (uren)', (report, week) => getAgentHours(report, week, logged), formatDecimal);
+  append('Inzet mail (uren)', (report) => report.total.mailHoursKnown ? report.total.mailHours : null, formatDecimal);
+  appendSection(rows, 'RECORDS');
+  append('Aangeboden calls', (report) => report.total.offered, formatNumber);
+  append('Aangenomen calls', (report) => report.total.answered, formatNumber);
+  append(`Binnen ${serviceLevelSec} seconden`, (report) => withinThreshold(report.total), formatNumber);
+  append('Short abandoned', (report) => report.total.shortAbandoned, formatNumber);
+  appendSection(rows, "KPI'S");
+  append('Gemiddelde gesprekstijd (min)', (report) => averageCallMinutes(report.total), formatDecimal);
+  append('Gemiddelde nawerktijd (min)', (report) => averageAfterCallMinutes(report.total), formatDecimal);
+  append('Bereikbaarheid', (report) => reachability(report.total), formatPercent, targetReachability);
+  append('Service level', (report) => serviceLevel(report.total), formatPercent, targetServiceLevel);
+  append('Short abandoned %', (report) => ratio(report.total.shortAbandoned, report.total.offered), formatPercent);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const columns = weeks.length + 2;
+  ws['!cols'] = [{ wch: 38 }, { wch: 12 }, ...weeks.map(() => ({ wch: 10 }))];
+  styleRangeRow(ws, 0, columns, STYLE_TITLE);
+  const colors: Record<string, string> = { UREN: '64748B', RECORDS: '22C55E', "KPI'S": '3B82F6', Jaaroverzicht: '4A7C4E' };
+  rows.forEach((row, rowIndex) => {
+    const first = String(row[0] ?? '');
+    if (colors[first]) {
+      styleRangeRow(ws, rowIndex, columns, STYLE_SECTION(colors[first]));
+      return;
+    }
+    if (!first || row.length <= 1) return;
+    styleCell(ws, `A${rowIndex + 1}`, STYLE_LABEL);
+    styleCell(ws, `B${rowIndex + 1}`, STYLE_TARGET);
+    for (let column = 2; column < columns; column += 1) styleCell(ws, `${colLetter(column)}${rowIndex + 1}`, STYLE_CELL);
+  });
+  return ws;
+}
+
+export async function exportInboundServiceYear({
+  projectId,
+  projectName,
+  mappingConfig,
+  year = new Date().getFullYear(),
+  reportageOverrides = [],
+  onToast,
+}: ExportArgs): Promise<void> {
   try {
     const yearStart = `${year}-01-01`;
     const yearEnd = `${year}-12-31`;
-    const handledSet = new Set(mappingConfig?.handled_results ?? []);
-    const notHandledSet = new Set(mappingConfig?.not_handled_results ?? []);
-    const targets = mappingConfig?.service_targets;
-    const targetBereikbaarheid = targets?.bereikbaarheid ?? 0.95;
-    const targetServiceLevel = targets?.service_level ?? 0.70;
-    const serviceLevelSec = targets?.service_level_sec ?? 30;
-
-    // 1. Fetch year records (paged)
     const records: RawRecord[] = [];
-    const PAGE = 1000;
-    let offset = 0;
-    while (true) {
+    const pageSize = 1000;
+    for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase
         .from('call_records')
-        .select('basicall_record_id, beldatum, beldatum_date, beltijd, gesprekstijd_sec, resultaat, week_number, raw_data')
+        .select('beldatum,beldatum_date,gesprekstijd_sec,resultaat,week_number,raw_data')
         .eq('project_id', projectId)
         .gte('beldatum_date', yearStart)
         .lte('beldatum_date', yearEnd)
         .order('beldatum_date', { ascending: true })
-        .range(offset, offset + PAGE - 1);
+        .range(offset, offset + pageSize - 1);
       if (error) throw error;
       if (!data || data.length === 0) break;
       records.push(...(data as RawRecord[]));
-      if (data.length < PAGE) break;
-      offset += PAGE;
+      if (data.length < pageSize) break;
     }
 
-    // 2. Fetch daily logged time
-    const { data: loggedRows, error: loggedErr } = await supabase
+    const { data: loggedRows, error: loggedError } = await supabase
       .from('daily_logged_time')
-      .select('date, total_seconds, corrected_seconds')
+      .select('date,total_seconds,corrected_seconds')
       .eq('project_id', projectId)
       .gte('date', yearStart)
       .lte('date', yearEnd);
-    if (loggedErr) throw loggedErr;
+    if (loggedError) throw loggedError;
 
-    // 3. Aggregate per week
-    const weeks = getAllWeeksForYear(year);
-    const weekStats: Record<number, DailyServiceStats> = {};
-    weeks.forEach((w) => (weekStats[w] = emptyWeek()));
-    const yearTotal: DailyServiceStats = emptyWeek();
-
-    records.forEach((record) => {
+    const overrides = await fetchYearReportageOverrides(projectId, year, 'inbound_service', reportageOverrides);
+    const recordsByWeek: Record<number, InboundServiceRecord[]> = {};
+    for (const record of records) {
       const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
-      if (!date) return;
-      if (getISOWeekYear(date) !== year) return;
-      const week = record.week_number ?? null;
-      if (!week || !weekStats[week]) return;
-      const dayKey = getDayKey(date);
-      if (!dayKey) return;
-
-      const resultName = record.resultaat ??
-        ((record.raw_data?.['bc_result_naam'] as string) ?? 'Onbekend');
-      const durationSec = Number(record.gesprekstijd_sec) || 0;
-      const isHandled = handledSet.has(resultName);
-      const isNotHandled = notHandledSet.has(resultName);
-
-      // Hour from beltijd or raw_data.bc_beltijd
-      const beltijd = record.beltijd ?? (record.raw_data?.['bc_beltijd'] as string | undefined) ?? '';
-      const hourMatch = beltijd.match(/^(\d{1,2}):/);
-      const hour = hourMatch ? parseInt(hourMatch[1], 10) : NaN;
-      const isAfter17 = !isNaN(hour) && hour >= 17;
-
-      [
-        weekStats[week].perDay[dayKey],
-        weekStats[week].total,
-        yearTotal.perDay[dayKey],
-        yearTotal.total,
-      ].forEach((s) => {
-        s.calls++;
-        s.durationSec += durationSec;
-        if (isHandled) s.handled++;
-        else if (isNotHandled) s.notHandled++;
-        if (durationSec > 0 && durationSec < serviceLevelSec) s.fastAnswered++;
-        if (isAfter17) s.after17Sec += durationSec;
-      });
-    });
-
-    (loggedRows ?? []).forEach((row) => {
-      const date = parseBasiCallDate(row.date);
-      if (!date) return;
-      if (getISOWeekYear(date) !== year) return;
-      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-      d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-      const yearStartUtc = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-      const week = Math.ceil(((d.getTime() - yearStartUtc.getTime()) / 86400000 + 1) / 7);
-      if (!weekStats[week]) return;
-      const dayKey = getDayKey(date);
-      if (!dayKey) return;
-      const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
-      weekStats[week].perDay[dayKey].loggedSeconds += seconds;
-      weekStats[week].total.loggedSeconds += seconds;
-      yearTotal.perDay[dayKey].loggedSeconds += seconds;
-      yearTotal.total.loggedSeconds += seconds;
-    });
-
-    const yearOverrides = await fetchYearReportageOverrides(projectId, year, 'inbound_service', reportageOverrides);
-    const overrideWeeks = new Set(yearOverrides.map((override) => override.week_number));
-    if (overrideWeeks.size > 0) {
-      weeks.forEach((w) => (weekStats[w] = emptyWeek()));
-      Object.assign(yearTotal, emptyWeek());
-
-      records.forEach((record) => {
-        const date = parseBasiCallDate(record.beldatum_date ?? record.beldatum);
-        if (!date || getISOWeekYear(date) !== year) return;
-        const week = record.week_number ?? null;
-        if (!week || overrideWeeks.has(week) || !weekStats[week]) return;
-        const dayKey = getDayKey(date);
-        if (!dayKey) return;
-        const resultName = record.resultaat ??
-          ((record.raw_data?.['bc_result_naam'] as string) ?? 'Onbekend');
-        const durationSec = Number(record.gesprekstijd_sec) || 0;
-        const isHandled = handledSet.has(resultName);
-        const isNotHandled = notHandledSet.has(resultName);
-        const beltijd = record.beltijd ?? (record.raw_data?.['bc_beltijd'] as string | undefined) ?? '';
-        const hourMatch = beltijd.match(/^(\d{1,2}):/);
-        const hour = hourMatch ? parseInt(hourMatch[1], 10) : NaN;
-        const isAfter17 = !isNaN(hour) && hour >= 17;
-        [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {
-          s.calls++;
-          s.durationSec += durationSec;
-          if (isHandled) s.handled++;
-          else if (isNotHandled) s.notHandled++;
-          if (durationSec > 0 && durationSec < serviceLevelSec) s.fastAnswered++;
-          if (isAfter17) s.after17Sec += durationSec;
-        });
-      });
-
-      (loggedRows ?? []).forEach((row) => {
-        const date = parseBasiCallDate(row.date);
-        if (!date || getISOWeekYear(date) !== year) return;
-        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-        const yearStartUtc = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-        const week = Math.ceil(((d.getTime() - yearStartUtc.getTime()) / 86400000 + 1) / 7);
-        if (overrideWeeks.has(week) || !weekStats[week]) return;
-        const dayKey = getDayKey(date);
-        if (!dayKey) return;
-        const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
-        weekStats[week].perDay[dayKey].loggedSeconds += seconds;
-        weekStats[week].total.loggedSeconds += seconds;
-        yearTotal.perDay[dayKey].loggedSeconds += seconds;
-        yearTotal.total.loggedSeconds += seconds;
-      });
-
-      const applyOverrideMetrics = (stats: ServiceStats, metrics: ReportageOverrideMetrics | undefined) => {
-        const calls = metricNumber(metrics, 'answered', 0);
-        const hours = metricNumber(metrics, 'hours', 0);
-        const avgCall = metricNumber(metrics, 'avgCall', 0);
-        stats.calls += calls;
-        stats.handled += calls;
-        stats.fastAnswered += metricNumber(metrics, 'answeredUnder60', 0);
-        stats.durationSec += avgCall > 0 ? avgCall * calls : 0;
-        stats.loggedSeconds += hours > 0 ? hours * 3600 : 0;
-      };
-
-      for (const override of yearOverrides) {
-        if (!weekStats[override.week_number]) continue;
-        applyOverrideMetrics(weekStats[override.week_number].total, override.metrics);
-        applyOverrideMetrics(yearTotal.total, override.metrics);
-        for (const day of REPORTAGE_DAYS) {
-          applyOverrideMetrics(weekStats[override.week_number].perDay[day], override.daily_metrics?.[day]);
-          applyOverrideMetrics(yearTotal.perDay[day], override.daily_metrics?.[day]);
-        }
-      }
+      if (!date || getISOWeekYear(date) !== year || !record.week_number) continue;
+      const converted = toServiceRecord(record);
+      if (!converted) continue;
+      (recordsByWeek[record.week_number] ??= []).push(converted);
+    }
+    const overridesByWeek = new Map<number, ReportageWeeklyOverride[]>();
+    for (const override of overrides) {
+      const list = overridesByWeek.get(override.week_number) ?? [];
+      list.push(override);
+      overridesByWeek.set(override.week_number, list);
     }
 
-    // 4. Build workbook
-    const wb = XLSX.utils.book_new();
+    const logged: LoggedCoverage = { byWeek: {} };
+    for (const row of (loggedRows ?? []) as LoggedRow[]) {
+      const date = parseBasiCallDate(row.date);
+      if (!date || getISOWeekYear(date) !== year) continue;
+      const day = getDay(date);
+      if (!day) continue;
+      const week = getISOWeek(date);
+      logged.byWeek[week] ??= {};
+      logged.byWeek[week][day] = Number(row.corrected_seconds ?? row.total_seconds ?? 0) / 3600;
+    }
 
-    // Triple Tree regel: per cel naar boven afronden op hele uren.
-    const getHours = (s: ServiceStats) =>
-      ceilHours(s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600);
+    const weeks = getAllWeeksForYear(year);
+    const reports = Object.fromEntries(weeks.map((week) => [
+      week,
+      buildInboundServiceBreakdown(recordsByWeek[week] ?? [], mappingConfig, overridesByWeek.get(week) ?? []),
+    ])) as Record<number, InboundServiceBreakdown>;
+    const serviceLevelSec = mappingConfig?.service_targets?.service_level_sec ?? 30;
+    const targetReachability = mappingConfig?.service_targets?.bereikbaarheid ?? 0.95;
+    const targetServiceLevel = mappingConfig?.service_targets?.service_level ?? 0.70;
 
-    const totaalSheet = buildTotaalSheet({
-      weeks,
-      weekStats,
-      yearTotal,
-      year,
-      projectName,
-      getHours,
-      targetBereikbaarheid,
-      targetServiceLevel,
-      serviceLevelSec,
-    });
-    XLSX.utils.book_append_sheet(wb, totaalSheet, 'Totaal');
-
-    weeks.forEach((w) => {
-      const ws = buildWeekSheet({
-        week: w,
-        year,
-        weekStats: weekStats[w],
-        getHours,
-        targetBereikbaarheid,
-        targetServiceLevel,
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, buildTotalSheet({
+      weeks, reports, logged, year, projectName, serviceLevelSec, targetReachability, targetServiceLevel,
+    }), 'Totaal');
+    for (const week of weeks) {
+      XLSX.utils.book_append_sheet(workbook, buildWeekSheet({
+        week,
+        report: reports[week],
+        logged,
         serviceLevelSec,
-      });
-      XLSX.utils.book_append_sheet(wb, ws, `W${String(w).padStart(2, '0')}`);
-    });
+        targetReachability,
+        targetServiceLevel,
+      }), `W${String(week).padStart(2, '0')}`);
+    }
 
     const safeName = projectName.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
     const filename = `Rapportage_${safeName}_${year}.xlsx`;
-    XLSX.writeFile(wb, filename);
-
-    onToast?.({
-      title: 'Export succesvol',
-      description: `Jaarrapport ${year} geëxporteerd als ${filename}`,
-    });
-  } catch (err) {
-    console.error('Inbound service year export failed:', err);
+    XLSX.writeFile(workbook, filename);
+    onToast?.({ title: 'Export succesvol', description: `Jaarrapport ${year} geëxporteerd als ${filename}` });
+  } catch (error) {
+    console.error('Inbound service year export failed:', error);
     onToast?.({
       title: 'Export mislukt',
-      description: friendlyError(err, 'Het jaarrapport kon niet gegenereerd worden. Probeer het opnieuw.'),
+      description: friendlyError(error, 'Het jaarrapport kon niet gegenereerd worden. Probeer het opnieuw.'),
       variant: 'destructive',
     });
   }
-}
-
-// ========== Sheet builders ==========
-
-interface TotaalArgs {
-  weeks: number[];
-  weekStats: Record<number, DailyServiceStats>;
-  yearTotal: DailyServiceStats;
-  year: number;
-  projectName: string;
-  getHours: (s: ServiceStats) => number;
-  targetBereikbaarheid: number;
-  targetServiceLevel: number;
-  serviceLevelSec: number;
-}
-
-function buildTotaalSheet(args: TotaalArgs): XLSX.WorkSheet {
-  const { weeks, weekStats, yearTotal, year, projectName, getHours, targetBereikbaarheid, targetServiceLevel, serviceLevelSec } = args;
-
-  const fmtPct = (v: number) => `${(v * 100).toFixed(2)}%`;
-  const fmtNum = (v: number) => v.toLocaleString('nl-NL');
-
-  const weekTotals = weeks.map((w) => weekStats[w].total);
-
-  const bereikbaarheid = (s: ServiceStats) => {
-    const decided = s.handled + s.notHandled;
-    return decided > 0 ? s.handled / decided : 0;
-  };
-  const serviceLevel = (s: ServiceStats) => (s.calls > 0 ? s.fastAnswered / s.calls : 0);
-  const avgDurationMin = (s: ServiceStats) => (s.calls > 0 ? s.durationSec / s.calls / 60 : 0);
-  // Year totals sum the per-week rounded hours so the year column equals the sum of the week columns.
-  const yearHoursSum = weeks.reduce((sum, w) => sum + getHours(weekStats[w].total), 0);
-  const yearToeslag17Sum = weeks.reduce((sum, w) => sum + ceilHours(weekStats[w].total.after17Sec / 3600), 0);
-  const yearToeslagZaSum = weeks.reduce((sum, w) => sum + getHours(weekStats[w].perDay.zaterdag), 0);
-  const yearToeslagZoSum = weeks.reduce((sum, w) => sum + getHours(weekStats[w].perDay.zondag), 0);
-  const toeslag17 = (s: ServiceStats) => (s === yearTotal.total ? yearToeslag17Sum : ceilHours(s.after17Sec / 3600));
-  const toeslagZa = (d: DailyServiceStats) => (d === yearTotal ? yearToeslagZaSum : getHours(d.perDay.zaterdag));
-  const toeslagZo = (d: DailyServiceStats) => (d === yearTotal ? yearToeslagZoSum : getHours(d.perDay.zondag));
-
-  const row = (label: string, fn: (s: ServiceStats) => number, fmt: (n: number) => string = fmtNum, target?: string): (string | number)[] => [
-    label,
-    '',
-    target ?? '',
-    fmt(fn(yearTotal.total)),
-    '',
-    ...weekTotals.map((s) => fmt(fn(s))),
-  ];
-
-  const weekRow = (label: string, fn: (d: DailyServiceStats) => number, fmt: (n: number) => string = fmtNum): (string | number)[] => [
-    label,
-    '',
-    '',
-    fmt(fn(yearTotal)),
-    '',
-    ...weeks.map((w) => fmt(fn(weekStats[w]))),
-  ];
-
-  const rows: (string | number)[][] = [];
-  rows.push([`Rapportage ${projectName} — ${year}`]);
-  rows.push([]);
-  const weekLabels = weeks.map((w) => `wk${String(w).padStart(2, '0')}`);
-  rows.push(['Totaal overzicht', 'Target', '', String(year), '', ...weekLabels]);
-  rows.push([]);
-  rows.push(['UREN']);
-  rows.push(weekRow('Inzet agenten (uren)', (d) => (d === yearTotal ? yearHoursSum : getHours(d.total)), (v) => v.toFixed(2)));
-  rows.push([]);
-  rows.push(['RECORDS']);
-  rows.push(row('Aangenomen calls', (s) => s.calls));
-  rows.push(row(`Binnen ${serviceLevelSec} seconden`, (s) => s.fastAnswered));
-  rows.push([]);
-  rows.push(["KPI'S"]);
-  rows.push(row('Gemiddelde gesprekstijd (min)', avgDurationMin, (v) => v.toFixed(2)));
-  rows.push(row('Bereikbaarheid', bereikbaarheid, fmtPct, fmtPct(targetBereikbaarheid)));
-  rows.push(row('Service level', serviceLevel, fmtPct, fmtPct(targetServiceLevel)));
-  rows.push([]);
-  rows.push(['TOESLAG-UREN']);
-  rows.push(row('Na 17:00 uur', toeslag17, (v) => v.toFixed(2)));
-  rows.push(weekRow('Op zaterdag', toeslagZa, (v) => v.toFixed(2)));
-  rows.push(weekRow('Op zondag', toeslagZo, (v) => v.toFixed(2)));
-
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [
-    { wch: 36 },
-    { wch: 10 },
-    { wch: 3 },
-    { wch: 14 },
-    { wch: 3 },
-    ...weeks.map(() => ({ wch: 10 })),
-  ];
-
-  const totalCols = 5 + weeks.length;
-  styleRangeRow(ws, 0, totalCols, STYLE_TITLE);
-
-  const sectionColors: Record<string, string> = {
-    'UREN': '64748B',
-    'RECORDS': '22C55E',
-    "KPI'S": '8B5CF6',
-    'TOESLAG-UREN': '06B6D4',
-    'Totaal overzicht': '4A7C4E',
-  };
-
-  for (let r = 0; r < rows.length; r++) {
-    const first = String(rows[r][0] ?? '');
-    if (first && sectionColors[first]) {
-      styleRangeRow(ws, r, totalCols, STYLE_SECTION(sectionColors[first]));
-      continue;
-    }
-    if (first && rows[r].length > 1) {
-      styleCell(ws, `${colLetter(0)}${r + 1}`, STYLE_LABEL);
-      styleCell(ws, `${colLetter(1)}${r + 1}`, STYLE_TARGET_COL);
-      styleCell(ws, `${colLetter(3)}${r + 1}`, STYLE_TOTAL_COL);
-      for (let c = 5; c < totalCols; c++) {
-        styleCell(ws, `${colLetter(c)}${r + 1}`, STYLE_CELL);
-      }
-    }
-  }
-
-  return ws;
-}
-
-interface WeekArgs {
-  week: number;
-  year: number;
-  weekStats: DailyServiceStats;
-  getHours: (s: ServiceStats) => number;
-  targetBereikbaarheid: number;
-  targetServiceLevel: number;
-  serviceLevelSec: number;
-}
-
-function buildWeekSheet(args: WeekArgs): XLSX.WorkSheet {
-  const { week, weekStats, getHours, targetBereikbaarheid, targetServiceLevel, serviceLevelSec } = args;
-
-  const fmtPct = (v: number) => `${(v * 100).toFixed(2)}%`;
-  const fmtNum = (v: number) => v.toLocaleString('nl-NL');
-
-  const total = weekStats.total;
-  // Week total = sum of the per-day rounded hours so the Totaal column equals the sum of the day columns.
-  const weekHoursSum = DAYS.reduce((sum, d) => sum + getHours(weekStats.perDay[d]), 0);
-  const weekToeslag17Sum = DAYS.reduce((sum, d) => sum + ceilHours(weekStats.perDay[d].after17Sec / 3600), 0);
-
-  const bereikbaarheid = (s: ServiceStats) => {
-    const decided = s.handled + s.notHandled;
-    return decided > 0 ? s.handled / decided : 0;
-  };
-  const serviceLevel = (s: ServiceStats) => (s.calls > 0 ? s.fastAnswered / s.calls : 0);
-  const avgDurationMin = (s: ServiceStats) => (s.calls > 0 ? s.durationSec / s.calls / 60 : 0);
-  const toeslag17 = (s: ServiceStats) => (s === total ? weekToeslag17Sum : ceilHours(s.after17Sec / 3600));
-
-  const row = (label: string, fn: (s: ServiceStats) => number, fmt: (n: number) => string = fmtNum, target?: string): (string | number)[] => [
-    label,
-    '',
-    target ?? '',
-    fmt(fn(total)),
-    '',
-    ...DAYS.map((d) => fmt(fn(weekStats.perDay[d]))),
-  ];
-
-  const rows: (string | number)[][] = [];
-  rows.push([`Week ${String(week).padStart(2, '0')}`]);
-  rows.push([]);
-  rows.push(['Weekoverzicht', 'Target', '', 'Totaal', '', ...DAY_LABELS]);
-  rows.push([]);
-  rows.push(['UREN']);
-  rows.push(row('Inzet agenten (uren)', (s) => (s === total ? weekHoursSum : getHours(s)), (v) => v.toFixed(2)));
-  rows.push([]);
-  rows.push(['RECORDS']);
-  rows.push(row('Aangenomen calls', (s) => s.calls));
-  rows.push(row(`Binnen ${serviceLevelSec} seconden`, (s) => s.fastAnswered));
-  rows.push([]);
-  rows.push(["KPI'S"]);
-  rows.push(row('Gemiddelde gesprekstijd (min)', avgDurationMin, (v) => v.toFixed(2)));
-  rows.push(row('Bereikbaarheid', bereikbaarheid, fmtPct, fmtPct(targetBereikbaarheid)));
-  rows.push(row('Service level', serviceLevel, fmtPct, fmtPct(targetServiceLevel)));
-  rows.push([]);
-  rows.push(['TOESLAG-UREN']);
-  rows.push(row('Na 17:00 uur', toeslag17, (v) => v.toFixed(2)));
-
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [
-    { wch: 36 },
-    { wch: 10 },
-    { wch: 3 },
-    { wch: 14 },
-    { wch: 3 },
-    ...DAY_LABELS.map(() => ({ wch: 11 })),
-  ];
-
-  const totalCols = 5 + DAY_LABELS.length;
-  styleRangeRow(ws, 0, totalCols, STYLE_TITLE);
-
-  const sectionColors: Record<string, string> = {
-    'UREN': '64748B',
-    'RECORDS': '22C55E',
-    "KPI'S": '8B5CF6',
-    'TOESLAG-UREN': '06B6D4',
-    'Weekoverzicht': '4A7C4E',
-  };
-
-  for (let r = 0; r < rows.length; r++) {
-    const first = String(rows[r][0] ?? '');
-    if (first && sectionColors[first]) {
-      styleRangeRow(ws, r, totalCols, STYLE_SECTION(sectionColors[first]));
-      continue;
-    }
-    if (first && rows[r].length > 1) {
-      styleCell(ws, `${colLetter(0)}${r + 1}`, STYLE_LABEL);
-      styleCell(ws, `${colLetter(1)}${r + 1}`, STYLE_TARGET_COL);
-      styleCell(ws, `${colLetter(3)}${r + 1}`, STYLE_TOTAL_COL);
-      for (let c = 5; c < totalCols; c++) {
-        styleCell(ws, `${colLetter(c)}${r + 1}`, STYLE_CELL);
-      }
-    }
-  }
-
-  return ws;
 }

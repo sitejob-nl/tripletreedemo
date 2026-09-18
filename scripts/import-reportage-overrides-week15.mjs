@@ -47,6 +47,8 @@ function parseArgs(argv) {
   const args = {
     year: 2026,
     throughWeek: 15,
+    basicallProjectId: null,
+    projectId: null,
     apply: false,
     out: DEFAULT_OUT,
   };
@@ -62,6 +64,12 @@ function parseArgs(argv) {
       i += 1;
     } else if (arg === "--out" && next) {
       args.out = path.resolve(ROOT, next);
+      i += 1;
+    } else if (arg === "--basicall-project-id" && next) {
+      args.basicallProjectId = Number(next);
+      i += 1;
+    } else if (arg === "--project-id" && next) {
+      args.projectId = String(next).trim();
       i += 1;
     } else if (arg === "--apply") {
       args.apply = true;
@@ -79,14 +87,28 @@ function parseArgs(argv) {
   if (!Number.isInteger(args.throughWeek) || args.throughWeek < 1 || args.throughWeek > 53) {
     throw new Error("--through-week must be between 1 and 53");
   }
+  if (args.basicallProjectId !== null && (!Number.isInteger(args.basicallProjectId) || args.basicallProjectId <= 0)) {
+    throw new Error("--basicall-project-id must be a positive integer");
+  }
+  if (args.projectId !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(args.projectId)) {
+    throw new Error("--project-id must be a valid UUID");
+  }
+  if (args.projectId !== null && args.basicallProjectId === null) {
+    throw new Error("--project-id requires --basicall-project-id");
+  }
+  if (args.projectId !== null && args.apply) {
+    throw new Error("--project-id is only available for dry runs; apply mode resolves the live project first");
+  }
   return args;
 }
 
 function printHelp() {
-  console.log(`Usage: node scripts/import-reportage-overrides-week15.mjs [--dry-run|--apply] [--year 2026] [--through-week 15]
+  console.log(`Usage: node scripts/import-reportage-overrides-week15.mjs [--dry-run|--apply] [--year 2026] [--through-week 15] [--basicall-project-id 870] [--project-id uuid]
 
 Default mode is --dry-run. It writes a preview JSON and performs no writes.
---apply upserts aggregate, non-PII rows into public.reportage_weekly_overrides.`);
+--apply upserts aggregate, non-PII rows into public.reportage_weekly_overrides.
+--basicall-project-id limits both parsing and writes to one project.
+--project-id skips the live project lookup for a dry-run preview only.`);
 }
 
 function loadEnvFile(filePath) {
@@ -398,6 +420,32 @@ function buildDailyMetrics(rows, labelConfig) {
   return daily;
 }
 
+function addSectionMetrics(rows, sectionLabel, prefix, metrics, dailyMetrics) {
+  const sectionKey = normalizeKey(sectionLabel);
+  const dayColumns = findDayColumns(rows);
+  const start = rows.findIndex((row) => row.some((cell) => normalizeKey(cell) === sectionKey));
+  if (start < 0) return;
+
+  for (let rowIndex = start + 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    const labelIndex = row.findIndex((cell) => typeof cell === "string" && String(cell).trim() !== "");
+    if (labelIndex < 0) continue;
+    const label = String(row[labelIndex]).trim();
+    if (normalizeKey(label) === "totaal") break;
+    const count = parseExcelNumber(row[labelIndex + 1]);
+    if (count === null) continue;
+    metrics[`${prefix}:${label}`] = roundMetric(count);
+
+    for (const day of DAYS) {
+      const column = dayColumns[day];
+      const dayValue = metricFromDay(row, column, "count");
+      if (dayValue === null) continue;
+      dailyMetrics[day] ??= {};
+      dailyMetrics[day][`${prefix}:${label}`] = roundMetric(dayValue);
+    }
+  }
+}
+
 function extractOutboundWeek(rows) {
   const config = {
     sales: { labels: "Aantal positief", unit: "count" },
@@ -482,8 +530,8 @@ function extractInboundWeek(rows, template) {
     avgHandling: { labels: ["Average handlingtime (sec.)"], unit: "number" },
     abandonedUnder60: { labels: ["Total calls abandoned < 60 sec.", "Short Abandoned"], unit: "count" },
     abandonedOver60: { labels: ["Total calls abandoned > 60 sec."], unit: "count" },
-    abandonedRate: { labels: ["Abandoned rate (%)"], unit: "percent" },
-    serviceLevel: { labels: ["Service level (%)"], unit: "percent" },
+    abandonedRate: { labels: ["Abandoned rate (%)", "Short Abandoned%"], unit: "percent" },
+    serviceLevel: { labels: ["Service level (%)", "Service level"], unit: "percent" },
     totalCalltimeMin: { labels: ["Total calltime (min)"], unit: "number" },
     totalHandlingtimeMin: { labels: ["Total handelingstime (min)", "Total handlingtime (min)"], unit: "number" },
     hours: { labels: ["Inzet agenten (uren)", "Aantal beluren", "Bel uren"], unit: "hours" },
@@ -492,6 +540,31 @@ function extractInboundWeek(rows, template) {
   const metrics = Object.fromEntries(
     Object.entries(config).map(([key, item]) => [key, roundMetric(firstMetric(rows, item.labels, item.unit), item.unit)]),
   );
+  const dailyMetrics = buildDailyMetrics(rows, config);
+
+  // De Nederlandse klantenservice-Excel drukt deze gemiddelden uit in minuten,
+  // terwijl de override-contracten seconden gebruiken.
+  const avgCallMinutes = getMetricFromRows(rows, "Gemiddelde gesprekstijd");
+  const avgHandlingMinutes = getMetricFromRows(rows, "Gemiddelde nawerktijd");
+  if (avgCallMinutes !== null) metrics.avgCall = roundMetric(avgCallMinutes * 60);
+  if (avgHandlingMinutes !== null) metrics.avgHandling = roundMetric(avgHandlingMinutes * 60);
+
+  const dayColumns = findDayColumns(rows);
+  const avgCallRow = findRowByLabel(rows, "Gemiddelde gesprekstijd");
+  const avgHandlingRow = findRowByLabel(rows, "Gemiddelde nawerktijd");
+  for (const day of DAYS) {
+    const column = dayColumns[day];
+    const callMinutes = metricFromDay(avgCallRow, column, "number");
+    const handlingMinutes = metricFromDay(avgHandlingRow, column, "number");
+    if (callMinutes !== null || handlingMinutes !== null) dailyMetrics[day] ??= {};
+    if (callMinutes !== null) dailyMetrics[day].avgCall = roundMetric(callMinutes * 60);
+    if (handlingMinutes !== null) dailyMetrics[day].avgHandling = roundMetric(handlingMinutes * 60);
+  }
+
+  if (template === "inbound_service") {
+    addSectionMetrics(rows, "Callreasons", "reason", metrics, dailyMetrics);
+    addSectionMetrics(rows, "Gebeld door", "caller", metrics, dailyMetrics);
+  }
 
   if (template === "inbound_retention") {
     Object.assign(metrics, {
@@ -508,7 +581,7 @@ function extractInboundWeek(rows, template) {
 
   return {
     metrics,
-    dailyMetrics: buildDailyMetrics(rows, config),
+    dailyMetrics,
     resultRows: [],
   };
 }
@@ -556,13 +629,26 @@ function readOverrides(config, args, project) {
 
 async function main() {
   const args = parseArgs(process.argv);
+  const selectedReports = args.basicallProjectId === null
+    ? MATCHED_REPORTS
+    : MATCHED_REPORTS.filter((item) => item.basicallProjectId === args.basicallProjectId);
+  if (selectedReports.length === 0) {
+    throw new Error(`No report configured for BasiCall project ${args.basicallProjectId}`);
+  }
   const provider = createProvider();
-  const projects = await provider.fetchProjects(MATCHED_REPORTS.map((item) => item.basicallProjectId));
+  const projects = args.projectId === null
+    ? await provider.fetchProjects(selectedReports.map((item) => item.basicallProjectId))
+    : [{
+      id: args.projectId,
+      name: `BasiCall ${args.basicallProjectId} (dry run)`,
+      basicall_project_id: args.basicallProjectId,
+      report_template: selectedReports[0].template,
+    }];
   const projectsByBasicallId = new Map(projects.map((project) => [Number(project.basicall_project_id), project]));
 
   const missingProjects = [];
   const overrides = [];
-  for (const config of MATCHED_REPORTS) {
+  for (const config of selectedReports) {
     const project = projectsByBasicallId.get(config.basicallProjectId);
     if (!project) {
       missingProjects.push(config);
@@ -574,10 +660,10 @@ async function main() {
   const preview = {
     generatedAt: new Date().toISOString(),
     mode: args.apply ? "apply" : "dry-run",
-    dataProvider: provider.name,
+    dataProvider: args.projectId === null ? provider.name : "local-dry-run",
     year: args.year,
     throughWeek: args.throughWeek,
-    matchedReports: MATCHED_REPORTS.length - missingProjects.length,
+    matchedReports: selectedReports.length - missingProjects.length,
     missingProjects: missingProjects.map((item) => ({
       file: item.file,
       basicall_project_id: item.basicallProjectId,
