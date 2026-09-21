@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/Dashboard/Sidebar';
 import { Header } from '@/components/Dashboard/Header';
 import { MappingTool } from '@/components/Dashboard/MappingTool';
 import { HoursCorrection } from '@/components/Dashboard/HoursCorrection';
+import { InboundServiceMailHours } from '@/components/Dashboard/InboundServiceMailHours';
 import { DashboardView } from '@/components/Dashboard/DashboardView';
 import { WelcomeScreen } from '@/components/Dashboard/WelcomeScreen';
 import { KPICardsSection, AnnualValueBreakdown } from '@/components/Dashboard/KPICardsSection';
@@ -632,6 +633,16 @@ const Index = () => {
                         hoursSource={currentProject.mapping_config?.hours_source ?? 'auto'}
                       />
                     </div>
+                  )}
+
+                  {currentProject.report_template === 'inbound_service'
+                    && dateFilterType === 'week'
+                    && selectedWeek !== 'all' && (
+                    <InboundServiceMailHours
+                      projectId={currentProject.id}
+                      selectedWeek={selectedWeek}
+                      reportageOverrides={reportageOverrides}
+                    />
                   )}
                 </div>
               )}

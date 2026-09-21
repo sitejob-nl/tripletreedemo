@@ -301,6 +301,14 @@ function formatLocalDate(d) {
     return `${year}-${month}-${day}`;
 }
 
+function parseLocalJobDate(value, endOfDay = false) {
+    const match = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) throw new Error(`Ongeldige sync-jobdatum: ${value}`);
+    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    date.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+    return date;
+}
+
 function getWeekNumber(d) {
     // Kopie maken zodat origineel niet gemuteerd wordt
     const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -1287,8 +1295,10 @@ async function run() {
 
                 const project = projectMap.get(job.projects.id) || job.projects;
                 console.log(`\n📋 Job: ${project.name} (${job.start_date} - ${job.end_date})`);
-                await performSync(project, new Date(job.start_date), new Date(job.end_date), job.id);
-                await syncLoggedTimeRange(project, new Date(job.start_date), new Date(job.end_date));
+                const jobStart = parseLocalJobDate(job.start_date);
+                const jobEnd = parseLocalJobDate(job.end_date, true);
+                await performSync(project, jobStart, jobEnd, job.id);
+                await syncLoggedTimeRange(project, jobStart, jobEnd);
                 await evaluateProjectQuality(project.id);
                 await discoverBatches(project);
                 await syncBatchTotals(project);

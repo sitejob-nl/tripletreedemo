@@ -243,6 +243,21 @@ function hasOverrideBreakdowns(metrics: ReportageOverrideMetrics | undefined): b
   return Object.keys(metrics ?? {}).some((key) => key.startsWith('reason:') || key.startsWith('caller:'));
 }
 
+function hasOverrideCore(metrics: ReportageOverrideMetrics | undefined): boolean {
+  return [
+    'offered',
+    'answered',
+    'abandonedUnder60',
+    'answeredUnder60',
+    'avgCall',
+    'avgHandling',
+  ].some((key) => metricMaybeNumber(metrics, key) !== null);
+}
+
+function hasNonHoursMetric(metrics: ReportageOverrideMetrics | undefined): boolean {
+  return Object.keys(metrics ?? {}).some((key) => key !== 'hours' && metricMaybeNumber(metrics, key) !== null);
+}
+
 function applyOverrideMetrics(bucket: InboundServiceBucket, metrics: ReportageOverrideMetrics | undefined) {
   if (!metrics) return;
   const offered = metricMaybeNumber(metrics, 'offered');
@@ -269,7 +284,10 @@ function applyOverrideMetrics(bucket: InboundServiceBucket, metrics: ReportageOv
     bucket.afterCallSec += avgHandling * answered;
     bucket.afterCallKnown += answered;
   }
-  if (hours !== null) {
+  // In gedeeltelijk ingevulde Excel-weken bevatten lege dagen soms uitsluitend
+  // `hours: 0`. Dat is een lege formulecel, geen bewijs dat er werkelijk nul
+  // agenturen waren. Laat in dat geval de live urenbron de waarde bepalen.
+  if (hours !== null && (hours !== 0 || hasNonHoursMetric(metrics))) {
     bucket.agentHours += hours;
     bucket.agentHoursKnown = true;
   }
@@ -301,8 +319,22 @@ export function buildInboundServiceBreakdown(
     const day = normalize(record.day_name) as ServiceDay;
     if (!SERVICE_DAYS.includes(day)) continue;
     const override = overridesByWeek.get(Number(record.week_number));
-    const includeCore = !override;
-    const includeBreakdowns = !override || !hasOverrideBreakdowns(override.metrics);
+    const dailyMetrics = override?.daily_metrics?.[day];
+    const hasDailyCoreCoverage = override
+      ? SERVICE_DAYS.some((candidate) => hasOverrideCore(override.daily_metrics?.[candidate]))
+      : false;
+    const hasDailyBreakdownCoverage = override
+      ? SERVICE_DAYS.some((candidate) => hasOverrideBreakdowns(override.daily_metrics?.[candidate]))
+      : false;
+    // Een weekoverride kan een momentopname halverwege de week zijn. Onderdruk
+    // live records daarom per dag zodra dagkolommen beschikbaar zijn. Zo blijft
+    // de Excel-maandag leidend, terwijl dinsdag t/m vrijdag uit BasiCall komen.
+    const includeCore = !override || (hasDailyCoreCoverage
+      ? !hasOverrideCore(dailyMetrics)
+      : !hasOverrideCore(override.metrics));
+    const includeBreakdowns = !override || (hasDailyBreakdownCoverage
+      ? !hasOverrideBreakdowns(dailyMetrics)
+      : !hasOverrideBreakdowns(override.metrics));
     applyRawRecord(perDay[day], record, mappingConfig, serviceLevelSec, includeCore, includeBreakdowns, reasonConfig, callerConfig);
     applyRawRecord(total, record, mappingConfig, serviceLevelSec, includeCore, includeBreakdowns, reasonConfig, callerConfig);
   }

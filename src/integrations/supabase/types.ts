@@ -801,6 +801,15 @@ export type Database = {
         Args: { p_project_id: string; p_version: number }
         Returns: number
       }
+      upsert_inbound_service_mail_hours: {
+        Args: {
+          p_mail_hours: number
+          p_project_id: string
+          p_week_number: number
+          p_year: number
+        }
+        Returns: Json
+      }
       get_result_code_distribution: {
         Args: Record<PropertyKey, never>
         Returns: {

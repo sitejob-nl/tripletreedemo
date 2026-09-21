@@ -48,6 +48,62 @@ describe('inbound-service rapportagedefinities', () => {
     expect(result.total.reasons.Inlogproblemen).toBe(1);
   });
 
+  it('vult een gedeeltelijke Excel-week per dag aan met live records', () => {
+    const override = {
+      week_number: 38,
+      metrics: {
+        offered: 12,
+        answered: 11,
+        abandonedUnder60: 1,
+        answeredUnder60: 9,
+        hours: 1.478,
+        mailHours: 3.09,
+        'reason:Inlogproblemen': 2,
+      },
+      daily_metrics: {
+        maandag: {
+          offered: 12,
+          answered: 11,
+          abandonedUnder60: 1,
+          answeredUnder60: 9,
+          hours: 1.478,
+          'reason:Inlogproblemen': 2,
+        },
+        dinsdag: { hours: 0 },
+      },
+    } as unknown as ReportageWeeklyOverride;
+    const result = buildInboundServiceBreakdown([
+      { week_number: 38, day_name: 'maandag', bc_result_naam: 'Afgehandeld', raw_data: { reden_van_bellen: 'Overig' } },
+      { week_number: 38, day_name: 'dinsdag', bc_result_naam: 'Afgehandeld', bc_gesprekstijd: 120, raw_data: { reden_van_bellen: 'Defensie', gebeld_door: 'Defensie' } },
+      { week_number: 38, day_name: 'dinsdag', bc_result_naam: 'Inbound verloren', bc_gesprekstijd: 0, raw_data: {} },
+    ], mapping, [override]);
+
+    expect(result.perDay.maandag.offered).toBe(12);
+    expect(result.perDay.dinsdag.offered).toBe(2);
+    expect(result.perDay.dinsdag.answered).toBe(1);
+    expect(result.perDay.dinsdag.agentHoursKnown).toBe(false);
+    expect(result.total.offered).toBe(14);
+    expect(result.total.answered).toBe(12);
+    expect(result.total.reasons).toEqual({ Inlogproblemen: 2, Defensie: 1 });
+    expect(result.total.mailHours).toBe(3.09);
+  });
+
+  it('laat een handmatige mailuren-override live belcijfers ongemoeid', () => {
+    const override = {
+      week_number: 39,
+      metrics: { mailHours: 4.5, mailHoursSource: 'manual' },
+      daily_metrics: {},
+    } as unknown as ReportageWeeklyOverride;
+    const result = buildInboundServiceBreakdown([
+      { week_number: 39, day_name: 'maandag', bc_result_naam: 'Afgehandeld', bc_gesprekstijd: 180, raw_data: { reden_van_bellen: 'Defensie' } },
+    ], mapping, [override]);
+
+    expect(result.total.offered).toBe(1);
+    expect(result.total.answered).toBe(1);
+    expect(result.total.mailHours).toBe(4.5);
+    expect(result.total.mailHoursKnown).toBe(true);
+  });
+
   it('herkent alleen expliciete wachttijdvelden en nooit gespreksduur', () => {
     expect(parseDurationSeconds('00:00:29')).toBe(29);
     expect(parseDurationSeconds('1:02')).toBe(62);

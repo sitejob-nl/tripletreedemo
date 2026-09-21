@@ -74,12 +74,11 @@ export function InboundServiceMatrix({
     return liveHours > 0 ? liveHours : bucket.offered === 0 ? 0 : null;
   };
   const totalAgentHours = (() => {
-    if (report.total.agentHoursKnown) return report.total.agentHours;
     if (activeDays.length === 0) return 0;
     const daily = activeDays.map(agentHoursForDay);
     return daily.every((value) => value !== null)
       ? daily.reduce<number>((sum, value) => sum + (value ?? 0), 0)
-      : null;
+      : report.total.agentHoursKnown ? report.total.agentHours : null;
   })();
   const totalMailHours = report.total.mailHoursKnown ? report.total.mailHours : null;
   const missingWaitTime = completeMetric(
