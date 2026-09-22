@@ -18,6 +18,8 @@ interface KPICardsSectionProps {
   totalAnnualValue: number;
   totalRecords: number;
   totalHours: number;
+  serviceAgentHours?: number | null;
+  serviceMailHours?: number | null;
   costPerDonor: number;
   hourlyRate: number;
   costPerSale?: number | null; // per-sale facturatie (bv. ANBO 734): subtitel "/sale" i.p.v. "/u"
@@ -36,6 +38,8 @@ export function KPICardsSection({
   totalAnnualValue,
   totalRecords,
   totalHours,
+  serviceAgentHours,
+  serviceMailHours,
   costPerDonor,
   hourlyRate,
   costPerSale,
@@ -103,7 +107,10 @@ export function KPICardsSection({
   if (isServiceProject) {
     const handledTotal = totalHandled + totalNotHandled;
     const handledPercent = handledTotal > 0 ? (totalHandled / handledTotal) * 100 : 0;
-    const callsPerHour = totalHours > 0 ? totalRecords / totalHours : 0;
+    const callsPerHour = serviceAgentHours != null && serviceAgentHours > 0
+      ? totalRecords / serviceAgentHours : null;
+    const serviceTotalHours = serviceAgentHours != null && serviceMailHours != null
+      ? serviceAgentHours + serviceMailHours : null;
 
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8" data-tour="kpi-cards">
@@ -127,8 +134,8 @@ export function KPICardsSection({
         />
         <KPICard
           title="Calls per Uur"
-          value={callsPerHour.toFixed(1)}
-          subtext="Productiviteit"
+          value={callsPerHour === null ? '—' : callsPerHour.toFixed(1)}
+          subtext="Op basis van agenturen"
           icon={TrendingUp}
           variant="purple"
           isLoading={isLoading}
@@ -136,8 +143,8 @@ export function KPICardsSection({
         />
         <KPICard
           title="Inzet Uren"
-          value={`${totalHours} u`}
-          subtext="Totale beltijd"
+          value={serviceTotalHours === null ? '—' : `${serviceTotalHours.toLocaleString('nl-NL', { maximumFractionDigits: 2 })} u`}
+          subtext="Agenten + mail"
           icon={Users}
           variant="cyan"
           isLoading={isLoading}

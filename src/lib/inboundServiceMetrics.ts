@@ -64,6 +64,23 @@ export interface InboundServiceBreakdown {
   usesExcelOverrides: boolean;
 }
 
+export function inboundServiceAgentHours(
+  report: InboundServiceBreakdown,
+  dailyLoggedHours?: Partial<Record<ServiceDay, number>>,
+): number | null {
+  const activeDays = SERVICE_DAYS.filter((day) => report.perDay[day].offered > 0);
+  if (activeDays.length === 0) return report.total.agentHoursKnown ? report.total.agentHours : 0;
+  const daily = activeDays.map((day) => {
+    const bucket = report.perDay[day];
+    if (bucket.agentHoursKnown) return bucket.agentHours;
+    const liveHours = dailyLoggedHours?.[day] ?? 0;
+    return liveHours > 0 ? liveHours : null;
+  });
+  return daily.every((value) => value !== null)
+    ? daily.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+    : null;
+}
+
 const WAIT_TIME_KEYS = [
   'wachttijd_sec',
   'wachttijd',

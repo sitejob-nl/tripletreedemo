@@ -8,7 +8,7 @@
 #
 # Gebruik:
 #   ./deploy.sh              # rsync + dry-run-samenvatting
-#   ./deploy.sh --apply      # daadwerkelijk overzetten
+#   ./deploy.sh --apply      # gewijzigde bestanden overzetten; dependencies alleen bij gewijzigde manifesten
 #   ./deploy.sh --restart    # na apply: cron pakt het vanzelf op; dit is alleen voor handmatige sync-test
 #
 # Bestanden die over gaan: sync.js, package.json, package-lock.json (niet .env, niet node_modules).
@@ -22,13 +22,25 @@ MODE="${1:-dry-run}"
 
 RSYNC_FLAGS=(
   -av
-  --delete
   --exclude=".env"
   --exclude="node_modules"
   --exclude=".git"
   --exclude="deploy.sh"
   --exclude=".env.example"
 )
+
+# Op de VPS staat een package-lock.json die deze checkout niet heeft. Verwijder
+# daarom geen serverbestanden. Voorkom ook een onnodige npm install wanneer
+# uitsluitend sync.js verandert: zonder lokaal lockbestand kan die versies wijzigen.
+MANIFEST_CHANGED=false
+if [[ "$MODE" == "--apply" || "$MODE" == "--restart" ]]; then
+  if [[ -n "$(rsync -ani --out-format='%n' package.json "${VPS_USER}@${VPS_HOST}:${VPS_PATH}/" | grep -x 'package.json' || true)" ]]; then
+    MANIFEST_CHANGED=true
+  fi
+  if [[ -f package-lock.json ]] && [[ -n "$(rsync -ani --out-format='%n' package-lock.json "${VPS_USER}@${VPS_HOST}:${VPS_PATH}/" | grep -x 'package-lock.json' || true)" ]]; then
+    MANIFEST_CHANGED=true
+  fi
+fi
 
 if [[ "$MODE" != "--apply" && "$MODE" != "--restart" ]]; then
   RSYNC_FLAGS+=(--dry-run)
@@ -39,8 +51,12 @@ echo "--> rsync naar ${VPS_USER}@${VPS_HOST}:${VPS_PATH}"
 rsync "${RSYNC_FLAGS[@]}" ./ "${VPS_USER}@${VPS_HOST}:${VPS_PATH}/"
 
 if [[ "$MODE" == "--apply" || "$MODE" == "--restart" ]]; then
-  echo "--> npm install op VPS"
-  ssh "${VPS_USER}@${VPS_HOST}" "cd ${VPS_PATH} && npm install --omit=dev --no-audit --no-fund"
+  if [[ "$MANIFEST_CHANGED" == true ]]; then
+    echo "--> package manifest gewijzigd; npm install op VPS"
+    ssh "${VPS_USER}@${VPS_HOST}" "cd ${VPS_PATH} && npm install --omit=dev --no-audit --no-fund"
+  else
+    echo "--> package manifest ongewijzigd; npm install overgeslagen"
+  fi
   echo "--> klaar. Volgende cron-run pakt de nieuwe versie op."
 fi
 

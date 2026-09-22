@@ -3,6 +3,7 @@ import type { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import {
   buildInboundServiceBreakdown,
   completeMetric,
+  inboundServiceAgentHours,
   isShortAbandonedResult,
   parseDurationSeconds,
 } from '@/lib/inboundServiceMetrics';
@@ -102,6 +103,16 @@ describe('inbound-service rapportagedefinities', () => {
     expect(result.total.answered).toBe(1);
     expect(result.total.mailHours).toBe(4.5);
     expect(result.total.mailHoursKnown).toBe(true);
+  });
+
+  it('toont geen inzeturen als een actieve dag alleen gesprekstijd heeft', () => {
+    const report = buildInboundServiceBreakdown([
+      { week_number: 39, day_name: 'maandag', bc_result_naam: 'Afgehandeld', bc_gesprekstijd: 180 },
+      { week_number: 39, day_name: 'dinsdag', bc_result_naam: 'Afgehandeld', bc_gesprekstijd: 240 },
+    ], mapping);
+
+    expect(inboundServiceAgentHours(report, { maandag: 2 })).toBeNull();
+    expect(inboundServiceAgentHours(report, { maandag: 2, dinsdag: 1.5 })).toBe(3.5);
   });
 
   it('herkent alleen expliciete wachttijdvelden en nooit gespreksduur', () => {

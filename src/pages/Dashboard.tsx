@@ -18,6 +18,7 @@ import { useOnboardingTour } from '@/hooks/useOnboardingTour';
 import { Role, ViewMode, ProjectMapping, ProcessedCallRecord } from '@/types/dashboard';
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { ceilHours } from '@/lib/hours';
+import { buildInboundServiceBreakdown, inboundServiceAgentHours } from '@/lib/inboundServiceMetrics';
 import { getCostPerSale } from '@/lib/cost';
 import { useProjects, useUpdateProject } from '@/hooks/useProjects';
 import { MappingConfig, ProjectType } from '@/types/database';
@@ -349,6 +350,22 @@ const Index = () => {
   const projectType = (currentProject?.project_type || 'outbound') as ProjectType;
   const isInboundProject = projectType === 'inbound' || projectType === 'inbound_service';
 
+  const serviceHours = useMemo(() => {
+    if (projectType !== 'inbound_service' || !isSingleWeek || selectedWeek === 'all'
+        || reportMatrixLoading || loggedTimeLoading || reportageOverridesLoading) return null;
+    const report = buildInboundServiceBreakdown(
+      reportMatrixProcessedData,
+      currentProject?.mapping_config,
+      reportageOverrides,
+    );
+    return {
+      agent: inboundServiceAgentHours(report, loggedTime?.dailyHours),
+      mail: report.total.mailHoursKnown ? report.total.mailHours : null,
+    };
+  }, [projectType, isSingleWeek, selectedWeek, reportMatrixLoading, loggedTimeLoading,
+    reportageOverridesLoading, reportMatrixProcessedData, currentProject?.mapping_config,
+    reportageOverrides, loggedTime?.dailyHours]);
+
   // Compute handled/not-handled counts for inbound_service
   const { totalHandled, totalNotHandled } = useMemo(() => {
     if (projectType !== 'inbound_service' || !currentProject?.mapping_config) {
@@ -668,6 +685,8 @@ const Index = () => {
                     totalAnnualValue={totalAnnualValue}
                     totalRecords={kpiAggregates?.totalRecords ?? 0}
                     totalHours={totalHours}
+                    serviceAgentHours={serviceHours?.agent ?? null}
+                    serviceMailHours={serviceHours?.mail ?? null}
                     costPerDonor={costPerDonor}
                     hourlyRate={hourlyRate}
                     costPerSale={costPerSale}

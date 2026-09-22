@@ -5,6 +5,7 @@ import {
   averageMetric,
   buildInboundServiceBreakdown,
   completeMetric,
+  inboundServiceAgentHours,
   SERVICE_DAYS,
   type InboundServiceBucket,
   type ServiceDay,
@@ -66,20 +67,13 @@ export function InboundServiceMatrix({
     [data, mappingConfig, reportageOverrides],
   );
 
-  const activeDays = SERVICE_DAYS.filter((day) => report.perDay[day].offered > 0);
   const agentHoursForDay = (day: ServiceDay): MetricValue => {
     const bucket = report.perDay[day];
     if (bucket.agentHoursKnown) return bucket.agentHours;
     const liveHours = dailyLoggedHours?.[day] ?? 0;
     return liveHours > 0 ? liveHours : bucket.offered === 0 ? 0 : null;
   };
-  const totalAgentHours = (() => {
-    if (activeDays.length === 0) return 0;
-    const daily = activeDays.map(agentHoursForDay);
-    return daily.every((value) => value !== null)
-      ? daily.reduce<number>((sum, value) => sum + (value ?? 0), 0)
-      : report.total.agentHoursKnown ? report.total.agentHours : null;
-  })();
+  const totalAgentHours = inboundServiceAgentHours(report, dailyLoggedHours);
   const totalMailHours = report.total.mailHoursKnown ? report.total.mailHours : null;
   const missingWaitTime = completeMetric(
     report.total.answeredWithinThreshold,
@@ -183,6 +177,9 @@ export function InboundServiceMatrix({
                 </span>
               )}
             </div>
+            <p className="mt-2 text-xs leading-relaxed opacity-90">
+              Agenturen komen uit de goedgekeurde weekrapportage of uit de BasiCall-urensync, met eventuele urencorrectie door een beheerder. Mailuren komen uit de weekrapportage of uit de invoer bij ‘Mailuren week’. Nawerktijd verschijnt alleen als BasiCall die expliciet levert of als ze in de goedgekeurde weekrapportage staat.
+            </p>
           </div>
         </div>
       </div>
