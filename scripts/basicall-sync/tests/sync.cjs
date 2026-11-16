@@ -40,7 +40,7 @@ function harness({ query = () => ({ data: [], error: null }), post } = {}) {
         },
     };
     const context = vm.createContext(sandbox);
-    vm.runInContext(source + '\nthis.api = { buildSoapRequest, loggedTimeSource, loggedTimeSeconds, syncLoggedTimeDay, syncLoggedTimeSingleDay, getActiveCallDays, getMissedLoggedTimeDays, logLoggedTimeSync, parseLocalJobDate };', context);
+    vm.runInContext(source + '\nthis.api = { buildSoapRequest, loggedTimeSource, loggedTimeSeconds, queueAfterCallSeconds, enrichQueueAfterCallRecords, syncLoggedTimeDay, syncLoggedTimeSingleDay, getActiveCallDays, getMissedLoggedTimeDays, logLoggedTimeSync, parseLocalJobDate };', context);
     return { ...sandbox.api, queries, requests, context, exports: sandbox.module.exports };
 }
 
@@ -192,4 +192,122 @@ test('backfill is read-only by default and refuses invalid or unfinished dates',
     assert.throws(() => parseOptions(['--project=870', '--from=2026-11-14', '--to=2099-01-01']), /afgesloten periode/);
     assert.throws(() => parseOptions([...args, '--unexpected']), /Onbekend argument/);
     assert.equal(app.queries.length, 0);
+});
+
+test('queue after-call time links by record ID, sums segments and distinguishes confirmed zero from missing', () => {
+    const app = harness();
+    const values = app.queueAfterCallSeconds([
+        { record_id: '100', status: 'In gesprek', aantal_seconden: '200' },
+        { record_id: '100', status: 'Nawerktijd', aantal_seconden: '25' },
+        { record_id: '100', status: 'Nawerktijd', aantal_seconden: '15' },
+        { record_id: '101', status: 'In gesprek', aantal_seconden: '100' },
+        { record_id: '102', status: 'Emailverwerking', aantal_seconden: '400' },
+        { record_id: '0', status: 'Nawerktijd', aantal_seconden: '5' },
+    ]);
+    assert.equal(values.get('100'), 40);
+    assert.equal(values.get('101'), 0);
+    assert.equal(values.has('102'), false);
+    assert.equal(values.has('0'), false);
+    assert.throws(() => app.queueAfterCallSeconds([{ record_id: '100', status: 'Nawerktijd', aantal_seconden: 'bad' }]), /seconden/);
+});
+
+test('after-call enrichment keeps dates separate, preserves existing fields and excludes agent data', async () => {
+    const app = harness({ post: xml => ({ data: { Envelope: { Body: { 'Queue.getIngelogdeTijdenResponse': { return: { item: [
+        { record_id: '100', status: 'In gesprek', aantal_seconden: 200, agent: 'Private' },
+        { record_id: '100', status: 'Nawerktijd', aantal_seconden: xml.includes('2026-11-10') ? 30 : 60 },
+    ] } } } } } }) });
+    const records = [
+        { basicall_record_id: 100, beldatum: '2026-11-09', raw_data: { reden_van_bellen: 'test' } },
+        { basicall_record_id: 100, beldatum: '2026-11-10', raw_data: {} },
+        { basicall_record_id: 999, beldatum: '2026-11-10', raw_data: {} },
+    ];
+    const result = await app.enrichQueueAfterCallRecords(project, records);
+    assert.equal(result.records[0].raw_data.bc_nawerktijd, 60);
+    assert.equal(result.records[1].raw_data.bc_nawerktijd, 30);
+    assert.equal(result.records[2].raw_data.bc_nawerktijd, undefined);
+    assert.equal(result.records[0].raw_data.reden_van_bellen, 'test');
+    assert.equal(result.records[0].raw_data.agent, undefined);
+    assert.equal(records[0].raw_data.bc_nawerktijd, undefined);
+    assert.equal(app.requests.length, 2);
+    assert.equal(app.queries.length, 0);
+});
+
+test('after-call source failure leaves call import possible and returns an auditable error', async () => {
+    const app = harness({ post: () => { throw new Error('Source unavailable'); } });
+    const records = [{ basicall_record_id: 100, beldatum: '2026-11-09', raw_data: {} }];
+    const result = await app.enrichQueueAfterCallRecords(project, records);
+    assert.equal(result.errors.length, 1);
+    assert.deepEqual(plain(result.records), records);
+    assert.equal(result.records[0].raw_data.bc_nawerktijd, undefined);
+    const outbound = await app.enrichQueueAfterCallRecords({ ...project, project_type: 'outbound' }, records);
+    assert.equal(outbound.errors.length, 0);
+    assert.equal(app.requests.length, 3);
+    const invalid = await app.enrichQueueAfterCallRecords({ ...project, mapping_config: { basicall_queue_id: 'invalid' } }, records);
+    assert.equal(invalid.errors.length, 1);
+    assert.deepEqual(plain(invalid.records), records);
+    const invalidDay = await app.enrichQueueAfterCallRecords(project, [{ basicall_record_id: 100, beldatum: 'unknown', raw_data: {} }]);
+    assert.equal(invalidDay.errors.length, 1);
+    assert.equal(invalidDay.records.length, 1);
+});
+
+function afterCallBackfillHarness({ apply = false, sourceErrors = [], conflict = false } = {}) {
+    const mutations = [];
+    const backups = [];
+    const previous = { id: 'row', project_id: project.id, basicall_record_id: 100, beldatum_date: '2026-11-09', raw_data: { bc_result_naam: 'Afgehandeld' } };
+    const app = harness({ query: (table, ops) => {
+        const update = operation(ops, 'update');
+        const insert = operation(ops, 'insert');
+        if (update || insert) {
+            mutations.push({ table, ops });
+            return { data: conflict ? [] : [{ id: previous.id }], error: null };
+        }
+        return { data: table === 'projects' ? project : [previous], error: null };
+    } });
+    const exports = { ...app.exports,
+        enrichProjectsWithTokens: async () => [project],
+        enrichQueueAfterCallRecords: async (_, records) => ({
+            records: records.map(record => ({ ...record, raw_data: { ...record.raw_data, bc_nawerktijd: 45 } })),
+            days: [{ day: '2026-11-09', matched: 1 }], errors: sourceErrors,
+        }),
+    };
+    const sandbox = { module: { exports: {} }, process: { argv: [] }, console: { log() {} },
+        require(name) {
+            if (name === './sync.js') return exports;
+            if (name === './backfill-hours.js') return { parseOptions: () => ({ project: '870', from: '2026-11-09', to: '2026-11-09', apply }) };
+            if (name === 'node:fs') return { writeFileSync: (...args) => backups.push(args) };
+            return require(name);
+        },
+    };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../backfill-after-call.js'), 'utf8'), sandbox);
+    return { main: sandbox.module.exports.main, mutations, backups, previous };
+}
+
+test('after-call backfill preview and failed source never write production data', async () => {
+    const preview = afterCallBackfillHarness();
+    await preview.main([]);
+    assert.equal(preview.mutations.length, 0);
+    assert.equal(preview.backups.length, 0);
+    const failed = afterCallBackfillHarness({ apply: true, sourceErrors: [{ day: '2026-11-09', message: 'Offline' }] });
+    await assert.rejects(failed.main([]), /Bronfouten/);
+    assert.equal(failed.mutations.length, 0);
+    assert.equal(failed.backups.length, 0);
+});
+
+test('after-call backfill backs up before writing and only changes matched raw fields', async () => {
+    const app = afterCallBackfillHarness({ apply: true });
+    await app.main([]);
+    assert.equal(app.backups.length, 1);
+    assert.equal(app.backups[0][2].mode, 0o600);
+    assert.deepEqual(Object.keys(operation(app.mutations[0].ops, 'update')[1]), ['raw_data']);
+    assert.equal(app.mutations[0].table, 'call_records');
+    assert.ok(app.mutations[0].ops.some(op => op[0] === 'eq' && op[1] === 'raw_data' && op[2] === JSON.stringify(app.previous.raw_data)));
+    assert.equal(app.mutations[1].table, 'sync_logs');
+    assert.equal(app.mutations.some(m => ['daily_logged_time', 'reportage_weekly_overrides'].includes(m.table)), false);
+});
+
+test('after-call backfill stops on concurrent modification without claiming success', async () => {
+    const app = afterCallBackfillHarness({ apply: true, conflict: true });
+    await assert.rejects(app.main([]), /onderbroken na 0 records/);
+    assert.equal(app.backups.length, 1);
+    assert.equal(app.mutations.length, 1);
 });

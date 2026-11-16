@@ -500,6 +500,77 @@ function loggedTimeSeconds(items, isQueue) {
     return total;
 }
 
+// Queue-tijden verwijzen naar de oorspronkelijke BasiCall-record-ID. Alleen
+// records met aantoonbare gesprek- of nawerkactiviteit krijgen een waarde;
+// een ontbrekende koppeling mag nooit als nul seconden worden opgeslagen.
+function queueAfterCallSeconds(items) {
+    const byRecord = new Map();
+    for (const item of items) {
+        const status = String(item.status ?? '').trim().toLowerCase();
+        if (!['in gesprek', 'nawerktijd'].includes(status)) continue;
+        const id = String(item.record_id ?? '').trim();
+        const seconds = Number(item.aantal_seconden);
+        if (item.aantal_seconden == null || String(item.aantal_seconden).trim() === ''
+            || !Number.isSafeInteger(seconds) || seconds < 0) {
+            throw new Error('Ongeldige seconden in BasiCall-nawerktijd');
+        }
+        if (!/^[1-9]\d*$/.test(id)) continue;
+        byRecord.set(id, (byRecord.get(id) ?? 0) + (status === 'nawerktijd' ? seconds : 0));
+    }
+    return byRecord;
+}
+
+async function enrichQueueAfterCallRecords(project, records) {
+    let source;
+    try {
+        source = loggedTimeSource(project);
+    } catch (error) {
+        return { records, days: [], errors: [{ day: 'configuratie', message: scrubTechnicalMessage(error.message) }] };
+    }
+    if (source.method !== 'Queue.getIngelogdeTijden') return { records, days: [], errors: [] };
+    const byDay = new Map();
+    const enriched = [];
+    const days = [];
+    const errors = [];
+    for (const record of records) {
+        const day = record.beldatum_date || record.beldatum;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day ?? '')) {
+            enriched.push(record);
+            errors.push({ day: 'onbekend', message: 'Nawerktijd vereist een kalenderdag per record' });
+            continue;
+        }
+        if (!byDay.has(day)) byDay.set(day, []);
+        byDay.get(day).push(record);
+    }
+    for (const [day, dailyRecords] of [...byDay].sort(([a], [b]) => a.localeCompare(b))) {
+        try {
+            const body = `<start_datum xsi:type="xsd:dateTime">${formatDateISO(parseLocalJobDate(day))}</start_datum>`
+                + `<eind_datum xsi:type="xsd:dateTime">${formatDateISO(parseLocalJobDate(day, true))}</eind_datum>`;
+            const response = await soapCall(source.method, body, project.basicall_token, source.id);
+            const result = response?.[`${source.method}Response`];
+            if (!result) throw new Error('Onverwacht antwoord van BasiCall-nawerktijdbron');
+            const afterCall = queueAfterCallSeconds(unboxRecords(result));
+            let matched = 0;
+            let seconds = 0;
+            for (const record of dailyRecords) {
+                const value = afterCall.get(String(record.basicall_record_id));
+                if (value === undefined) { enriched.push(record); continue; }
+                matched++;
+                seconds += value;
+                enriched.push({ ...record, raw_data: {
+                    ...(record.raw_data || {}), bc_nawerktijd: value,
+                    bc_nawerktijd_bron: 'Queue.getIngelogdeTijden',
+                } });
+            }
+            days.push({ day, records: dailyRecords.length, matched, seconds });
+        } catch (error) {
+            enriched.push(...dailyRecords);
+            errors.push({ day, message: scrubTechnicalMessage(error.message) });
+        }
+    }
+    return { records: enriched, days, errors };
+}
+
 // Geeft een uitkomst-object terug i.p.v. seconden-of-null. Drie gevallen die uit elkaar
 // gehouden moeten worden, omdat ze in de audittrail verschillend wegen:
 //   'ok'     — BasiCall antwoordde; seconds is het totaal (mag 0 zijn).
@@ -992,9 +1063,26 @@ async function performSync(project, start, end, jobId = null, isFinalForDay = tr
         ].filter(Boolean).join(', ');
         console.log(`   📋 ${fetchedRecords.length} records opgehaald, ${failedRecords} fouten.`);
 
+        // De frontend en Excel lezen bc_nawerktijd al. Verrijk vóór opslaan,
+        // zodat een volgende records-sync de gekoppelde nawerktijd behoudt.
+        // Storingen in deze aanvullende bron blokkeren de calls-import niet.
+        const afterCall = await enrichQueueAfterCallRecords(project, fetchedRecords);
+        if (afterCall.errors.length > 0) {
+            console.warn(`   ⚠️  Nawerktijd ontbreekt op ${afterCall.errors.length} dag(en).`);
+            await supabase.from('sync_logs').insert({
+                project_id: project.id, kind: 'after_call_time', status: 'warning',
+                records_synced: afterCall.days.reduce((sum, day) => sum + day.matched, 0),
+                expected_records: fetchedRecords.length,
+                failed_records: fetchedRecords.length - afterCall.days.reduce((sum, day) => sum + day.matched, 0),
+                sync_from: start.toISOString(), sync_to: end.toISOString(),
+                error_message: afterCall.errors.map(error => `${error.day}: ${error.message}`).join('; ').slice(0, 500),
+                completed_at: new Date().toISOString(),
+            });
+        }
+
         // 6. Upsert in batches naar DB
-        for (let i = 0; i < fetchedRecords.length; i += CONFIG.BATCH_UPSERT_SIZE) {
-            const batch = fetchedRecords.slice(i, i + CONFIG.BATCH_UPSERT_SIZE);
+        for (let i = 0; i < afterCall.records.length; i += CONFIG.BATCH_UPSERT_SIZE) {
+            const batch = afterCall.records.slice(i, i + CONFIG.BATCH_UPSERT_SIZE);
             await upsertBatch(batch);
         }
         console.log(`   💾 ${fetchedRecords.length} records opgeslagen.`);
@@ -1573,4 +1661,5 @@ if (require.main === module) run();
 module.exports = {
     supabase, enrichProjectsWithTokens, getActiveCallDays, parseLocalJobDate,
     syncLoggedTimeDay, saveLoggedTime, logLoggedTimeSync, loggedTimeSource,
+    enrichQueueAfterCallRecords,
 };

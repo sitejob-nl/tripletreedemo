@@ -55,6 +55,31 @@ De frontend gebruikt de bestaande urentabel, zodat een aparte frontend-release
 niet nodig is voor deze reparatie. De syncserver moet wel de nieuwe `sync.js`
 en `backfill-hours.js` krijgen via `deploy.sh --apply` (na productieakkoord).
 
+## Nawerktijd per gesprek
+
+`Queue.getIngelogdeTijden` levert naast status en seconden ook `record_id`.
+De records-sync koppelt `Nawerktijd` per kalenderdag en record aan
+`raw_data.bc_nawerktijd`. Het bestaande dashboard en de Excel-export lezen
+dit veld al. Er worden geen agentgegevens uit de queue overgenomen.
+
+Een record met `In gesprek` maar zonder nawerksegment krijgt een aantoonbare
+nul; records die niet in de queue voorkomen blijven onbekend. Een bronfout
+blokkeert de calls-import niet en krijgt een aparte `after_call_time`-auditregel.
+Wachttijd of service level wordt niet afgeleid uit gespreksduur of IVR-nulwaarden.
+
+Gerichte aanvulling van bestaande records (standaard alleen-lezen):
+
+```sh
+node backfill-after-call.js --project=870 --from=2026-09-15 --to=2026-11-15
+```
+
+Na akkoord: voeg `--apply` toe. Het commando leest eerst de volledige bron,
+stopt vóór mutaties bij bronfouten en maakt een backup met rechten 0600.
+Alleen `raw_data` van gekoppelde records verandert. Een vergelijking met de
+oorspronkelijke JSON voorkomt overschrijven van gelijktijdige wijzigingen.
+Bij een conflict stopt het commando en meldt het aantal opgeslagen records
+en het backuppad. Uren, handmatige correcties en weekoverrides blijven behouden.
+
 ## Validatie
 
 ```sh
