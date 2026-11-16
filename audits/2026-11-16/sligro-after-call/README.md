@@ -1,8 +1,9 @@
 # Sligro nawerktijd en filmfestival — vervolg 16 november 2026
 
-Status: nawerktijdreparatie voorbereid en alleen-lezen gecontroleerd.
-**Nog niet gedeployd; in dit vervolg geen productiedata gewijzigd.**
-De eerdere urenreparatie is wel live; zie het naastgelegen `sligro-hours`-audit.
+Status: **na expliciet akkoord gedeployd en uitgevoerd op 16 november 2026**.
+774 bestaande gesprekken zijn aangevuld; de live klantpreview toont voor
+week 46 **1,07 minuut gemiddelde nawerktijd**. De eerdere urenreparatie blijft
+ongewijzigd; zie het naastgelegen `sligro-hours`-audit.
 
 ## Sligro nawerktijd
 
@@ -24,7 +25,7 @@ Alleen-lezen proefrun over 15 september t/m 15 november:
   16 september, één op 18 september en één onbekend resultaat op 29 september.
   Hiervoor blijft het veld onbekend; een onvolledig dag-/weekgemiddelde blijft leeg.
 - Week 46: alle 144 aangenomen gesprekken gekoppeld, 9.210 seconden nawerktijd.
-  Verwachte live weergave: **1,07 minuut gemiddelde nawerktijd**.
+  Gecontroleerde live weergave: **1,07 minuut gemiddelde nawerktijd**.
 - `preview.jsonl` bevat uitsluitend dagtotalen en aantallen per resultaat.
 
 ## Service level
@@ -62,16 +63,36 @@ in supportticket 2026061510000046 van 2 juli 2026.
 De tests controleren onder meer onbekend versus nul, dagscheiding, behoud van
 bronvelden, foutafhandeling, alleen-lezen preview, backup en concurrentieconflict.
 
-Na akkoord op de aanvullende productiedeploy:
+Uitgevoerd op de live syncserver `tt-vps`, broncommit `1578c46`:
 
-1. Bewaar de huidige `sync.js` op de syncserver voor rollback.
-2. `./deploy.sh --apply` vanuit `scripts/basicall-sync`; geen omgevingwijziging.
-3. Vanuit `/opt/basicall-sync`:
-   `node backfill-after-call.js --project=870 --from=2026-09-15 --to=2026-11-15 --apply`.
-4. Bewaar het door de reparatie gemelde backupbestand buiten `/tmp`.
-5. Controleer week 46 op 1,07 minuut, behoud van alle andere recordvelden en
-   ongewijzigde uren, correcties en weekoverrides.
-6. Controleer de live klantweergave. Het service level blijft onbekend totdat
-   de benodigde brondata beschikbaar zijn.
+- Rollbackmap: `/home/sitejob-tt/basicall-sync-backups/sligro-after-call-20261116T162959Z/`.
+- Uitrol met `./deploy.sh --apply` vanuit `scripts/basicall-sync`; geen
+  omgeving- of dependencywijzigingen. Syntax en hashes op de server gecontroleerd.
+- SHA-256 `sync.js`: `37d61eb0f3ed6b717a476902fc34677f60416c05dc6d053b50e64376510d4e5d`.
+- SHA-256 `backfill-after-call.js`: `7e1cb1feb5f4aa285c022fca18acdbdef2d1ab663630596c096c757389d07a84`.
+- Uitgevoerd vanuit `/opt/basicall-sync`:
+  `node backfill-after-call.js --project=870 --from=2026-09-15 --to=2026-11-15 --apply`.
+- Succes om 17:32 CET: 774 records opgeslagen, 0 bron- of opslagfouten.
+  Alle dagresultaten staan in `applied.jsonl`; succesvolle audit in `sync_logs`.
+- Datarollback: `/tmp/basicall-after-call-870-1794846680205.json`, duurzaam
+  bewaard als `after-call-before.json` in bovenstaande rollbackmap (rechten 0600).
+
+Controle na uitvoering:
+
+- 830 callrecords behouden, 774 hebben nu `bc_nawerktijd`.
+- Alle overige recordvelden zijn exact gelijk; fingerprint vóór en na:
+  `749032b9601b97ef2898d88654db197a`.
+- Uren inclusief alle correcties exact gelijk; fingerprint vóór en na:
+  `45ad2d4ba43eef4e4c3fbf256777d6a7`.
+- Alle weekoverrides, inclusief mailuren, exact gelijk; fingerprint vóór en na:
+  `76df01c7da63b791d6163759b2f15cbf`.
+- Live dashboard, Sligro, week 46, **Bekijk als klant**: nawerktijd **1,07 min**,
+  156 calls, 11,1 calls per uur, 14,03 agenturen en 37,78 totaaluren.
+  Dit is de klantpreview vanuit een beheeraccount, geen Sligro-gebruikerslogin.
+- De melding van ontbrekende nawerktijd is verdwenen; alleen wachttijd/service
+  level blijft onbekend. Filmfestival is nog niet geïmporteerd en de koppeling
+  is niet aangepast, in afwachting van de opgevraagde gegevens.
+- De reguliere cron gebruikt de uitgerolde verrijking bij volgende imports.
+  De eerstvolgende automatische records-sync is nog niet waargenomen.
 
 Geen schemawijziging, RLS-wijziging of frontend-release nodig.
