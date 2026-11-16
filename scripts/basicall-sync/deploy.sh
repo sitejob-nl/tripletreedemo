@@ -27,6 +27,7 @@ RSYNC_FLAGS=(
   --exclude=".git"
   --exclude="deploy.sh"
   --exclude=".env.example"
+  --exclude="tests"
 )
 
 # Op de VPS staat een package-lock.json die deze checkout niet heeft. Verwijder

@@ -164,6 +164,8 @@ export interface MappingConfig {
   // Raakt UITSLUITEND HoursCorrection — niet de KPI/matrix/export (die vallen
   // al per dag terug op gesprekstijd).
   hours_source?: HoursSource;
+  /** Verified BasiCall queue ID for inbound agent hours (never a project ID). */
+  basicall_queue_id?: number;
 }
 
 export type HoursSource = 'logged' | 'auto' | 'gesprekstijd';
