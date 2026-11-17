@@ -73,8 +73,8 @@ export function inboundServiceAgentHours(
   const daily = activeDays.map((day) => {
     const bucket = report.perDay[day];
     if (bucket.agentHoursKnown) return bucket.agentHours;
-    const liveHours = dailyLoggedHours?.[day] ?? 0;
-    return liveHours > 0 ? liveHours : null;
+    const liveHours = dailyLoggedHours?.[day];
+    return liveHours !== undefined && liveHours >= 0 ? liveHours : null;
   });
   return daily.every((value) => value !== null)
     ? daily.reduce<number>((sum, value) => sum + (value ?? 0), 0)

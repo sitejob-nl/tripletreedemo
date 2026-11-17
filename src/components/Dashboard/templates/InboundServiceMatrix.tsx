@@ -70,8 +70,8 @@ export function InboundServiceMatrix({
   const agentHoursForDay = (day: ServiceDay): MetricValue => {
     const bucket = report.perDay[day];
     if (bucket.agentHoursKnown) return bucket.agentHours;
-    const liveHours = dailyLoggedHours?.[day] ?? 0;
-    return liveHours > 0 ? liveHours : bucket.offered === 0 ? 0 : null;
+    const liveHours = dailyLoggedHours?.[day];
+    return liveHours !== undefined && liveHours >= 0 ? liveHours : bucket.offered === 0 ? 0 : null;
   };
   const totalAgentHours = inboundServiceAgentHours(report, dailyLoggedHours);
   const totalMailHours = report.total.mailHoursKnown ? report.total.mailHours : null;

@@ -113,6 +113,7 @@ describe('inbound-service rapportagedefinities', () => {
 
     expect(inboundServiceAgentHours(report, { maandag: 2 })).toBeNull();
     expect(inboundServiceAgentHours(report, { maandag: 2, dinsdag: 1.5 })).toBe(3.5);
+    expect(inboundServiceAgentHours(report, { maandag: 2, dinsdag: 0 })).toBe(2);
   });
 
   it('herkent alleen expliciete wachttijdvelden en nooit gespreksduur', () => {

@@ -134,7 +134,7 @@ export const InboundReportMatrix = ({
     }
 
     return result;
-  }, [data, amountCol, mappingConfig, reportageOverrides, days]);
+  }, [data, mappingConfig, reportageOverrides, days]);
 
   // Get all unique reasons
   const allLostReasons = useMemo(() => {
@@ -169,7 +169,7 @@ export const InboundReportMatrix = ({
     if (!dayName) return days.reduce((sum, day) => sum + calcHours(aggregated[day], day), 0);
     if (reportageOverrides.length === 0 && dailyLoggedHours) {
       const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
-      if (dh !== undefined && dh > 0) return ceilHours(dh);
+      if (dh !== undefined && dh >= 0) return ceilHours(dh);
     }
     return ceilHours(stats.durationSec / 3600);
   };

@@ -5,6 +5,7 @@ import { parseDutchFloat } from '@/lib/dataProcessing';
 import { detectFrequencyFromConfig } from '@/lib/statsHelpers';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { resolvedLoggedSeconds } from '@/lib/loggedTime';
 import { friendlyError } from '@/lib/friendlyError';
 import { metricNumber, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
 import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
@@ -32,6 +33,7 @@ interface RetentionStats {
   partialValue: number;
   durationSec: number;
   loggedSeconds: number;
+  hasLoggedTime: boolean;
   // Reden-breakdown: category-name -> count
   reasonCounts: Record<string, number>;
 }
@@ -55,6 +57,7 @@ const emptyStats = (categories: string[]): RetentionStats => ({
   partialValue: 0,
   durationSec: 0,
   loggedSeconds: 0,
+  hasLoggedTime: false,
   reasonCounts: Object.fromEntries(categories.map((c) => [c, 0])),
 });
 
@@ -267,11 +270,12 @@ export async function exportInboundRetentionYear(args: ExportArgs): Promise<void
       if (!weekStats[week]) return;
       const dayKey = getDayKey(date);
       if (!dayKey) return;
-      const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
-      weekStats[week].perDay[dayKey].loggedSeconds += seconds;
-      weekStats[week].total.loggedSeconds += seconds;
-      yearTotal.perDay[dayKey].loggedSeconds += seconds;
-      yearTotal.total.loggedSeconds += seconds;
+      const seconds = resolvedLoggedSeconds(row);
+      if (seconds === undefined) return;
+      [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((stats) => {
+        stats.loggedSeconds += seconds;
+        stats.hasLoggedTime = true;
+      });
     });
 
     const yearOverrides = await fetchYearReportageOverrides(projectId, year, 'inbound_retention', reportageOverrides);
@@ -325,11 +329,12 @@ export async function exportInboundRetentionYear(args: ExportArgs): Promise<void
         if (overrideWeeks.has(week) || !weekStats[week]) return;
         const dayKey = getDayKey(date);
         if (!dayKey) return;
-        const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
-        weekStats[week].perDay[dayKey].loggedSeconds += seconds;
-        weekStats[week].total.loggedSeconds += seconds;
-        yearTotal.perDay[dayKey].loggedSeconds += seconds;
-        yearTotal.total.loggedSeconds += seconds;
+        const seconds = resolvedLoggedSeconds(row);
+        if (seconds === undefined) return;
+        [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((stats) => {
+          stats.loggedSeconds += seconds;
+          stats.hasLoggedTime = true;
+        });
       });
 
       const applyOverrideMetrics = (stats: RetentionStats, metrics: ReportageOverrideMetrics | undefined) => {
@@ -363,7 +368,7 @@ export async function exportInboundRetentionYear(args: ExportArgs): Promise<void
     const wb = XLSX.utils.book_new();
     // Triple Tree regel: per cel naar boven afronden op hele uren.
     const getHours = (s: RetentionStats) =>
-      ceilHours(s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600);
+      ceilHours((s.hasLoggedTime || s.loggedSeconds > 0) ? s.loggedSeconds / 3600 : s.durationSec / 3600);
 
     const totaalSheet = buildTotaalSheet({
       weeks,

@@ -127,7 +127,7 @@ export const ServiceReportMatrix = ({
     if (stats.loggedSeconds > 0) return ceilHours(stats.loggedSeconds / 3600);
     if (dayName && dailyLoggedHours) {
       const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
-      if (dh !== undefined && dh > 0) return ceilHours(dh);
+      if (dh !== undefined && dh >= 0) return ceilHours(dh);
     }
     return ceilHours(stats.durationSec / 3600);
   };

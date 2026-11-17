@@ -83,7 +83,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
 
       const rawData = record as unknown as { raw_data?: Record<string, unknown> };
       const attempts = rawData.raw_data?.bc_belpogingen ? Number(rawData.raw_data.bc_belpogingen) : 1;
-      const amount = rawData.raw_data?.[amountCol] ? parseDutchFloat(rawData.raw_data[amountCol]) : 0;
+      const amount = rawData.raw_data?.[amountCol] ? parseDutchFloat(String(rawData.raw_data[amountCol])) : 0;
       const resultName = rawData.raw_data?.bc_result_naam as string || record.bc_result_naam || 'Onbekend';
 
       stats[weekYearKey].calls++;
@@ -108,9 +108,9 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
       }
 
       // Netto-noemer: mirror van ReportMatrix (onbereikbaar + expliciet uitgesloten codes).
-      if (isUnreachable(resultName, mappingConfig ?? {})) {
+      if (isUnreachable(resultName, mappingConfig)) {
         stats[weekYearKey].unreachableCount++;
-      } else if (isExcludedFromNet(resultName, mappingConfig ?? {})) {
+      } else if (isExcludedFromNet(resultName, mappingConfig)) {
         stats[weekYearKey].excludedFromNetCount++;
       }
     });
@@ -136,7 +136,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
   // die is voor outbound vrijwel altijd 0 en toonde daardoor "Aantal beluren 0.00".
   const calcHours = (stats: WeekStats) => {
     const logged = weeklyLoggedHours?.[stats.weekYearKey];
-    if (logged !== undefined && logged > 0) return logged;
+    if (logged !== undefined && logged >= 0) return logged;
     return ceilHours(stats.durationSec / 3600);
   };
   const calcSalesPerHour = (stats: WeekStats) => {
@@ -144,9 +144,9 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
     return hours > 0 ? stats.sales / hours : 0;
   };
   // Per-sale facturatie (bv. ANBO 734): kosten = aantal sales × vergoeding per sale, i.p.v. uren × tarief.
-  const calcInvestment = (stats: DayStats) =>
+  const calcInvestment = (stats: WeekStats) =>
     costPerSale != null ? stats.sales * costPerSale : calcHours(stats) * hourlyRate;
-  const calcCostPerDonor = (stats: DayStats) =>
+  const calcCostPerDonor = (stats: WeekStats) =>
     stats.sales > 0 ? calcInvestment(stats) / stats.sales : 0;
   const calcNettoConversion = (stats: DayStats) => {
     const denom = stats.calls - stats.unreachableCount - stats.excludedFromNetCount;
@@ -156,7 +156,7 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
     stats.calls > 0 ? (stats.sales / stats.calls) * 100 : 0;
   const calcAvgAmount = (stats: DayStats) =>
     stats.sales > 0 ? stats.totalAmount / stats.sales : 0;
-  const calcROI = (stats: DayStats) => {
+  const calcROI = (stats: WeekStats) => {
     const investment = calcInvestment(stats);
     return investment > 0 ? stats.annualValue / investment : 0;
   };
@@ -233,18 +233,16 @@ export const WeekComparison = ({ data, hourlyRate, availableWeeks, amountCol = '
 
   const [selectedChartMetrics, setSelectedChartMetrics] = useState<string[]>(['sales', 'annualValue', 'conversion']);
 
-  // Chart data - all weeks sorted chronologically for the trend
-  const chartData = useMemo(() => {
-    return Object.values(weekStats)
-      .sort((a, b) => a.weekNumber - b.weekNumber)
-      .map(stats => {
-        const dataPoint: Record<string, number | string> = { week: `Week ${stats.weekNumber}` };
-        metrics.forEach(metric => {
-          dataPoint[metric.key] = metric.getValue(stats);
-        });
-        return dataPoint;
+  // Ook gewijzigde uren/tarieven moeten doorwerken wanneer de calls gelijk blijven.
+  const chartData = Object.values(weekStats)
+    .sort((a, b) => a.weekNumber - b.weekNumber)
+    .map(stats => {
+      const dataPoint: Record<string, number | string> = { week: `Week ${stats.weekNumber}` };
+      metrics.forEach(metric => {
+        dataPoint[metric.key] = metric.getValue(stats);
       });
-  }, [weekStats]);
+      return dataPoint;
+    });
 
   const formatValue = (value: number, format: string) => {
     switch (format) {

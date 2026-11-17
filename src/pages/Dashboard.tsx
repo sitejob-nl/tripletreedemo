@@ -327,14 +327,14 @@ const Index = () => {
     if (isSingleWeek) {
       const dayKeys = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'] as const;
       return dayKeys.reduce((sum, day) => {
-        const loggedHours = loggedTime?.dailyHours?.[day] ?? 0;
-        const hoursForDay = loggedHours > 0 ? loggedHours : (gesprekstijdByDay[day] ?? 0) / 3600;
+        const loggedHours = loggedTime?.dailyHours?.[day];
+        const hoursForDay = loggedHours ?? (gesprekstijdByDay[day] ?? 0) / 3600;
         return sum + ceilHours(hoursForDay);
       }, 0);
     }
     // 'Alle weken' of meerweekse selectie: geen dag-as -> enkel weektotaal, met
     // seconden-gebaseerde fallback (lege/ontbrekende logtijd -> gesprekstijd).
-    const rawTotalHours = (loggedTime?.totalSeconds ?? 0) > 0
+    const rawTotalHours = loggedTime?.hasData
       ? (loggedTime?.totalHours ?? 0)
       : (kpiAggregates?.totalGesprekstijdSec ?? 0) / 3600;
     return ceilHours(rawTotalHours);

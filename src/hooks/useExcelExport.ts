@@ -116,13 +116,13 @@ export function useExcelExport({
     const getHoursForDay = (dayName: string, durationSec: number): number => {
       if (dailyLoggedHours) {
         const dh = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
-        if (dh !== undefined && dh > 0) return ceilHours(dh);
+        if (dh !== undefined && dh >= 0) return ceilHours(dh);
       }
       return ceilHours(durationSec / 3600);
     };
 
     const getTotalHours = (totalDurationSec: number): number => {
-      if (loggedTimeHours !== undefined && loggedTimeHours > 0) return ceilHours(loggedTimeHours);
+      if (loggedTimeHours !== undefined && loggedTimeHours >= 0) return ceilHours(loggedTimeHours);
       return ceilHours(totalDurationSec / 3600);
     };
 
