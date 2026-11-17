@@ -250,6 +250,32 @@ test('after-call source failure leaves call import possible and returns an audit
     assert.equal(invalidDay.records.length, 1);
 });
 
+test('failed queue read keeps stored after-call time and does not write zero or null', async () => {
+    const stored = [
+        { basicall_record_id: 100, beldatum_date: '2026-11-09', raw_data: { bc_nawerktijd: 90, bc_nawerktijd_bron: 'Queue.getIngelogdeTijden', bc_result_naam: 'oud' } },
+        { basicall_record_id: 101, beldatum_date: '2026-11-09', raw_data: { bc_nawerktijd: 0, bc_nawerktijd_bron: 'Queue.getIngelogdeTijden' } },
+    ];
+    const app = harness({
+        query: table => ({ data: table === 'call_records' ? stored : [], error: null }),
+        post: () => { throw new Error('Source unavailable'); },
+    });
+    const records = [
+        { basicall_record_id: 100, beldatum: '2026-11-09', raw_data: { bc_result_naam: 'nieuw' } },
+        { basicall_record_id: 101, beldatum: '2026-11-09', raw_data: { bc_result_naam: 'nieuw' } },
+        { basicall_record_id: 102, beldatum: '2026-11-09', raw_data: { bc_result_naam: 'nieuw' } },
+    ];
+    const result = await app.enrichQueueAfterCallRecords(project, records);
+    assert.equal(result.errors.length, 1);
+    assert.equal(result.days.length, 0);
+    assert.equal(result.records[0].raw_data.bc_nawerktijd, 90);
+    assert.equal(result.records[0].raw_data.bc_nawerktijd_bron, 'Queue.getIngelogdeTijden');
+    assert.equal(result.records[0].raw_data.bc_result_naam, 'nieuw');
+    assert.equal(result.records[1].raw_data.bc_nawerktijd, 0);
+    assert.equal(result.records[2].raw_data.bc_nawerktijd, undefined);
+    assert.equal(records[0].raw_data.bc_nawerktijd, undefined);
+    assert.equal(app.queries.filter(query => query.table === 'call_records').length, 1);
+});
+
 function afterCallBackfillHarness({ apply = false, sourceErrors = [], conflict = false } = {}) {
     const mutations = [];
     const backups = [];
