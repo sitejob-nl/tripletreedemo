@@ -1,6 +1,8 @@
 # Urencorrecties in rapportages — 17 november 2026
 
-Status: voorbereid en lokaal getest; nog niet naar productie uitgerold.
+Status: na expliciet akkoord op 17 november 2026 live uitgerold. PR #39 is
+samengevoegd als `6130780a51dbfda4d8d91cb16ee05ba019d006a5`; de productiecode
+is identiek aan de geteste PR-commit `545dde0f017857f42930284ec7dbfd8964f5b03a`.
 
 ## Melding en broncontrole
 
@@ -56,9 +58,26 @@ Live alleen-lezen gecontroleerd:
 - Losse TypeScript-check heeft nog één bestaande fout buiten deze wijziging:
   `ResultsBreakdown.tsx:66` geeft `MappingConfig | {}` door waar `MappingConfig`
   is vereist. Geen nieuwe typefouten in de gewijzigde bestanden.
-- Productie-uitrol en ingelogde visuele acceptatie staan nog open. Na uitrol
-  een echte correctie controleren in dagrapport, weekvergelijking en export;
-  geen fictieve correctie in een klantcampagne opslaan.
+- Productie-uitrol is afgerond. Ingelogde visuele acceptatie staat nog open:
+  de browsersessie vraagt om inloggen. Geen fictieve correctie in een
+  klantcampagne opgeslagen.
+
+## Productiecontrole
+
+- Vercel-release `dpl_9yEKLXkgPMYqhv8TNzifjog9G16M`, commit `6130780`,
+  status `READY`, productie, zonder aliasfout. Gereed op 17 november om 11:10 CET.
+- `app.ttcallcenters.nl` en `.com` staan op deze release. De `.nl`-homepage
+  serveert `/assets/index-BZgaXaoe.js`; vóór uitrol was dit `index-BBv5W8aa.js`.
+- De gedownloade productie-JavaScriptbundel is byte voor byte gelijk aan
+  de lokaal geteste build: SHA-256
+  `c6212e40be2b5dfc98f80c708837accf12a63e7dc0788efe1eabfdd78bad0d3e`.
+  De publieke pagina opent in Google Chrome op
+  jawerkt-ai zonder consolefouten; de loginbeveiliging blijft actief.
+- Live database nogmaals alleen-lezen gecontroleerd: op 27, 29 en 30 oktober
+  staan de correcties van Max Magazine nog steeds op 36.000 seconden (10 uur).
+  Ook de overige opgeslagen correcties zijn behouden.
+- Terugvalrelease: `dpl_4ipGzNQM3cPEpKe1JwGLHHkKfpHP`, commit `f2668b0`.
+  Niet teruggezet; vastgelegd als rollbackmogelijkheid.
 
 ## BasiCall-verzoek (afzonderlijke opdracht)
 
