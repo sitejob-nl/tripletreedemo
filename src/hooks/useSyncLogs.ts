@@ -20,18 +20,20 @@ interface SyncLogWithProject extends SyncLog {
 
 /**
  * Vertaalt sync_logs.kind naar wat een beheerder ervan moet weten. Sinds 28-07-2026 logt de
- * urensync zichzelf ook (kind logged_time*), dus "een mislukte sync" kan nu over records óf
- * over ingelogde uren gaan — zonder label leest dat als hetzelfde probleem.
+ * urensync zichzelf ook (kind logged_time*), en nawerktijd als after_call_time. Zonder eigen
+ * label leest een andere soort als hetzelfde probleem.
  * `_preview` = tussenstand uit de avondronde over een dag die nog liep; geen definitieve meting.
  */
 export function describeSyncKind(kind: string | null) {
   const normalized = kind ?? 'records';
   const isHours = normalized.startsWith('logged_time');
+  const isAfterCall = normalized.startsWith('after_call_time');
   const isPreview = normalized.endsWith('_preview');
+  const subject = isHours ? 'uren' : isAfterCall ? 'nawerktijd' : 'records';
   return {
     isHours,
     isPreview,
-    label: `${isHours ? 'uren' : 'records'}${isPreview ? ' (tussenstand)' : ''}`,
+    label: `${subject}${isPreview ? ' (tussenstand)' : ''}`,
     /** records_synced telt records bij een records-sync, maar dagen bij een urensync. */
     countLabel: isHours ? 'Dagen met uren' : 'Records',
   };
