@@ -72,7 +72,7 @@ export const ReportMatrix = ({
       // Get raw_data fields
       const rawData = record as unknown as { raw_data?: Record<string, unknown> };
       const attempts = rawData.raw_data?.bc_belpogingen ? Number(rawData.raw_data.bc_belpogingen) : 1;
-      const amount = rawData.raw_data?.[amountCol] ? parseDutchFloat(rawData.raw_data[amountCol]) : 0;
+      const amount = rawData.raw_data?.[amountCol] ? parseDutchFloat(String(rawData.raw_data[amountCol])) : 0;
       const resultName = rawData.raw_data?.bc_result_naam as string || record.bc_result_naam || 'Onbekend';
       const frequency = rawData.raw_data?.[freqCol];
 
@@ -218,7 +218,7 @@ export const ReportMatrix = ({
     }
     if (reportageOverrides.length === 0 && dayName && dailyLoggedHours) {
       const dailyHours = dailyLoggedHours[dayName as keyof DailyLoggedTimeBreakdown];
-      if (dailyHours !== undefined && dailyHours > 0) {
+      if (dailyHours !== undefined && dailyHours >= 0) {
         return ceilHours(dailyHours);
       }
     }

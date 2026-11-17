@@ -1,19 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getDay, getISOWeek, getISOWeekYear } from 'date-fns';
-import { ceilHours } from '@/lib/hours';
+import { summarizeLoggedTime, type DailyLoggedTimeBreakdown } from '@/lib/loggedTime';
 import { ResolvedDateFilter, applyMaxDate } from './useDateFilter';
 
-// Daily breakdown of logged time per weekday
-export interface DailyLoggedTimeBreakdown {
-  maandag: number;
-  dinsdag: number;
-  woensdag: number;
-  donderdag: number;
-  vrijdag: number;
-  zaterdag: number;
-  zondag: number;
-}
+export type { DailyLoggedTimeBreakdown } from '@/lib/loggedTime';
 
 interface LoggedTimeData {
   totalSeconds: number;
@@ -27,17 +17,6 @@ interface UseLoggedTimeOptions {
   dateFilter?: ResolvedDateFilter;
   hoursFactor?: number;
 }
-
-// Map JS getDay() (0=Sunday) to Dutch day names
-const dayIndexToDutch: Record<number, keyof DailyLoggedTimeBreakdown> = {
-  0: 'zondag',
-  1: 'maandag',
-  2: 'dinsdag',
-  3: 'woensdag',
-  4: 'donderdag',
-  5: 'vrijdag',
-  6: 'zaterdag',
-};
 
 export const useLoggedTime = ({ projectId, dateFilter, hoursFactor = 1.0 }: UseLoggedTimeOptions) => {
   return useQuery({
@@ -66,43 +45,16 @@ export const useLoggedTime = ({ projectId, dateFilter, hoursFactor = 1.0 }: UseL
       
       if (error) throw error;
       
-      // Use corrected_seconds if available, otherwise total_seconds, then apply global factor
-      const factor = hoursFactor ?? 1.0;
-      const totalSeconds = (data?.reduce((sum, r) => sum + (r.corrected_seconds ?? r.total_seconds ?? 0), 0) || 0) * factor;
-      const totalHours = totalSeconds / 3600;
-      
-      // Build daily breakdown when filtering is active
-      let dailyHours: DailyLoggedTimeBreakdown | undefined;
-      if (dateFilter?.isFiltering && data && data.length > 0) {
-        dailyHours = {
-          maandag: 0,
-          dinsdag: 0,
-          woensdag: 0,
-          donderdag: 0,
-          vrijdag: 0,
-          zaterdag: 0,
-          zondag: 0,
-        };
-        
-        data.forEach((record) => {
-          if (record.date) {
-            const date = new Date(record.date);
-            const dayIndex = getDay(date);
-            const dayName = dayIndexToDutch[dayIndex];
-            if (dayName) {
-              dailyHours![dayName] += (record.corrected_seconds ?? record.total_seconds ?? 0) * factor / 3600;
-            }
-          }
-        });
-      }
-      
-      return { 
-        totalSeconds, 
-        totalHours,
-        hasData: (data?.length || 0) > 0,
-        dailyHours,
+      const summary = summarizeLoggedTime(data ?? [], hoursFactor ?? 1);
+      return {
+        totalSeconds: summary.totalSeconds,
+        totalHours: summary.totalHours,
+        hasData: summary.hasData,
+        dailyHours: dateFilter?.isFiltering ? summary.dailyHours : undefined,
       };
     },
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
     enabled: !!projectId
   });
 };
@@ -123,17 +75,10 @@ export const useLoggedTimeWeekly = (projectId: string | undefined, hoursFactor =
         .select('total_seconds, corrected_seconds, date')
         .eq('project_id', projectId);
       if (error) throw error;
-      const factor = hoursFactor ?? 1.0;
-      const weekly: Record<string, number> = {};
-      (data ?? []).forEach((r) => {
-        if (!r.date) return;
-        const d = new Date(r.date);
-        const key = `${getISOWeekYear(d)}-${String(getISOWeek(d)).padStart(2, '0')}`;
-        const hours = ((r.corrected_seconds ?? r.total_seconds ?? 0) * factor) / 3600;
-        weekly[key] = (weekly[key] ?? 0) + ceilHours(hours);
-      });
-      return weekly;
+      return summarizeLoggedTime(data ?? [], hoursFactor ?? 1).weeklyHours;
     },
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
     enabled: !!projectId,
   });
 };

@@ -1,3 +1,4 @@
+import { resolvedLoggedSeconds } from '@/lib/loggedTime';
 import * as XLSX from 'xlsx-js-style';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -390,8 +391,10 @@ export async function exportInboundServiceYear({
       const day = getDay(date);
       if (!day) continue;
       const week = getISOWeek(date);
+      const seconds = resolvedLoggedSeconds(row);
+      if (seconds === undefined) continue;
       logged.byWeek[week] ??= {};
-      logged.byWeek[week][day] = Number(row.corrected_seconds ?? row.total_seconds ?? 0) / 3600;
+      logged.byWeek[week][day] = seconds / 3600;
     }
 
     const weeks = getAllWeeksForYear(year);

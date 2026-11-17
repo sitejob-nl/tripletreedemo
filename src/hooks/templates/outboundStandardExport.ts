@@ -5,6 +5,7 @@ import { detectFrequencyFromConfig, FrequencyType, isUnreachable, isSale as isSa
 import { parseDutchFloat } from '@/lib/dataProcessing';
 import { getAllWeeksForYear, getISOWeekYear, parseBasiCallDate } from '@/lib/weekHelpers';
 import { ceilHours } from '@/lib/hours';
+import { resolvedLoggedSeconds } from '@/lib/loggedTime';
 import { friendlyError } from '@/lib/friendlyError';
 import { deriveCalls, deriveUnreachable, metricNumber, REPORTAGE_DAYS } from '@/lib/reportageOverrideUtils';
 import { fetchYearReportageOverrides } from './reportageOverrideExportUtils';
@@ -31,6 +32,7 @@ interface WeekStats {
   annualValueRecurring: number;
   durationSec: number;
   loggedSeconds: number;
+  hasLoggedTime: boolean;
   freqCounts: Record<FrequencyType, number>;
   unreachable: number;
   upgradeSales: number; // sales where Nbedrag > Bedrag (opwaardering detected)
@@ -60,6 +62,7 @@ const emptyStats = (): WeekStats => ({
   annualValueRecurring: 0,
   durationSec: 0,
   loggedSeconds: 0,
+  hasLoggedTime: false,
   freqCounts: { monthly: 0, biMonthly: 0, quarterly: 0, halfYearly: 0, yearly: 0, oneoff: 0 },
   unreachable: 0,
   upgradeSales: 0,
@@ -260,14 +263,14 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
 
       const amountRaw = (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['amount'] ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
-      const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
+      const amount = amountRaw ? parseDutchFloat(String(amountRaw)) : 0;
       const annualValue = isSale ? (flatSaleValue > 0 ? flatSaleValue : amount * freq.multiplier) : 0;
 
       // Upgrade detection: Nbedrag (new) > Bedrag (old) on the same record.
       // Only meaningful for winback/upgrade campaigns that populate both fields.
       const nBedragRaw = rawData['Nbedrag'];
-      const oldAmount = rawData['Bedrag'] ? parseDutchFloat(rawData['Bedrag']) : 0;
-      const newAmount = nBedragRaw ? parseDutchFloat(nBedragRaw) : 0;
+      const oldAmount = rawData['Bedrag'] ? parseDutchFloat(String(rawData['Bedrag'])) : 0;
+      const newAmount = nBedragRaw ? parseDutchFloat(String(nBedragRaw)) : 0;
       const isUpgrade = isSale && newAmount > 0 && oldAmount > 0 && newAmount > oldAmount;
 
       const dayStats = weekStats[week].perDay[dayKey];
@@ -304,11 +307,12 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
       if (!weekStats[week]) return;
       const dayKey = getDayKey(date);
       if (!dayKey) return;
-      const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
-      weekStats[week].perDay[dayKey].loggedSeconds += seconds;
-      weekStats[week].total.loggedSeconds += seconds;
-      yearTotal.perDay[dayKey].loggedSeconds += seconds;
-      yearTotal.total.loggedSeconds += seconds;
+      const seconds = resolvedLoggedSeconds(row);
+      if (seconds === undefined) return;
+      [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((stats) => {
+        stats.loggedSeconds += seconds;
+        stats.hasLoggedTime = true;
+      });
     });
 
     const yearOverrides = await fetchYearReportageOverrides(projectId, year, 'outbound_standard', reportageOverrides);
@@ -355,7 +359,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         const freqRaw = rawData['frequency'] ?? (mappingConfig ? rawData[mappingConfig.freq_col] : undefined);
         const freq = detectFrequencyFromConfig(freqRaw, mappingConfig?.freq_map ?? {}, resultName);
         const amountRaw = (mappingConfig ? rawData[mappingConfig.amount_col] : undefined) ?? rawData['amount'] ?? rawData['termijnbedrag'] ?? rawData['Bedrag'];
-        const amount = amountRaw ? parseDutchFloat(amountRaw) : 0;
+        const amount = amountRaw ? parseDutchFloat(String(amountRaw)) : 0;
         const annualValue = isSale ? (flatSaleValue > 0 ? flatSaleValue : amount * freq.multiplier) : 0;
         [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((s) => {
           s.calls++;
@@ -384,11 +388,12 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
         if (overrideWeeks.has(week) || !weekStats[week]) return;
         const dayKey = getDayKey(date);
         if (!dayKey) return;
-        const seconds = Number(row.corrected_seconds ?? row.total_seconds) || 0;
-        weekStats[week].perDay[dayKey].loggedSeconds += seconds;
-        weekStats[week].total.loggedSeconds += seconds;
-        yearTotal.perDay[dayKey].loggedSeconds += seconds;
-        yearTotal.total.loggedSeconds += seconds;
+        const seconds = resolvedLoggedSeconds(row);
+        if (seconds === undefined) return;
+        [weekStats[week].perDay[dayKey], weekStats[week].total, yearTotal.perDay[dayKey], yearTotal.total].forEach((stats) => {
+          stats.loggedSeconds += seconds;
+          stats.hasLoggedTime = true;
+        });
       });
 
       for (const override of yearOverrides) {
@@ -449,7 +454,7 @@ export async function exportOutboundStandardYear(args: ExportArgs): Promise<void
     };
     // Triple Tree regel: per cel naar boven afronden op hele uren.
     const getHours = (s: WeekStats): number =>
-      ceilHours(s.loggedSeconds > 0 ? s.loggedSeconds / 3600 : s.durationSec / 3600);
+      ceilHours((s.hasLoggedTime || s.loggedSeconds > 0) ? s.loggedSeconds / 3600 : s.durationSec / 3600);
 
     // Totaal-tab
     const totaalSheet = buildTotaalSheet({

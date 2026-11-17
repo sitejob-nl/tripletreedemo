@@ -8,6 +8,7 @@ import { Loader2, Save, RotateCcw, Clock, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/friendlyError';
 import { HoursSource } from '@/types/database';
+import { refreshHoursQueries } from '@/lib/refreshHoursQueries';
 import {
   Table,
   TableBody,
@@ -48,6 +49,7 @@ export const HoursCorrection = ({ projectId, startDate, endDate, hoursSource = '
   const queryClient = useQueryClient();
   // Edits gekeyed op datum (fallback-dagen hebben nog geen row id).
   const [edits, setEdits] = useState<Record<string, { seconds: number | null; note: string }>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   const { data: breakdown, isLoading } = useQuery({
     queryKey: ['daily_hours_breakdown', projectId, startDate, endDate],
@@ -154,21 +156,31 @@ export const HoursCorrection = ({ projectId, startDate, endDate, hoursSource = '
   const hasEdits = Object.keys(edits).length > 0;
 
   const handleSaveAll = async () => {
-    for (const [day, edit] of Object.entries(edits)) {
-      const row = displayRows.find((r) => r.day === day);
-      if (!row) continue;
-      await saveMutation.mutateAsync({
-        day,
-        rowId: row.rowId,
-        baselineSeconds: row.baselineSeconds,
-        correctedSeconds: edit.seconds,
-        note: edit.note,
-      });
+    setIsSaving(true);
+    let saved = false;
+    try {
+      for (const [day, edit] of Object.entries(edits)) {
+        const row = displayRows.find((r) => r.day === day);
+        if (!row) continue;
+        await saveMutation.mutateAsync({
+          day,
+          rowId: row.rowId,
+          baselineSeconds: row.baselineSeconds,
+          correctedSeconds: edit.seconds,
+          note: edit.note,
+        });
+      }
+      setEdits({});
+      saved = true;
+    } catch {
+      // De mutatie toont de opslagfout; behoud de invoer voor een nieuwe poging.
+    } finally {
+      // Ook bij een gedeeltelijk geslaagde reeks moeten opgeslagen dagen direct
+      // zichtbaar worden in alle tabellen, inclusief de aparte weekvergelijking.
+      await refreshHoursQueries(queryClient, projectId);
+      setIsSaving(false);
     }
-    setEdits({});
-    queryClient.invalidateQueries({ queryKey: ['daily_hours_breakdown'] });
-    queryClient.invalidateQueries({ queryKey: ['logged_time'] });
-    toast.success('Uren correctie opgeslagen');
+    if (saved) toast.success('Uren correctie opgeslagen');
   };
 
   const handleResetCorrection = (row: DisplayRow) => {
@@ -217,8 +229,8 @@ export const HoursCorrection = ({ projectId, startDate, endDate, hoursSource = '
           </p>
         </div>
         {hasEdits && (
-          <Button onClick={handleSaveAll} disabled={saveMutation.isPending} size="sm" className="flex items-center gap-2">
-            {saveMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          <Button onClick={handleSaveAll} disabled={isSaving} size="sm" className="flex items-center gap-2">
+            {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Opslaan
           </Button>
         )}
@@ -260,6 +272,7 @@ export const HoursCorrection = ({ projectId, startDate, endDate, hoursSource = '
                   <TableCell className="text-right">
                     <Input
                       type="number"
+                      disabled={isSaving}
                       step="0.25"
                       className="w-24 text-right font-mono text-sm ml-auto"
                       placeholder={formatHours(row.baselineSeconds)}
@@ -279,6 +292,7 @@ export const HoursCorrection = ({ projectId, startDate, endDate, hoursSource = '
                   <TableCell>
                     <Input
                       className="text-xs"
+                      disabled={isSaving}
                       placeholder="Reden correctie..."
                       value={currentNote}
                       onChange={(e) => {
@@ -288,7 +302,7 @@ export const HoursCorrection = ({ projectId, startDate, endDate, hoursSource = '
                   </TableCell>
                   <TableCell>
                     {hasCorrectionActive && (
-                      <Button variant="ghost" size="sm" onClick={() => handleResetCorrection(row)} title="Correctie verwijderen">
+                      <Button variant="ghost" size="sm" disabled={isSaving} onClick={() => handleResetCorrection(row)} title="Correctie verwijderen">
                         <RotateCcw size={14} />
                       </Button>
                     )}
