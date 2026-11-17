@@ -520,6 +520,29 @@ function queueAfterCallSeconds(items) {
     return byRecord;
 }
 
+// De records-upsert vervangt raw_data volledig. Een mislukte lees heeft geen
+// nieuwe waarde; zonder de opgeslagen nawerktijd terug te zetten wordt die gewist.
+async function retainStoredAfterCall(project, records) {
+    const pending = records.filter(record => record.raw_data?.bc_nawerktijd === undefined && record.basicall_record_id != null);
+    if (pending.length === 0) return records;
+    const identity = (day, id) => `${day}:${String(id)}`;
+    const { data, error } = await supabase.from('call_records')
+        .select('basicall_record_id, beldatum_date, raw_data')
+        .eq('project_id', project.id)
+        .in('beldatum_date', [...new Set(pending.map(record => record.beldatum_date || record.beldatum))])
+        .in('basicall_record_id', [...new Set(pending.map(record => record.basicall_record_id))]);
+    if (error) throw error;
+    const stored = new Map((data ?? []).map(row => [identity(row.beldatum_date, row.basicall_record_id), row.raw_data]));
+    return records.map(record => {
+        if (record.raw_data?.bc_nawerktijd !== undefined) return record;
+        const previous = stored.get(identity(record.beldatum_date || record.beldatum, record.basicall_record_id));
+        if (previous?.bc_nawerktijd === undefined) return record;
+        const raw_data = { ...(record.raw_data || {}), bc_nawerktijd: previous.bc_nawerktijd };
+        if (previous.bc_nawerktijd_bron !== undefined) raw_data.bc_nawerktijd_bron = previous.bc_nawerktijd_bron;
+        return { ...record, raw_data };
+    });
+}
+
 async function enrichQueueAfterCallRecords(project, records) {
     let source;
     try {
@@ -564,7 +587,7 @@ async function enrichQueueAfterCallRecords(project, records) {
             }
             days.push({ day, records: dailyRecords.length, matched, seconds });
         } catch (error) {
-            enriched.push(...dailyRecords);
+            enriched.push(...await retainStoredAfterCall(project, dailyRecords));
             errors.push({ day, message: scrubTechnicalMessage(error.message) });
         }
     }
