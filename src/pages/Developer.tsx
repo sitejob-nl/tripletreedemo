@@ -28,6 +28,7 @@ const errorTypeStyles: Record<string, { icon: React.ReactNode; color: string; la
   api_error: { icon: <AlertCircle className="h-4 w-4" />, color: 'text-kpi-purple-text bg-kpi-purple', label: 'API' },
   network_error: { icon: <RefreshCw className="h-4 w-4" />, color: 'text-kpi-blue-text bg-kpi-blue', label: 'Network' },
   unhandled_rejection: { icon: <AlertTriangle className="h-4 w-4" />, color: 'text-warning bg-warning/10', label: 'Promise' },
+  sync_hours_failure: { icon: <Clock className="h-4 w-4" />, color: 'text-destructive bg-destructive/10', label: 'Uren' },
 };
 
 const copyToClipboard = (text: string, label: string) => {
