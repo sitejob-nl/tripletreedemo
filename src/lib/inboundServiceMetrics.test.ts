@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MappingConfig, ReportageWeeklyOverride } from '@/types/database';
 import {
+  averageMetric,
   buildInboundServiceBreakdown,
   completeMetric,
   inboundServiceAgentHours,
@@ -18,6 +19,18 @@ const mapping = {
 } satisfies MappingConfig;
 
 describe('inbound-service rapportagedefinities', () => {
+  it('berekent nawerktijd uit de wachtrij zonder een ontbrekend service level te verzinnen', () => {
+    const report = buildInboundServiceBreakdown([
+      { week_number: 46, day_name: 'maandag', bc_result_naam: 'Afgehandeld', bc_gesprekstijd: 180,
+        raw_data: { bc_nawerktijd: 90, bc_nawerktijd_bron: 'Queue.getIngelogdeTijden', bc_ivr_gesprekstijd: '0' } },
+      { week_number: 46, day_name: 'maandag', bc_result_naam: 'Afgehandeld', bc_gesprekstijd: 120,
+        raw_data: { bc_nawerktijd: 0, bc_nawerktijd_bron: 'Queue.getIngelogdeTijden' } },
+      { week_number: 46, day_name: 'maandag', bc_result_naam: 'Inbound verloren', raw_data: {} },
+    ], mapping);
+    expect(averageMetric(report.total.afterCallSec, report.total.afterCallKnown, report.total.answered)).toBe(45);
+    expect(completeMetric(report.total.answeredWithinThreshold, report.total.waitTimeKnown, report.total.answered)).toBeNull();
+  });
+
   it('telt aangeboden minus short abandoned als aangenomen', () => {
     const result = buildInboundServiceBreakdown([
       { week_number: 38, day_name: 'maandag', bc_result_naam: 'Afgehandeld', bc_gesprekstijd: 120, raw_data: { reden_van_bellen: 'Defensie', gebeld_door: 'Defensie', wachttijd_sec: 12 } },

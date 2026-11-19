@@ -43,6 +43,11 @@ const RETRY_MODE = process.argv.slice(2).some(a => a === 'retry' || a === '--ret
 // klaar en heeft de admin ruim tijd om te corrigeren vóór de 09:00-publicatie (embargo). De
 // 04:00-nachtronde haalt 'gisteren' daarna nog eens op als vangnet.
 const TODAY_MODE = process.argv.slice(2).some(a => a === 'today' || a === '--today');
+// BasiCall Support, 02-07-2026, ticket 2026061510000046: inbound uren
+// horen bij een Queue-header, niet bij het campagne/project-ID.
+// Alleen Sligro is hier live geverifieerd. Andere inbound-campagnes krijgen
+// hun eigen mapping_config.basicall_queue_id na controle van de wachtrij.
+const VERIFIED_INBOUND_QUEUES = { 870: 74 };
 const QUALITY_ALERT_EMAILS = (process.env.QUALITY_ALERT_EMAILS || '')
     .split(',')
     .map(email => email.trim())
@@ -326,6 +331,7 @@ function buildSoapRequest(method, body, token, projectId) {
     // Batch methods gebruiken v3.0 namespace, rest v2.0
     const domain = method.split('.')[0];
     const apiVersion = domain === 'Batch' ? 'v3.0' : 'v2.0';
+    const scope = domain === 'Queue' ? 'Queue' : 'Project';
     return `<?xml version="1.0" encoding="UTF-8"?>
     <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
         xmlns:ns1="https://S06.basicall.nl/BasiCall/bc_WebApi/${apiVersion}/${domain}"
@@ -335,7 +341,7 @@ function buildSoapRequest(method, body, token, projectId) {
         SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
         <SOAP-ENV:Header>
             <ns2:Token>${token}</ns2:Token>
-            <ns2:Project>${projectId}</ns2:Project>
+            <ns2:${scope}>${projectId}</ns2:${scope}>
         </SOAP-ENV:Header>
         <SOAP-ENV:Body>
             <ns1:${method}>${body}</ns1:${method}>
@@ -396,6 +402,12 @@ async function withRetry(fn, label, maxRetries = CONFIG.MAX_RETRIES) {
 }
 
 // --- SOAP CALL (met retry) ---
+function isEmptyQueueFault(method, fault) {
+    return method === 'Queue.getIngelogdeTijden'
+        && String(fault?.faultcode) === '404'
+        && String(fault?.faultstring).trim().toLowerCase() === 'geen resultaten gevonden';
+}
+
 async function soapCall(method, body, token, projectId) {
     const xml = buildSoapRequest(method, body, token, projectId);
     return withRetry(async () => {
@@ -411,11 +423,27 @@ async function soapCall(method, body, token, projectId) {
             const fault = respBody?.Fault || respBody?.['SOAP-ENV:Fault'];
             if (fault) {
                 const faultMsg = fault.faultstring || fault.detail || JSON.stringify(fault);
-                throw new Error(`SOAP Fault: ${faultMsg}`);
+                const faultError = new Error(`SOAP Fault: ${faultMsg}`);
+                faultError.isNoData = isEmptyQueueFault(method, fault);
+                throw faultError;
             }
 
             return respBody;
         } catch (err) {
+            // Queue levert op een lege dag HTTP 500 met SOAP 404. Alleen die
+            // expliciete melding is 'geen data'; een andere 500 blijft een fout.
+            if (err.response?.status === 500 && method === 'Queue.getIngelogdeTijden') {
+                let fault;
+                try {
+                    const parsed = await parser.parseStringPromise(err.response.data);
+                    fault = parsed.Envelope?.Body?.Fault;
+                } catch (_) { /* Onbekend/onleesbaar antwoord blijft een storing. */ }
+                if (isEmptyQueueFault(method, fault)) {
+                    const noDataErr = new Error('Geen inlogtijd-data voor deze dag (SOAP 404)');
+                    noDataErr.isNoData = true;
+                    throw noDataErr;
+                }
+            }
             // BasiCall geeft ook HTTP 500 op dagen zonder agent-activiteit.
             // De caller beoordeelt met de recorddekking of dit werkelijk een lege dag is.
             if (err.response?.status === 500 && method === 'Project.getIngelogdeTijden') {
@@ -443,6 +471,106 @@ async function validateToken(project) {
 }
 
 // --- SYNC INGELOGDE TIJD: ENKELE DAG ---
+function loggedTimeSource(project) {
+    const isInbound = ['inbound', 'inbound_service'].includes(project.project_type);
+    if (!isInbound) return { method: 'Project.getIngelogdeTijden', id: project.basicall_project_id };
+    const queueId = project.mapping_config?.basicall_queue_id
+        ?? VERIFIED_INBOUND_QUEUES[project.basicall_project_id];
+    if (queueId == null) return { method: 'Project.getIngelogdeTijden', id: project.basicall_project_id };
+    if (!Number.isSafeInteger(Number(queueId)) || Number(queueId) <= 0) {
+        throw new Error('Ongeldig BasiCall-wachtrij-ID; controleer de urenbron van deze campagne');
+    }
+    return { method: 'Queue.getIngelogdeTijden', id: Number(queueId) };
+}
+
+function loggedTimeSeconds(items, isQueue) {
+    let total = 0;
+    for (const item of items) {
+        // Sligro Excel: inzet agenten = gesprek + nawerk. Queue-data bevat ook
+        // pauzes en Emailverwerking; die mogen niet nogmaals bij agenturen komen.
+        const status = String(item.status ?? '').trim().toLowerCase();
+        if (isQueue && !status) throw new Error('Wachtrij-uren missen een status; uren niet opgeslagen');
+        const seconds = Number(item.aantal_seconden);
+        if (item.aantal_seconden == null || String(item.aantal_seconden).trim() === ''
+            || !Number.isSafeInteger(seconds) || seconds < 0) {
+            throw new Error('Ongeldig aantal seconden in BasiCall-uren; uren niet opgeslagen');
+        }
+        if (!isQueue || status === 'in gesprek' || status === 'nawerktijd') total += seconds;
+    }
+    return total;
+}
+
+// Queue-tijden verwijzen naar de oorspronkelijke BasiCall-record-ID. Alleen
+// records met aantoonbare gesprek- of nawerkactiviteit krijgen een waarde;
+// een ontbrekende koppeling mag nooit als nul seconden worden opgeslagen.
+function queueAfterCallSeconds(items) {
+    const byRecord = new Map();
+    for (const item of items) {
+        const status = String(item.status ?? '').trim().toLowerCase();
+        if (!['in gesprek', 'nawerktijd'].includes(status)) continue;
+        const id = String(item.record_id ?? '').trim();
+        const seconds = Number(item.aantal_seconden);
+        if (item.aantal_seconden == null || String(item.aantal_seconden).trim() === ''
+            || !Number.isSafeInteger(seconds) || seconds < 0) {
+            throw new Error('Ongeldige seconden in BasiCall-nawerktijd');
+        }
+        if (!/^[1-9]\d*$/.test(id)) continue;
+        byRecord.set(id, (byRecord.get(id) ?? 0) + (status === 'nawerktijd' ? seconds : 0));
+    }
+    return byRecord;
+}
+
+async function enrichQueueAfterCallRecords(project, records) {
+    let source;
+    try {
+        source = loggedTimeSource(project);
+    } catch (error) {
+        return { records, days: [], errors: [{ day: 'configuratie', message: scrubTechnicalMessage(error.message) }] };
+    }
+    if (source.method !== 'Queue.getIngelogdeTijden') return { records, days: [], errors: [] };
+    const byDay = new Map();
+    const enriched = [];
+    const days = [];
+    const errors = [];
+    for (const record of records) {
+        const day = record.beldatum_date || record.beldatum;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day ?? '')) {
+            enriched.push(record);
+            errors.push({ day: 'onbekend', message: 'Nawerktijd vereist een kalenderdag per record' });
+            continue;
+        }
+        if (!byDay.has(day)) byDay.set(day, []);
+        byDay.get(day).push(record);
+    }
+    for (const [day, dailyRecords] of [...byDay].sort(([a], [b]) => a.localeCompare(b))) {
+        try {
+            const body = `<start_datum xsi:type="xsd:dateTime">${formatDateISO(parseLocalJobDate(day))}</start_datum>`
+                + `<eind_datum xsi:type="xsd:dateTime">${formatDateISO(parseLocalJobDate(day, true))}</eind_datum>`;
+            const response = await soapCall(source.method, body, project.basicall_token, source.id);
+            const result = response?.[`${source.method}Response`];
+            if (!result) throw new Error('Onverwacht antwoord van BasiCall-nawerktijdbron');
+            const afterCall = queueAfterCallSeconds(unboxRecords(result));
+            let matched = 0;
+            let seconds = 0;
+            for (const record of dailyRecords) {
+                const value = afterCall.get(String(record.basicall_record_id));
+                if (value === undefined) { enriched.push(record); continue; }
+                matched++;
+                seconds += value;
+                enriched.push({ ...record, raw_data: {
+                    ...(record.raw_data || {}), bc_nawerktijd: value,
+                    bc_nawerktijd_bron: 'Queue.getIngelogdeTijden',
+                } });
+            }
+            days.push({ day, records: dailyRecords.length, matched, seconds });
+        } catch (error) {
+            enriched.push(...dailyRecords);
+            errors.push({ day, message: scrubTechnicalMessage(error.message) });
+        }
+    }
+    return { records: enriched, days, errors };
+}
+
 // Geeft een uitkomst-object terug i.p.v. seconden-of-null. Drie gevallen die uit elkaar
 // gehouden moeten worden, omdat ze in de audittrail verschillend wegen:
 //   'ok'     — BasiCall antwoordde; seconds is het totaal (mag 0 zijn).
@@ -455,15 +583,17 @@ async function syncLoggedTimeDay(project, dayDate, hasCallRecords) {
     end.setHours(23, 59, 59, 999);
 
     try {
+        const source = loggedTimeSource(project);
         const body = `
             <start_datum xsi:type="xsd:dateTime">${formatDateISO(start)}</start_datum>
             <eind_datum xsi:type="xsd:dateTime">${formatDateISO(end)}</eind_datum>
         `;
         const respBody = await soapCall(
-            'Project.getIngelogdeTijden', body,
-            project.basicall_token, project.basicall_project_id
+            source.method, body,
+            project.basicall_token, source.id
         );
-        const responseObj = respBody['Project.getIngelogdeTijdenResponse'];
+        const responseObj = respBody?.[`${source.method}Response`];
+        if (!responseObj) throw new Error('Onverwacht antwoord van de BasiCall-urenbron');
         const items = unboxRecords(responseObj);
 
         if (!items || items.length === 0) {
@@ -472,11 +602,7 @@ async function syncLoggedTimeDay(project, dayDate, hasCallRecords) {
                 : { outcome: 'nodata', seconds: 0, message: 'Geen ingelogde tijd gerapporteerd' };
         }
 
-        let totalSeconds = 0;
-        items.forEach(item => {
-            const seconds = parseInt(item.aantal_seconden || '0', 10);
-            if (!isNaN(seconds)) totalSeconds += seconds;
-        });
+        const totalSeconds = loggedTimeSeconds(items, source.method.startsWith('Queue.'));
 
         if (hasCallRecords && totalSeconds === 0) {
             return { outcome: 'error', seconds: 0, message: 'Nul inlogtijd gerapporteerd voor een dag met records' };
@@ -522,6 +648,29 @@ async function logLoggedTimeSync(project, start, end, {
         // Een falende auditregel mag de sync zelf nooit breken.
         console.warn(`   ⚠️  Kon urenlog niet wegschrijven: ${error.message}`);
     }
+    // Ook zichtbaar in het beheerderslog als de records wel goed binnenkwamen.
+    // Geen mail vanuit deze route; maximaal één melding per project/dag per 24u.
+    if (isFinalForDay && failedDays > 0) {
+        try {
+            const day = formatLocalDate(start);
+            const { data: recent, error: lookupError } = await supabase.from('error_logs')
+                .select('id').eq('error_type', 'sync_hours_failure')
+                .contains('metadata', { project_id: project.id, day })
+                .gte('created_at', new Date(Date.now() - 86400000).toISOString()).limit(1);
+            if (lookupError) throw lookupError;
+            if (recent?.length === 0) {
+                const { error: alertError } = await supabase.from('error_logs').insert({
+                    error_type: 'sync_hours_failure',
+                    error_message: `Uren ontbreken voor ${project.name} (${day}): ${scrubTechnicalMessage(message)}`,
+                    component_name: 'sync-basicall',
+                    metadata: { project_id: project.id, day, failed_days: failedDays },
+                });
+                if (alertError) throw alertError;
+            }
+        } catch (alertError) {
+            console.warn(`   ⚠️  Kon urenmelding niet opslaan: ${alertError.message}`);
+        }
+    }
 }
 
 // --- SYNC INGELOGDE TIJD: OPSLAAN NAAR DB ---
@@ -543,6 +692,22 @@ async function saveLoggedTime(projectId, dateStr, totalSeconds) {
 }
 
 // --- SYNC INGELOGDE TIJD: PERIODE ---
+async function getActiveCallDays(projectId, startStr, endStr) {
+    const days = new Set();
+    // PostgREST geeft maximaal 1000 records per pagina. Zonder paginering
+    // werden latere dagen bij een langere historische urensync overgeslagen.
+    for (let offset = 0; ; offset += 1000) {
+        const { data, error } = await supabase.from('call_records')
+            .select('beldatum_date').eq('project_id', projectId)
+            .gte('beldatum_date', startStr).lte('beldatum_date', endStr)
+            .order('beldatum_date').order('id').range(offset, offset + 999);
+        if (error) throw error;
+        for (const row of data || []) if (row.beldatum_date) days.add(row.beldatum_date);
+        if (!data || data.length < 1000) break;
+    }
+    return days;
+}
+
 async function syncLoggedTimeRange(project, start, end) {
     console.log(`\n⏱️  Inlogtijd ophalen: ${project.name}`);
 
@@ -550,14 +715,7 @@ async function syncLoggedTimeRange(project, start, end) {
     // zo'n dag is een dekkingsfout, geen bevestigde lege dag.
     const startStr = formatLocalDate(start);
     const endStr = formatLocalDate(end);
-    const { data: activeDays, error: activeDaysError } = await supabase
-        .from('call_records')
-        .select('beldatum_date')
-        .eq('project_id', project.id)
-        .gte('beldatum_date', startStr)
-        .lte('beldatum_date', endStr);
-    if (activeDaysError) throw activeDaysError;
-    const activeDaySet = new Set((activeDays || []).map(r => r.beldatum_date));
+    const activeDaySet = await getActiveCallDays(project.id, startStr, endStr);
 
     let currentDate = new Date(start);
     let totalSaved = 0;
@@ -905,9 +1063,26 @@ async function performSync(project, start, end, jobId = null, isFinalForDay = tr
         ].filter(Boolean).join(', ');
         console.log(`   📋 ${fetchedRecords.length} records opgehaald, ${failedRecords} fouten.`);
 
+        // De frontend en Excel lezen bc_nawerktijd al. Verrijk vóór opslaan,
+        // zodat een volgende records-sync de gekoppelde nawerktijd behoudt.
+        // Storingen in deze aanvullende bron blokkeren de calls-import niet.
+        const afterCall = await enrichQueueAfterCallRecords(project, fetchedRecords);
+        if (afterCall.errors.length > 0) {
+            console.warn(`   ⚠️  Nawerktijd ontbreekt op ${afterCall.errors.length} dag(en).`);
+            await supabase.from('sync_logs').insert({
+                project_id: project.id, kind: 'after_call_time', status: 'warning',
+                records_synced: afterCall.days.reduce((sum, day) => sum + day.matched, 0),
+                expected_records: fetchedRecords.length,
+                failed_records: fetchedRecords.length - afterCall.days.reduce((sum, day) => sum + day.matched, 0),
+                sync_from: start.toISOString(), sync_to: end.toISOString(),
+                error_message: afterCall.errors.map(error => `${error.day}: ${error.message}`).join('; ').slice(0, 500),
+                completed_at: new Date().toISOString(),
+            });
+        }
+
         // 6. Upsert in batches naar DB
-        for (let i = 0; i < fetchedRecords.length; i += CONFIG.BATCH_UPSERT_SIZE) {
-            const batch = fetchedRecords.slice(i, i + CONFIG.BATCH_UPSERT_SIZE);
+        for (let i = 0; i < afterCall.records.length; i += CONFIG.BATCH_UPSERT_SIZE) {
+            const batch = afterCall.records.slice(i, i + CONFIG.BATCH_UPSERT_SIZE);
             await upsertBatch(batch);
         }
         console.log(`   💾 ${fetchedRecords.length} records opgeslagen.`);
@@ -1237,8 +1412,31 @@ async function maybeAlertPersistentFailure(project) {
 }
 
 // --- PER-PROJECT: GEMISTE DAGEN INHALEN + BATCHES + ALERT ---
+async function getMissedLoggedTimeDays(project) {
+    const end = getNowAmsterdam();
+    end.setDate(end.getDate() - 1);
+    end.setHours(0, 0, 0, 0);
+    const start = new Date(end);
+    start.setDate(start.getDate() - BACKFILL_LOOKBACK_DAYS + 1);
+    const startStr = formatLocalDate(start);
+    const endStr = formatLocalDate(end);
+    const activeDays = await getActiveCallDays(project.id, startStr, endStr);
+    const { data: logged, error } = await supabase.from('daily_logged_time')
+        .select('date,total_seconds,corrected_seconds').eq('project_id', project.id)
+        .gte('date', startStr).lte('date', endStr);
+    if (error) throw error;
+    const covered = new Set((logged || [])
+        .filter(row => row.corrected_seconds != null || row.total_seconds > 0)
+        .map(row => row.date));
+    // Recentste gaten eerst; een chronisch oud probleem mag de laatste week
+    // niet verdringen. Een expliciete handmatige nul blijft gerespecteerd.
+    return [...activeDays].filter(day => !covered.has(day)).sort().reverse()
+        .slice(0, BACKFILL_MAX_DAYS_PER_RUN).map(day => parseLocalJobDate(day));
+}
+
 // Gedeeld door de nachtronde (na de 'gisteren'-sync) en de daytime-retry-ronde.
 async function syncProjectMissedAndBatches(p) {
+    const attemptedDays = new Set();
     // Losse gemiste dagen (ook midden-gaten) elk GEÏSOLEERD inhalen. Defensief in
     // try/catch: een fout in de backfill-detectie mag de overige projecten niet afbreken.
     try {
@@ -1251,11 +1449,26 @@ async function syncProjectMissedAndBatches(p) {
                 console.log(`   ↩️  inhalen ${formatLocalDate(day)}`);
                 await performSync(p, dayStart, dayEnd);
                 await syncLoggedTimeSingleDay(p, dayStart, dayEnd);
+                attemptedDays.add(formatLocalDate(dayStart));
                 await sleep(CONFIG.DELAY_BETWEEN_DAYS_MS);
             }
         }
     } catch (backfillErr) {
         console.warn(`   ⚠️  Backfill-check overgeslagen voor ${p.name}: ${backfillErr.message}`);
+    }
+
+    // Records en uren zijn aparte bronnen: succesvolle records mogen herstel
+    // van ontbrekende uren niet tegenhouden. Haal hierbij geen calls opnieuw op.
+    try {
+        const missingHours = await getMissedLoggedTimeDays(p);
+        for (const day of missingHours) {
+            if (attemptedDays.has(formatLocalDate(day))) continue;
+            const end = new Date(day); end.setHours(23, 59, 59, 999);
+            await syncLoggedTimeSingleDay(p, day, end);
+            await sleep(CONFIG.DELAY_BETWEEN_DAYS_MS);
+        }
+    } catch (error) {
+        console.warn(`   ⚠️  Urenherstel overgeslagen voor ${p.name}: ${error.message}`);
     }
 
     // Batch discovery + totals
@@ -1441,4 +1654,12 @@ async function run() {
     }
 }
 
-run();
+// Importeren voor een gerichte uren-preview/backfill mag nooit de volledige
+// cronronde, de jobqueue of kwaliteitsmails starten.
+if (require.main === module) run();
+
+module.exports = {
+    supabase, enrichProjectsWithTokens, getActiveCallDays, parseLocalJobDate,
+    syncLoggedTimeDay, saveLoggedTime, logLoggedTimeSync, loggedTimeSource,
+    enrichQueueAfterCallRecords,
+};
