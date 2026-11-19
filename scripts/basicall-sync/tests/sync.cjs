@@ -165,6 +165,27 @@ test('a failed admin-alert lookup does not interrupt synchronization', async () 
     assert.equal(app.queries.filter(q => q.table === 'sync_logs').length, 1);
 });
 
+test('hour-gap retry and failure alert run only when a verified queue supplies hours', async () => {
+    const hersen = { id: 'hersen', name: 'Hersenstichting inbound', basicall_project_id: 849, project_type: 'inbound', basicall_token: 'test-token' };
+    const failed = { status: 'failed', savedDays: 0, expectedDays: 1, failedDays: 1, message: 'HTTP 500' };
+    const day = [new Date('2026-11-14T00:00:00+01:00'), new Date('2026-11-14T23:59:59+01:00')];
+    const app = harness({ query: table => ({ data: table === 'call_records'
+        ? [{ beldatum_date: '2026-11-14' }] : [], error: null }) });
+    vm.runInContext("getNowAmsterdam = () => new Date('2026-11-16T12:00:00+01:00')", app.context);
+    assert.equal((await app.getMissedLoggedTimeDays(hersen)).length, 0);
+    assert.equal((await app.getMissedLoggedTimeDays({ ...hersen, project_type: 'outbound' })).length, 0);
+    assert.equal(app.queries.length, 0);
+    assert.deepEqual(Array.from(await app.getMissedLoggedTimeDays({ ...hersen, mapping_config: { basicall_queue_id: 12 } }), date => date.getDate()), [14]);
+
+    app.queries.length = 0;
+    await app.logLoggedTimeSync(hersen, ...day, failed);
+    assert.equal(app.queries.some(query => query.table === 'error_logs'), false);
+    assert.equal(operation(app.queries.find(query => query.table === 'sync_logs').operations, 'insert')[1].status, 'failed');
+    app.queries.length = 0;
+    await app.logLoggedTimeSync({ ...hersen, mapping_config: { basicall_queue_id: 12 } }, ...day, failed);
+    assert.equal(app.queries.filter(query => query.table === 'error_logs' && operation(query.operations, 'insert')).length, 1);
+});
+
 test('hours retry detects gaps independently of record-sync success and respects corrections', async () => {
     const app = harness({ query: table => ({ data: table === 'call_records'
         ? ['09', '10', '11', '12', '13', '14'].map(d => ({ beldatum_date: `2026-11-${d}` }))

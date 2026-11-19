@@ -483,6 +483,16 @@ function loggedTimeSource(project) {
     return { method: 'Queue.getIngelogdeTijden', id: Number(queueId) };
 }
 
+// Without a verified queue, Project.getIngelogdeTijden returns HTTP 500 on
+// every day that has calls, so the gap never closes. An invalid queue id throws.
+function queueSuppliesLoggedHours(project) {
+    try {
+        return loggedTimeSource(project).method === 'Queue.getIngelogdeTijden';
+    } catch {
+        return false;
+    }
+}
+
 function loggedTimeSeconds(items, isQueue) {
     let total = 0;
     for (const item of items) {
@@ -650,7 +660,7 @@ async function logLoggedTimeSync(project, start, end, {
     }
     // Ook zichtbaar in het beheerderslog als de records wel goed binnenkwamen.
     // Geen mail vanuit deze route; maximaal één melding per project/dag per 24u.
-    if (isFinalForDay && failedDays > 0) {
+    if (isFinalForDay && failedDays > 0 && queueSuppliesLoggedHours(project)) {
         try {
             const day = formatLocalDate(start);
             const { data: recent, error: lookupError } = await supabase.from('error_logs')
@@ -1413,6 +1423,7 @@ async function maybeAlertPersistentFailure(project) {
 
 // --- PER-PROJECT: GEMISTE DAGEN INHALEN + BATCHES + ALERT ---
 async function getMissedLoggedTimeDays(project) {
+    if (!queueSuppliesLoggedHours(project)) return [];
     const end = getNowAmsterdam();
     end.setDate(end.getDate() - 1);
     end.setHours(0, 0, 0, 0);
